@@ -2,6 +2,8 @@ import { h } from "preact";
 import type { ComponentChildren } from "preact";
 import type { Layout, LayoutProps } from "@velella/mizzen/contracts";
 import base from "./base.ts";
+import header from "../chrome/header/index.ts";
+import siteFooter from "../chrome/site-footer/index.ts";
 
 /**
  * The docs home, following `docs/design/mockups/home.html`. Everything comes from the page's front
@@ -135,6 +137,11 @@ function content(props: LayoutProps): ComponentChildren {
 }
 
 /** The home page: the base document shell around the hero, the section grids, and the page body. */
-const home: Layout = (props) => base({ ...props, main: content(props) });
+const home: Layout = (props) => base({
+    ...props,
+    header: header(props) as ComponentChildren,
+    main: content(props),
+    footer: siteFooter(props) as ComponentChildren,
+  });
 
 export default home;
