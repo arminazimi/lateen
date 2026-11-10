@@ -70,4 +70,4 @@ curl -fsSL https://get.slipway.dev | sh
 - Choosing a tab by hand is remembered in `localStorage["slipway-os-tabs"]` and switches every OS tab group on the page and on later pages that offers the same system.
 - Arrow keys move between tabs, `Home` and `End` go to the ends, and the arrows follow the reading direction in right-to-left pages.
 - Component islands are not wired into built pages yet, so a built site shows the no-JavaScript state — every section stacked — until island wiring lands.
-- Use [code tabs](./code-tabs/) when the choice is a language or package manager rather than an operating system.
+- Use [code tabs](../code-tabs/) when the choice is a language or package manager rather than an operating system.

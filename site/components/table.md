@@ -36,4 +36,4 @@ None. The table's accessible name comes from its first row, or from the surround
 - Keep the table narrow enough to scan. For two columns of prose, a definition list or two paragraphs may read better.
 - The alignment row is required; `---` on its own is enough.
 - Inline code in cells is the clearest way to name a field, a path, or a value.
-- A table is never a layout tool; use [steps](./steps/) or a list for a sequence.
+- A table is never a layout tool; use [steps](../steps/) or a list for a sequence.

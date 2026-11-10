@@ -26,7 +26,7 @@ Run the installer, then restart the terminal.
 
 :::details{summary="Show the full command"}
 ```bash
-node packages/engine/bin/slipway.ts build site --out dist
+npx mizzen build site --out dist
 ```
 :::
 

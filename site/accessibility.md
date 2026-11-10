@@ -1,6 +1,6 @@
 ---
 title: Accessibility
-description: How Slipway's theme is tested against WCAG 2.2 AA, and what is checked by hand.
+description: How the Lateen theme is tested against WCAG 2.2 AA, and what is checked by hand.
 layout: doc
 permalink: /accessibility/
 ---

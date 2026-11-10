@@ -28,7 +28,7 @@ Each section is one card. `title` and `url` make the card's heading a link, `des
 
 ## Options
 
-The `card` helper in `packages/theme/components/cards/` takes:
+The `card` helper in `components/cards/` takes:
 
 | Name | Type | Required | What it does |
 | --- | --- | --- | --- |
@@ -43,9 +43,9 @@ There is no live example on this page: `cards` is a layout component, and `:::ca
 
 Use the home layout with `sections` in front matter, or a Markdown list of links:
 
-- [Callout](./callout/) for a note or warning.
-- [Code tabs](./code-tabs/) for one example in several languages.
-- [Steps](./steps/) for a numbered tutorial.
+- [Callout](../callout/) for a note or warning.
+- [Code tabs](../code-tabs/) for one example in several languages.
+- [Steps](../steps/) for a numbered tutorial.
 
 ## Notes
 

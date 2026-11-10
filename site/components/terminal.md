@@ -31,7 +31,7 @@ None. The prompt is `$ `.
 $ npm install slipway
 added 1 package
 
-$ node packages/engine/bin/slipway.ts build site --out dist
+$ npx mizzen build site --out dist
 Written 12 pages to dist
 :::
 

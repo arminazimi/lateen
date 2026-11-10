@@ -23,7 +23,7 @@ redirect_from:
 
 Components are the pieces pages use inside their content: a callout, a code tab, an endpoint, a file tree. Each page below shows the Markdown you write, every option it reads, and a live example.
 
-The engine turns a directive into the component whose folder has the same name under `packages/theme/components/`. A container directive (`:::name` … `:::`) wraps a Markdown body; a leaf directive (`::name`) stands alone on its own line. Directive attributes are the component's options: `:::callout{type=warning}`.
+The engine turns a directive into the component whose folder has the same name under `components/`. A container directive (`:::name` … `:::`) wraps a Markdown body; a leaf directive (`::name`) stands alone on its own line. Directive attributes are the component's options: `:::callout{type=warning}`.
 
 | Component | Use it for |
 | --- | --- |

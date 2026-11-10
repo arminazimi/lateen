@@ -58,4 +58,4 @@ The chip is hidden when the total is `0`, and it reads as failed when any exampl
   ```
 
 - Automatic per-block placement needs the engine's example markers (N01/N06), which say which code blocks are runnable. Until they land, place the chip next to the block with this directive.
-- Use a [badge](./badge/) for a status label that is not about examples.
+- Use a [badge](../badge/) for a status label that is not about examples.

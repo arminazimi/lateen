@@ -12,7 +12,7 @@ steps" or "keep reading" block.
 ## Syntax
 
 ```markdown
-::link-card{href="/guide/install/" title="Install" description="Put Slipway in a project."}
+::link-card{href="/guide/install/" title="Install" description="Put Lateen in a project."}
 
 ::link-card{href="/reference/" title="Reference" description="Look up an option." icon="→"}
 ```

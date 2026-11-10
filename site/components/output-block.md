@@ -43,4 +43,4 @@ Copied 6 assets
 - An empty body, or one that holds only whitespace, renders nothing.
 - The body stays text: `<b>` written in it is shown as it is written, never turned into markup.
 - The copy button copies the whole output and nothing else. It is made by JavaScript and starts hidden; the output still reads without it.
-- Use a [terminal](./terminal/) when the commands and their output belong together in one block, and this block when only the result matters.
+- Use a [terminal](../terminal/) when the commands and their output belong together in one block, and this block when only the result matters.

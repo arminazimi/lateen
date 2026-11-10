@@ -33,13 +33,13 @@ The `items` prop takes the same pairs as a JSON array, for content that comes fr
 :::key-value
 Version: 1.0
 License: MIT
-Built with: Slipway
+Built with: Lateen
 :::
 
 The list keeps the order you write, including duplicate keys. Each line is split at its first colon, the key and value are trimmed, and blank lines are skipped.
 
 ## Notes
 
-- Use it for a short set of properties or metadata, not for tabular data with several columns; a [table](./table/) is the right component there.
-- A value is plain text. To link or style part of a value, use Markdown elsewhere or a [schema table](./schema-table/) when the data is a JSON Schema.
+- Use it for a short set of properties or metadata, not for tabular data with several columns; a [table](../table/) is the right component there.
+- A value is plain text. To link or style part of a value, use Markdown elsewhere or a [schema table](../schema-table/) when the data is a JSON Schema.
 - On a narrow screen the two columns become one, and long values wrap instead of widening the page.
