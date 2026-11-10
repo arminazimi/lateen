@@ -5,7 +5,7 @@ layout: doc
 permalink: /install/
 ---
 
-Lateen is the default theme of [Mizzen](https://arminazimi.github.io/mizzen/): layouts, chrome, components, design tokens, and styles for a docs site that people and agents read. It needs Node 24 or later.
+Lateen is the default theme of [Mizzen](https://velella.sh/mizzen/): layouts, chrome, components, design tokens, and styles for a docs site that people and agents read. It needs Node 24 or later.
 
 ## Install
 

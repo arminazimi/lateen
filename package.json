@@ -15,13 +15,13 @@
     "accessibility",
     "wcag"
   ],
-  "homepage": "https://arminazimi.github.io/lateen/",
+  "homepage": "https://velella.sh/lateen/",
   "bugs": {
-    "url": "https://github.com/arminazimi/lateen/issues"
+    "url": "https://github.com/velella-sh/lateen/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/arminazimi/lateen.git"
+    "url": "git+https://github.com/velella-sh/lateen.git"
   },
   "license": "MIT",
   "type": "module",

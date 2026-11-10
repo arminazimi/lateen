@@ -45,4 +45,4 @@ This page lists the WCAG 2.2 success criteria at levels A and AA that the Lateen
 
 ## Report a problem
 
-If something on a Slipway site is hard to use, open an issue in the [repository](https://github.com/arminazimi/slipway/issues).
+If something on a Lateen site is hard to use, open an issue in the [repository](https://github.com/velella-sh/lateen/issues).

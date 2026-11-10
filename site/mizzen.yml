@@ -2,10 +2,10 @@
 title: Lateen
 description: A docs theme for people and agents, built on Mizzen.
 lang: en
-url: https://arminazimi.github.io
+url: https://velella.sh
 base: /lateen
 repository:
-  url: https://github.com/arminazimi/lateen
+  url: https://github.com/velella-sh/lateen
   branch: main
   dir: site
 theme:
@@ -22,9 +22,9 @@ theme:
       license: "MIT license"
       links:
         - title: GitHub
-          url: https://github.com/arminazimi/lateen
+          url: https://github.com/velella-sh/lateen
         - title: Mizzen
-          url: https://arminazimi.github.io/mizzen/
+          url: https://velella.sh/mizzen/
         - title: Install
           url: /install/
         - title: Accessibility

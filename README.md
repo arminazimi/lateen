@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/arminazimi/lateen/main/.github/assets/mark-night.svg">
-    <img src="https://raw.githubusercontent.com/arminazimi/lateen/main/.github/assets/mark-day.svg" width="96" height="96" alt="Lateen">
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/velella-sh/lateen/main/.github/assets/mark-night.svg">
+    <img src="https://raw.githubusercontent.com/velella-sh/lateen/main/.github/assets/mark-day.svg" width="96" height="96" alt="Lateen">
   </picture>
 </p>
 
@@ -13,16 +13,16 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/arminazimi/lateen/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/arminazimi/lateen/ci.yml?branch=main&label=CI&logo=github&logoColor=white&labelColor=1F1F28&color=4C6F9A&style=flat"></a>
+  <a href="https://github.com/velella-sh/lateen/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/velella-sh/lateen/ci.yml?branch=main&label=CI&logo=github&logoColor=white&labelColor=1F1F28&color=4C6F9A&style=flat"></a>
   <a href="https://www.npmjs.com/package/@velella/lateen"><img alt="npm" src="https://img.shields.io/npm/v/@velella/lateen?label=npm&logo=npm&logoColor=white&labelColor=1F1F28&color=4C6F9A&style=flat"></a>
-  <a href="https://github.com/arminazimi/lateen/actions/workflows/ci.yml"><img alt="coverage" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Farminazimi%2Flateen%2Fbadges%2Fcoverage.json&labelColor=1F1F28&style=flat"></a>
+  <a href="https://github.com/velella-sh/lateen/actions/workflows/ci.yml"><img alt="coverage" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fvelella-sh%2Flateen%2Fbadges%2Fcoverage.json&labelColor=1F1F28&style=flat"></a>
 </p>
 
 <p align="center">
-  <a href="https://arminazimi.github.io/lateen/install/">Quick start</a> ·
-  <a href="https://arminazimi.github.io/lateen/">Documentation</a> ·
+  <a href="https://velella.sh/lateen/install/">Quick start</a> ·
+  <a href="https://velella.sh/lateen/">Documentation</a> ·
   <a href="#contributing">Contributing</a> ·
-  <a href="https://github.com/arminazimi/mizzen">Mizzen</a>
+  <a href="https://github.com/velella-sh/mizzen">Mizzen</a>
 </p>
 
 ---
@@ -36,7 +36,7 @@ A docs theme for people and agents, built on Mizzen: layouts, chrome, components
 - **Accessible.** Tested against WCAG 2.2 AA, with a keyboard gate, a contrast gate, and an RTL gate.
 - **Right-to-left ready.** Direction, language, and mirrored icons are handled for RTL languages.
 
-Check out [Mizzen](https://github.com/arminazimi/mizzen) next to it (`../mizzen`) and run `npm ci` in both; the tests and the docs site build with it.
+Check out [Mizzen](https://github.com/velella-sh/mizzen) next to it (`../mizzen`) and run `npm ci` in both; the tests and the docs site build with it.
 
 The theme may `import type` from `@velella/mizzen/contracts`, by package name and never by relative path, and imports nothing else from the engine. Preact is a peer dependency, with `jsx: react-jsx` and `jsxImportSource: preact` in `tsconfig.json`.
 
@@ -76,23 +76,23 @@ Components are the pieces pages use inside their content. Each name is its folde
 
 | Component | What it does | Reference |
 | --- | --- | --- |
-| `badge` | A small inline label for a version or status (`:badge[New]{variant=tip}`). | [Badge](https://arminazimi.github.io/slipway/components/badge/) |
-| `callout` | A note, tip, important, warning, or caution (`:::callout{type=warning}`, and GitHub alert syntax). | [Callout](https://arminazimi.github.io/slipway/components/callout/) |
-| `cards` | A responsive grid of linked cards. | [Cards](https://arminazimi.github.io/slipway/components/cards/) |
-| `code` | Fenced code highlighted at build time with Shiki in light and dark, with a copy button. | [Code](https://arminazimi.github.io/slipway/components/code/) |
-| `code-tabs` | The same example in several languages or package managers, as tabs that stack without JavaScript (`:::code-tabs`). | [Code tabs](https://arminazimi.github.io/slipway/components/code-tabs/) |
-| `details` | A native disclosure that starts closed unless given `open` (`:::details{summary="…"}`). | [Details](https://arminazimi.github.io/slipway/components/details/) |
-| `embed` | A lazy iframe that requests nothing from the provider until it loads (`::embed{src="…" title="…"}`). | [Embed](https://arminazimi.github.io/slipway/components/embed/) |
-| `endpoint` | An API endpoint: method, path with parameters, parameter list, and body (`:::endpoint`). | [Endpoint](https://arminazimi.github.io/slipway/components/endpoint/) |
-| `figure` | A responsive image with alt text, an optional caption, and an optional credit (`:::figure{src="…"}`). | [Figure](https://arminazimi.github.io/slipway/components/figure/) |
-| `file-tree` | A nested Markdown list drawn as a folder tree (`:::file-tree`). | [File tree](https://arminazimi.github.io/slipway/components/file-tree/) |
-| `heading-anchor` | Adds a link icon to every h2 to h4; automatic on rendered pages. | [Heading anchor](https://arminazimi.github.io/slipway/components/heading-anchor/) |
-| `kbd` | A keyboard key or combination (`:kbd[Ctrl+K]`). | [Kbd](https://arminazimi.github.io/slipway/components/kbd/) |
-| `page-status` | An experimental, beta, or deprecated banner from `status`, `since`, and `replaced_by` in front matter. | [Page status](https://arminazimi.github.io/slipway/components/page-status/) |
-| `schema-table` | A JSON Schema from `_data` as a table of properties, types, defaults, and descriptions (`::schema-table{data="widget"}`). | [Schema table](https://arminazimi.github.io/slipway/components/schema-table/) |
-| `steps` | A numbered sequence, wrapped around an ordered list (`:::steps`). | [Steps](https://arminazimi.github.io/slipway/components/steps/) |
-| `table` | Wraps every Markdown table in a labelled scroll region; automatic on rendered pages. | [Table](https://arminazimi.github.io/slipway/components/table/) |
-| `terminal` | A shell session where a line starting with `$` is a command and the rest is output (`:::terminal`). | [Terminal](https://arminazimi.github.io/slipway/components/terminal/) |
+| `badge` | A small inline label for a version or status (`:badge[New]{variant=tip}`). | [Badge](https://velella.sh/lateen/components/badge/) |
+| `callout` | A note, tip, important, warning, or caution (`:::callout{type=warning}`, and GitHub alert syntax). | [Callout](https://velella.sh/lateen/components/callout/) |
+| `cards` | A responsive grid of linked cards. | [Cards](https://velella.sh/lateen/components/cards/) |
+| `code` | Fenced code highlighted at build time with Shiki in light and dark, with a copy button. | [Code](https://velella.sh/lateen/components/code/) |
+| `code-tabs` | The same example in several languages or package managers, as tabs that stack without JavaScript (`:::code-tabs`). | [Code tabs](https://velella.sh/lateen/components/code-tabs/) |
+| `details` | A native disclosure that starts closed unless given `open` (`:::details{summary="…"}`). | [Details](https://velella.sh/lateen/components/details/) |
+| `embed` | A lazy iframe that requests nothing from the provider until it loads (`::embed{src="…" title="…"}`). | [Embed](https://velella.sh/lateen/components/embed/) |
+| `endpoint` | An API endpoint: method, path with parameters, parameter list, and body (`:::endpoint`). | [Endpoint](https://velella.sh/lateen/components/endpoint/) |
+| `figure` | A responsive image with alt text, an optional caption, and an optional credit (`:::figure{src="…"}`). | [Figure](https://velella.sh/lateen/components/figure/) |
+| `file-tree` | A nested Markdown list drawn as a folder tree (`:::file-tree`). | [File tree](https://velella.sh/lateen/components/file-tree/) |
+| `heading-anchor` | Adds a link icon to every h2 to h4; automatic on rendered pages. | [Heading anchor](https://velella.sh/lateen/components/heading-anchor/) |
+| `kbd` | A keyboard key or combination (`:kbd[Ctrl+K]`). | [Kbd](https://velella.sh/lateen/components/kbd/) |
+| `page-status` | An experimental, beta, or deprecated banner from `status`, `since`, and `replaced_by` in front matter. | [Page status](https://velella.sh/lateen/components/page-status/) |
+| `schema-table` | A JSON Schema from `_data` as a table of properties, types, defaults, and descriptions (`::schema-table{data="widget"}`). | [Schema table](https://velella.sh/lateen/components/schema-table/) |
+| `steps` | A numbered sequence, wrapped around an ordered list (`:::steps`). | [Steps](https://velella.sh/lateen/components/steps/) |
+| `table` | Wraps every Markdown table in a labelled scroll region; automatic on rendered pages. | [Table](https://velella.sh/lateen/components/table/) |
+| `terminal` | A shell session where a line starting with `$` is a command and the rest is output (`:::terminal`). | [Terminal](https://velella.sh/lateen/components/terminal/) |
 
 Each reference page has the syntax, every option, and a live example, and is built with the docs site.
 
