@@ -1,0 +1,71 @@
+/* Doc layout: three columns from the guide mockup — navigation, article, on this page.
+   The chrome units keep their own sticky offsets, scrolls, and width flips; this file only
+   places the columns and moves the table-of-contents fold above the article when its column
+   leaves. */
+
+.layout {
+  --doc-side-w: 17rem;
+  --doc-art-w: 46rem;
+  --doc-toc-w: 14rem;
+  max-inline-size: 90rem;
+  margin-inline: auto;
+  display: grid;
+  grid-template-columns: var(--doc-side-w) minmax(0, 1fr) var(--doc-toc-w);
+  gap: 0 var(--space-12);
+  padding-inline: var(--space-6);
+}
+
+.layout > main {
+  min-inline-size: 0;
+}
+
+.doc {
+  max-inline-size: var(--doc-art-w);
+  min-inline-size: 0;
+  padding-block: var(--space-6) var(--space-12);
+}
+
+.doc > h1 {
+  margin-block: var(--space-4) var(--space-6);
+}
+
+/* Below 64rem the TOC column leaves (chrome/toc/style.css hides it): the fold takes the
+   article column above the article. */
+@media (max-width: 64rem) {
+  .layout {
+    grid-template-columns: var(--doc-side-w) minmax(0, 1fr);
+  }
+
+  .layout > .aside {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .layout > main {
+    grid-column: 2;
+    grid-row: 2;
+  }
+}
+
+/* Below 768px the drawer carries the navigation (the same breakpoint chrome/drawer/style.css
+   uses): single column, no sidebar. Without JavaScript the drawer is in the flow above the
+   article, so the navigation stays reachable. */
+@media (max-width: 767.98px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .layout > .sidebar {
+    display: none;
+  }
+
+  .layout > .aside {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .layout > main {
+    grid-column: 1;
+    grid-row: 2;
+  }
+}

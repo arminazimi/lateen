@@ -1,0 +1,299 @@
+/* Forced colors (Windows high contrast): the reader's system palette replaces every token color,
+   so a rule that relies on color loses its meaning. This file names system colors instead:
+   borders and separators use ButtonBorder or CanvasText, the focus ring uses Highlight, a selected
+   or current item uses Highlight on HighlightText, and disabled text uses GrayText.
+
+   Nothing here creates a color-only signal. A badge, a callout, a page status, a diff line, and a
+   tag all carry their meaning in text in the markup; a selected item is also underlined; and this
+   file never adds generated text, hides an element, or removes an outline.
+
+   `styles/base.css` already names the generic focus ring. This file only adds the controls whose
+   own `outline` shorthand is more specific and loads later, so it complements that rule instead of
+   copying it. Component styles also load after the shared stylesheets, so the overrides that must
+   win carry `!important`, as the print stylesheet does for the same reason. */
+
+@media (forced-colors: active) {
+  /* Links keep the system link colors instead of a token the palette would flatten. */
+  :where(a) {
+    color: LinkText !important;
+  }
+
+  :where(a:visited) {
+    color: VisitedText !important;
+  }
+
+  /* Borders and separators: a token border is replaced by Canvas, so nothing separates. */
+  :where(
+    .announcement-dismiss,
+    .badge,
+    .callout,
+    .card,
+    .changelog-entry,
+    .code,
+    .code-tabs,
+    .copy-markdown-key,
+    .details,
+    .diff-block,
+    .diff-block-copy,
+    .embed,
+    .endpoint,
+    .feedback-button,
+    .file-tree,
+    .home-btn,
+    .kbd,
+    .output-block,
+    .output-block-copy,
+    .page-footer-copy,
+    .page-status,
+    .pager-link,
+    .schema-table-scroll,
+    .search-input,
+    .steps,
+    .table-scroll,
+    .tag,
+    .terminal,
+    .terminal-copy
+  ) {
+    border-color: ButtonBorder !important;
+  }
+
+  /* A quote's edge, a rule, and the inline code chip are information, not decoration. */
+  :where(blockquote, hr, :not(pre) > code) {
+    border-color: CanvasText !important;
+  }
+
+  .steps > ol > li::before {
+    border-color: ButtonBorder !important;
+  }
+
+  .steps > ol > li:not(:last-child)::after {
+    border-inline-start-color: ButtonBorder !important;
+  }
+
+  /* A table is its grid; the zebra background goes away with the palette. */
+  .table-scroll,
+  .schema-table-scroll,
+  .table-scroll th,
+  .table-scroll td,
+  .schema-table th,
+  .schema-table td {
+    border-color: ButtonBorder !important;
+  }
+
+  .table-scroll th,
+  .schema-table th {
+    border-block-end-color: CanvasText !important;
+  }
+
+  /* A badge's variant is also its text, so flattening the accent loses no information. */
+  .badge,
+  .badge-note,
+  .badge-tip,
+  .badge-important,
+  .badge-warning,
+  .badge-caution {
+    border-color: CanvasText !important;
+    color: CanvasText !important;
+  }
+
+  /* Callouts keep a heavy start edge and a visible icon; the title text names the variant. */
+  .callout,
+  .callout-note,
+  .callout-tip,
+  .callout-important,
+  .callout-warning,
+  .callout-caution {
+    border-color: ButtonBorder !important;
+    border-inline-start-color: CanvasText !important;
+  }
+
+  .callout-icon,
+  .callout-note .callout-icon,
+  .callout-tip .callout-icon,
+  .callout-important .callout-icon,
+  .callout-warning .callout-icon,
+  .callout-caution .callout-icon {
+    color: CanvasText !important;
+  }
+
+  /* Page status (the status banner) keeps its edge; its label says experimental, beta, or deprecated. */
+  .page-status,
+  .page-status-experimental,
+  .page-status-beta,
+  .page-status-deprecated {
+    border-color: ButtonBorder !important;
+    border-inline-start-color: CanvasText !important;
+  }
+
+  .page-status-label {
+    color: CanvasText !important;
+  }
+
+  .page-status-since {
+    color: GrayText !important;
+  }
+
+  .page-status-replacement {
+    color: LinkText !important;
+  }
+
+  /* Diff lines keep their edge, their + or − marker, and the strikethrough on a removal. */
+  .diff-block,
+  .diff-block-copy {
+    border-color: ButtonBorder !important;
+  }
+
+  .diff-block-added,
+  .diff-block-removed {
+    border-inline-start-color: CanvasText !important;
+  }
+
+  .diff-block-context {
+    border-inline-start-color: Canvas !important;
+  }
+
+  .diff-block-marker,
+  .diff-block-added > .diff-block-marker,
+  .diff-block-removed > .diff-block-marker {
+    color: CanvasText !important;
+  }
+
+  /* A tag is a chip with a text label; its link keeps the system link color. */
+  .tag {
+    border-color: ButtonBorder !important;
+    color: CanvasText !important;
+  }
+
+  .tag > a {
+    color: LinkText !important;
+  }
+
+  /* An endpoint's method badge says GET or POST in text, so the method stays readable. */
+  .endpoint-method {
+    border-color: CanvasText !important;
+    color: CanvasText !important;
+  }
+
+  /* Selected text, including inside code blocks and diffs, uses the system highlight pair. */
+  ::selection,
+  .code ::selection,
+  .diff-block ::selection,
+  .terminal ::selection {
+    background-color: Highlight !important;
+    color: HighlightText !important;
+  }
+
+  /* A highlighted code line is a tint in the normal palette; name the system highlight instead. */
+  .code .highlighted {
+    background-color: Highlight !important;
+    color: HighlightText !important;
+  }
+
+  /* A current or selected item is a filled Highlight, and the underline keeps the state readable
+     alongside it, so the state is not colour alone. */
+  .sidebar-nav a[aria-current="page"],
+  .sidebar-nav a[aria-current="true"],
+  .sidebar-nav h2[aria-current="true"],
+  .sidebar-nav h3[aria-current="true"],
+  .sidebar-nav h4[aria-current="true"],
+  .sidebar-nav h5[aria-current="true"],
+  .sidebar-nav h6[aria-current="true"],
+  .toc a[aria-current="true"],
+  .section-tab[aria-current="page"],
+  .code-tabs-tab[aria-selected="true"],
+  .theme-toggle-option:has(.theme-toggle-input:checked) {
+    background-color: Highlight !important;
+    color: HighlightText !important;
+    text-decoration: underline;
+  }
+
+  /* The toc and the tabs draw the current state as an edge; keep that edge on the highlight. */
+  .toc a[aria-current="true"] {
+    border-inline-start-color: HighlightText !important;
+  }
+
+  .section-tab[aria-current="page"],
+  .code-tabs-tab[aria-selected="true"] {
+    border-block-end-color: HighlightText !important;
+  }
+
+  /* A highlighted file-tree entry is bold in the normal palette; the fill adds the system cue. */
+  .file-tree-item.is-highlighted > .file-tree-row {
+    background-color: Highlight !important;
+    color: HighlightText !important;
+  }
+
+  /* A search hit uses the system mark colors, which are separate from the reader's selection. */
+  .search-result-excerpt mark {
+    background-color: Mark !important;
+    color: MarkText !important;
+  }
+
+  /* Buttons and button-shaped links take the system button fill, border, and text. */
+  .announcement-dismiss,
+  .copy-markdown-button,
+  .copy-markdown-link,
+  .diff-block-copy,
+  .feedback-button,
+  .home-btn,
+  .output-block-copy,
+  .page-footer-copy,
+  .terminal-copy {
+    background-color: ButtonFace !important;
+    border-color: ButtonBorder !important;
+    color: ButtonText !important;
+  }
+
+  /* A text field is a field: its surface and text come from the system field pair. */
+  .search-input {
+    background-color: Field !important;
+    border-color: ButtonBorder !important;
+    color: FieldText !important;
+  }
+
+  /* The announcement bar is a banner, so it keeps an edge once its accent fill is replaced. */
+  .announcement {
+    background-color: Canvas !important;
+    border-block-end: thin solid CanvasText;
+    color: CanvasText !important;
+  }
+
+  /* Disabled controls are visibly disabled, not just low-contrast. */
+  :is(:disabled, [aria-disabled="true"]) {
+    color: GrayText !important;
+    border-color: GrayText !important;
+  }
+
+  /* Icons are line art on `currentColor`; nothing here may replace that with a token color. */
+  :where(
+    .announcement svg,
+    .breadcrumb svg,
+    .callout-icon,
+    .card-icon > svg,
+    .changelog-entry-anchor svg,
+    .file-tree-icon,
+    .header svg,
+    .heading-anchor svg,
+    .pager-arrow,
+    .search svg,
+    .theme-toggle svg
+  ) {
+    stroke: currentColor;
+  }
+
+  .heading-anchor svg,
+  .changelog-entry-anchor svg {
+    fill: currentColor;
+  }
+
+  /* The base stylesheet already names the ring for every focus. A component's own `outline`
+     shorthand is more specific and loads later, so repeat the system color for interactive
+     elements only. This complements the base rule; it does not copy its generic selector. */
+  :is(a, button, input, select, summary, textarea, [tabindex], [role="button"]):focus-visible {
+    outline-color: Highlight !important;
+  }
+
+  .theme-toggle-option:has(.theme-toggle-input:focus-visible) {
+    outline-color: Highlight !important;
+  }
+}

@@ -1,0 +1,45 @@
+/* Language switcher: one link per configured language, in the header. Plain anchors, so it works
+   without JavaScript; the current language carries `aria-current` and a visible word, not colour alone. */
+
+.language-switcher-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.language-switcher-link {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  padding-block: var(--space-1);
+  padding-inline: var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--color-muted);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-sm);
+  text-decoration: none;
+}
+
+.language-switcher-link:hover {
+  background: var(--state-hover-bg);
+  color: var(--color-text);
+}
+
+.language-switcher-link:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: 2px;
+}
+
+.language-switcher-link[aria-current="true"] {
+  color: var(--color-heading);
+  font-weight: var(--type-weight-bold);
+}
+
+.language-switcher-current {
+  color: var(--color-muted);
+  font-weight: var(--type-weight-regular);
+}

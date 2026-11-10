@@ -1,0 +1,60 @@
+/* Page feedback: a question with two vote buttons under the article. Hidden until the island runs. */
+
+.feedback {
+  display: grid;
+  gap: var(--space-2);
+  margin-block-start: var(--space-6);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-sm);
+  color: var(--color-muted);
+}
+
+/* The widget sets display, so the hidden attribute needs its own rule to keep it out of sight. */
+.feedback[hidden] {
+  display: none;
+}
+
+.feedback-question {
+  margin: 0;
+  color: var(--color-text);
+}
+
+.feedback-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.feedback-button {
+  padding: var(--space-1) var(--space-3);
+  font: inherit;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+/* The buttons set display, so the hidden attribute needs its own rule to keep them out of sight. */
+.feedback-button[hidden] {
+  display: none;
+}
+
+.feedback-button:hover {
+  background: var(--state-hover-bg);
+}
+
+.feedback-button:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: 2px;
+}
+
+.feedback-button:disabled {
+  color: var(--state-disabled-fg);
+  cursor: default;
+}
+
+.feedback-status {
+  margin: 0;
+  min-block-size: var(--space-4);
+}

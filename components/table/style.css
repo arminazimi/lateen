@@ -1,0 +1,87 @@
+/* Tables: readable cells, horizontal scroll, sticky first column, edge shadow. */
+
+.table-scroll {
+  max-inline-size: 100%;
+  margin-block: var(--space-6);
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-canvas);
+  box-shadow: var(--shadow-sm);
+}
+
+.table-scroll:focus {
+  outline: none;
+}
+
+.table-scroll:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: var(--space-1);
+}
+
+.table-scroll > .table,
+.table-scroll > table {
+  border-collapse: collapse;
+  inline-size: max-content;
+  min-inline-size: 100%;
+  margin: 0;
+  font-family: var(--type-font-body);
+  font-size: var(--type-size-sm);
+  line-height: var(--type-leading-body);
+  color: var(--color-text);
+}
+
+.table-scroll th,
+.table-scroll td {
+  padding-block: var(--space-2);
+  padding-inline: var(--space-3);
+  border: 1px solid var(--color-border);
+  text-align: start;
+  vertical-align: top;
+}
+
+.table-scroll th {
+  background-color: var(--color-surface);
+  color: var(--color-heading);
+  font-weight: var(--type-weight-medium);
+}
+
+.table-scroll td {
+  background-color: var(--color-canvas);
+}
+
+.table-scroll tbody tr:nth-child(even) td {
+  background-color: var(--color-surface);
+}
+
+.table-scroll th:first-child,
+.table-scroll td:first-child {
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: 1;
+  box-shadow: var(--shadow-md);
+}
+
+.table-scroll th:first-child {
+  z-index: 2;
+  background-color: var(--color-surface);
+}
+
+.table-scroll td:first-child {
+  background-color: var(--color-canvas);
+}
+
+.table-scroll tbody tr:nth-child(even) td:first-child {
+  background-color: var(--color-surface);
+}
+
+.table-scroll code {
+  font-family: var(--type-font-mono);
+  font-size: var(--type-size-sm);
+  color: var(--code-fg);
+  background-color: var(--code-bg);
+  border: 1px solid var(--code-border);
+  border-radius: var(--radius-sm);
+  padding-block: 0;
+  padding-inline: var(--space-1);
+}

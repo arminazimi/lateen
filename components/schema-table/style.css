@@ -1,0 +1,105 @@
+/* Schema tables: a JSON Schema as a table of properties, with nested properties indented under their parent. Colors and spacing come from tokens, so dark mode follows. */
+
+.schema-table-scroll {
+  max-inline-size: 100%;
+  margin-block: var(--space-6);
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-canvas);
+  box-shadow: var(--shadow-sm);
+}
+
+.schema-table-scroll:focus {
+  outline: none;
+}
+
+.schema-table-scroll:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: var(--space-1);
+}
+
+.schema-table {
+  border-collapse: collapse;
+  inline-size: max-content;
+  min-inline-size: 100%;
+  margin: 0;
+  font-family: var(--type-font-body);
+  font-size: var(--type-size-sm);
+  line-height: var(--type-leading-body);
+  color: var(--color-text);
+}
+
+.schema-table th,
+.schema-table td {
+  padding-block: var(--space-2);
+  padding-inline: var(--space-3);
+  border: 1px solid var(--color-border);
+  text-align: start;
+  vertical-align: top;
+}
+
+.schema-table thead th {
+  background-color: var(--color-surface);
+  color: var(--color-heading);
+  font-weight: var(--type-weight-medium);
+}
+
+.schema-table td {
+  background-color: var(--color-canvas);
+}
+
+.schema-table tbody th {
+  background-color: var(--color-canvas);
+  color: var(--color-heading);
+  font-weight: var(--type-weight-medium);
+  white-space: nowrap;
+}
+
+.schema-table code {
+  font-family: var(--type-font-mono);
+  font-size: var(--type-size-sm);
+  color: var(--code-fg);
+  background-color: var(--code-bg);
+  border: 1px solid var(--code-border);
+  border-radius: var(--radius-sm);
+  padding-block: 0;
+  padding-inline: var(--space-1);
+  unicode-bidi: isolate;
+}
+
+.schema-required {
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+
+.schema-description > span {
+  display: block;
+}
+
+.schema-values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-block: var(--space-1) 0;
+  margin-inline: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.schema-depth-1 > th {
+  padding-inline-start: var(--space-6);
+}
+
+.schema-depth-2 > th {
+  padding-inline-start: var(--space-12);
+}
+
+.schema-depth-3 > th {
+  padding-inline-start: var(--space-16);
+}
+
+.schema-table-missing {
+  margin-block: var(--space-4);
+  color: var(--color-muted);
+}

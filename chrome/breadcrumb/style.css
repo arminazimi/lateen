@@ -1,0 +1,41 @@
+/* Breadcrumb: the trail from the navigation tree above the title. Ancestor links, then the current page last. */
+
+.breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-sm);
+  color: var(--color-muted);
+}
+
+.breadcrumb a {
+  color: var(--color-muted);
+  text-decoration: none;
+}
+
+.breadcrumb a:hover {
+  color: var(--color-accent);
+}
+
+.breadcrumb a:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: 2px;
+}
+
+.breadcrumb-sep {
+  flex: none;
+  inline-size: var(--space-3);
+  block-size: var(--space-3);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Separators point toward the current page: mirror them when the page is right-to-left. */
+[dir="rtl"] .breadcrumb-sep {
+  transform: scaleX(-1);
+}

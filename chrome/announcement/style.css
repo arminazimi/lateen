@@ -1,0 +1,68 @@
+/* Announcement bar: a dismissible message at the top of every page, from theme.options.announcement.
+   The dismiss button starts hidden; client.ts reveals it and hides the bar again on a later visit. */
+
+.announcement {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding-block: var(--space-2);
+  padding-inline: var(--space-4);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-sm);
+}
+
+/* The bar sets display, so the hidden attribute needs its own rule to keep it out of sight. */
+.announcement[hidden] {
+  display: none;
+}
+
+.announcement-text {
+  margin: 0;
+  text-align: center;
+}
+
+.announcement-link {
+  color: var(--color-on-accent);
+  text-decoration: underline;
+  text-underline-offset: var(--space-1);
+}
+
+.announcement-link:hover {
+  color: var(--color-on-accent);
+}
+
+.announcement-link:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: 2px;
+}
+
+.announcement-dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 var(--space-1);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* The button sets display, so the hidden attribute needs its own rule to keep it out of sight. */
+.announcement-dismiss[hidden] {
+  display: none;
+}
+
+.announcement-dismiss:hover {
+  opacity: 0.8;
+}
+
+.announcement-dismiss:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: 2px;
+}

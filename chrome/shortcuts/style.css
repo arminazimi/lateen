@@ -1,0 +1,121 @@
+/* Keyboard shortcuts dialog: a small sheet of key bindings over the page, hidden until client.ts opens it. */
+
+/* The static HTML carries `hidden`; client.ts removes it once it has wired the dialog. */
+.shortcuts[hidden] {
+  display: none;
+}
+
+.shortcuts {
+  inline-size: min(32rem, calc(100vw - 2 * var(--space-4)));
+  max-block-size: min(80vh, 32rem);
+  margin-block: 10vh auto;
+  margin-inline: auto;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  box-shadow: var(--shadow-dialog);
+  overflow: hidden;
+}
+
+.shortcuts::backdrop {
+  background: var(--state-overlay);
+}
+
+.shortcuts-panel {
+  max-block-size: inherit;
+  overflow-y: auto;
+}
+
+.shortcuts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-block-end: 1px solid var(--color-border);
+}
+
+.shortcuts-title {
+  margin: 0;
+  color: var(--color-heading);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-lg);
+  font-weight: var(--type-weight-medium);
+}
+
+.shortcuts-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: var(--space-8);
+  min-inline-size: var(--space-8);
+  padding: var(--space-1);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-muted);
+  font-size: var(--type-size-lg);
+  line-height: 1;
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--motion-ease);
+}
+
+.shortcuts-close:hover {
+  background: var(--state-hover-bg);
+  color: var(--color-heading);
+}
+
+.shortcuts-close:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: 2px;
+}
+
+.shortcuts-list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+  padding: var(--space-3);
+}
+
+.shortcut {
+  display: contents;
+}
+
+.shortcut-keys {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+}
+
+.shortcut-key {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-heading);
+  font-family: var(--type-font-mono);
+  font-size: var(--type-size-sm);
+  line-height: var(--type-leading-tight);
+  white-space: nowrap;
+}
+
+.shortcut-separator {
+  color: var(--color-muted);
+}
+
+.shortcut-action {
+  margin: 0;
+  color: var(--color-text);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-sm);
+}
+
+.shortcut-needs-js {
+  display: block;
+  color: var(--color-muted);
+  font-size: var(--type-size-xs);
+}

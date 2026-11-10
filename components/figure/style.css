@@ -1,0 +1,71 @@
+/* Figures: an image with a caption and credit, centered and never wider than its column. Colors come from tokens, so dark mode follows. */
+
+.figure {
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  margin-block: var(--space-6);
+  margin-inline: auto;
+}
+
+.figure-img {
+  display: block;
+  max-inline-size: 100%;
+  block-size: auto;
+  margin-inline: auto;
+  border-radius: var(--radius-md);
+}
+
+/* A paired figure shows its light image in light mode and its dark image in dark mode, as the header logo does. */
+.figure-paired .figure-img-dark {
+  display: none;
+}
+
+:root[data-theme="dark"] .figure-paired .figure-img-light {
+  display: none;
+}
+
+:root[data-theme="dark"] .figure-paired .figure-img-dark {
+  display: block;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .figure-paired .figure-img-light {
+    display: none;
+  }
+
+  :root:not([data-theme="light"]) .figure-paired .figure-img-dark {
+    display: block;
+  }
+}
+
+.figure-caption {
+  margin-block-start: var(--space-2);
+  color: var(--color-muted);
+  font-size: var(--type-size-sm);
+  line-height: var(--type-leading-body);
+  text-align: start;
+}
+
+.figure-caption > :first-child {
+  margin-block-start: 0;
+}
+
+.figure-caption > :last-child {
+  margin-block-end: 0;
+}
+
+.figure-text > p {
+  margin-block: var(--space-1);
+}
+
+.figure-credit {
+  margin-block-start: var(--space-1);
+}
+
+.figure-credit a {
+  color: var(--color-link);
+}
+
+.figure-credit a:hover {
+  color: var(--color-link-hover);
+}

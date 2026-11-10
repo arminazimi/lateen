@@ -1,0 +1,47 @@
+/* Footnote popover: the note a reference points at, shown below the reference on hover or focus.
+   The island moves this root beside the reference and marks that element `data-footnote-anchor`,
+   which gives the absolutely positioned tooltip its containing block. Every edge is logical, so
+   the tooltip opens toward the inline direction of a Persian or Arabic page too. */
+
+[data-footnote-anchor] {
+  position: relative;
+}
+
+.footnote-popover {
+  position: absolute;
+  inset-block-start: 100%;
+  inset-inline-start: 0;
+  z-index: var(--layer-popover);
+  display: block;
+  inline-size: max-content;
+  max-inline-size: var(--type-measure-min);
+  margin-block-start: var(--space-1);
+  padding-block: var(--space-2);
+  padding-inline: var(--space-3);
+  border: thin solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-popover);
+  color: var(--color-text);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-sm);
+  font-style: normal;
+  font-weight: var(--type-weight-regular);
+  line-height: var(--type-leading-body);
+  text-align: start;
+  white-space: normal;
+  overflow-wrap: break-word;
+  pointer-events: none;
+}
+
+/* The root sets display, so the hidden attribute needs its own rule to keep it out of sight. */
+.footnote-popover[hidden] {
+  display: none;
+}
+
+/* A printed page keeps the note in its own section; the hover tooltip has no place on paper. */
+@media print {
+  .footnote-popover {
+    display: none;
+  }
+}

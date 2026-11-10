@@ -1,0 +1,122 @@
+/* Self-hosted fonts: Geist (sans), Geist Mono, and Vazirmatn (Arabic script).
+ *
+ * Sources: @fontsource/geist-sans@5.3.0, @fontsource/geist-mono@5.3.0, and
+ * @fontsource/vazirmatn@5.3.0, redistributed under the SIL Open Font License 1.1
+ * (each family's LICENSE sits beside its files in `../fonts/`). The latin files
+ * were re-subsetted to the canonical latin unicode-range below so a Latin page
+ * loads ~78.5 KiB of fonts. The `* Fallback` faces carry the same metrics as the
+ * web fonts (`size-adjust`, `ascent-override`, computed from hhea/OS/2 with the
+ * @next/font formulas against Arial, Courier New, and Tahoma) so the swap does
+ * not shift layout. Wire them into `--type-font-*` after the first name in the
+ * token stacks, e.g. `Geist, "Geist Fallback", Vazirmatn, …`.
+ */
+
+/* Geist — latin, static 400/500/700 */
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url("../fonts/geist/geist-sans-latin-400-normal.woff2") format("woff2");
+  unicode-range: U+0020-007E, U+00A0-00FF, U+0131, U+0152-0153, U+02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+2013-2014, U+2018-201A, U+201C-201E, U+2020-2022, U+2026, U+2030, U+2032-2033, U+2039-203A, U+2044, U+20AC, U+2122, U+2191, U+2193, U+2212;
+}
+
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url("../fonts/geist/geist-sans-latin-500-normal.woff2") format("woff2");
+  unicode-range: U+0020-007E, U+00A0-00FF, U+0131, U+0152-0153, U+02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+2013-2014, U+2018-201A, U+201C-201E, U+2020-2022, U+2026, U+2030, U+2032-2033, U+2039-203A, U+2044, U+20AC, U+2122, U+2191, U+2193, U+2212;
+}
+
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 700;
+  src: url("../fonts/geist/geist-sans-latin-700-normal.woff2") format("woff2");
+  unicode-range: U+0020-007E, U+00A0-00FF, U+0131, U+0152-0153, U+02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+2013-2014, U+2018-201A, U+201C-201E, U+2020-2022, U+2026, U+2030, U+2032-2033, U+2039-203A, U+2044, U+20AC, U+2122, U+2191, U+2193, U+2212;
+}
+
+/* Geist Mono — latin, static 400/700 */
+@font-face {
+  font-family: "Geist Mono";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url("../fonts/geist-mono/geist-mono-latin-400-normal.woff2") format("woff2");
+  unicode-range: U+0020-007E, U+00A0-00AC, U+00AE-00FF, U+0131, U+0152-0153, U+02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+2013-2014, U+2018-201A, U+201C-201E, U+2022, U+2026, U+2032-2033, U+2039-203A, U+2044, U+20AC, U+2122, U+2191, U+2193, U+2212;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 700;
+  src: url("../fonts/geist-mono/geist-mono-latin-700-normal.woff2") format("woff2");
+  unicode-range: U+0020-007E, U+00A0-00AC, U+00AE-00FF, U+0131, U+0152-0153, U+02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+2013-2014, U+2018-201A, U+201C-201E, U+2022, U+2026, U+2032-2033, U+2039-203A, U+2044, U+20AC, U+2122, U+2191, U+2193, U+2212;
+}
+
+/* Vazirmatn — Arabic script (Arabic + Persian, incl. ZWNJ and Persian digits), static 400/500/700 */
+@font-face {
+  font-family: "Vazirmatn";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url("../fonts/vazirmatn/vazirmatn-arabic-400-normal.woff2") format("woff2");
+  unicode-range: U+0000, U+000D, U+0020, U+0041, U+00A0, U+060C-060D, U+0610-0612, U+0615, U+061B, U+061F, U+0621-063A, U+063D, U+0640-0658, U+065A-065B, U+0660-0671, U+0674, U+0679, U+067C, U+067E, U+0681, U+0685-0686, U+0688-0689, U+0691, U+0693, U+0695-0696, U+0698, U+069A, U+06A0-06A1, U+06A4, U+06A9-06AD, U+06AF, U+06B5, U+06BA, U+06BC-06BE, U+06C0-06C3, U+06C6-06D0, U+06D2-06D5, U+06DC-06DE, U+06E9, U+06F0-06F9, U+0762-0763, U+200C-200E, U+2010-2011, U+FB50-FB51, U+FB56-FB59, U+FB66-FB6D, U+FB7A-FB7D, U+FB88-FB95, U+FB9E-FB9F, U+FBA5, U+FBA7-FBB1, U+FBBF-FBC0, U+FBD3-FBDC, U+FBDE-FBDF, U+FBE2-FBE3, U+FBE8-FBE9, U+FBFC-FBFF, U+FD3E-FD3F, U+FDF2, U+FDFC, U+FE70-FE74, U+FE76-FEFC;
+}
+
+@font-face {
+  font-family: "Vazirmatn";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url("../fonts/vazirmatn/vazirmatn-arabic-500-normal.woff2") format("woff2");
+  unicode-range: U+0000, U+000D, U+0020, U+0041, U+00A0, U+060C-060D, U+0610-0612, U+0615, U+061B, U+061F, U+0621-063A, U+063D, U+0640-0658, U+065A-065B, U+0660-0671, U+0674, U+0679, U+067C, U+067E, U+0681, U+0685-0686, U+0688-0689, U+0691, U+0693, U+0695-0696, U+0698, U+069A, U+06A0-06A1, U+06A4, U+06A9-06AD, U+06AF, U+06B5, U+06BA, U+06BC-06BE, U+06C0-06C3, U+06C6-06D0, U+06D2-06D5, U+06DC-06DE, U+06E9, U+06F0-06F9, U+0762-0763, U+200C-200E, U+2010-2011, U+FB50-FB51, U+FB56-FB59, U+FB66-FB6D, U+FB7A-FB7D, U+FB88-FB95, U+FB9E-FB9F, U+FBA5, U+FBA7-FBB1, U+FBBF-FBC0, U+FBD3-FBDC, U+FBDE-FBDF, U+FBE2-FBE3, U+FBE8-FBE9, U+FBFC-FBFF, U+FD3E-FD3F, U+FDF2, U+FDFC, U+FE70-FE74, U+FE76-FEFC;
+}
+
+@font-face {
+  font-family: "Vazirmatn";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 700;
+  src: url("../fonts/vazirmatn/vazirmatn-arabic-700-normal.woff2") format("woff2");
+  unicode-range: U+0000, U+000D, U+0020, U+0041, U+00A0, U+060C-060D, U+0610-0612, U+0615, U+061B, U+061F, U+0621-063A, U+063D, U+0640-0658, U+065A-065B, U+0660-0671, U+0674, U+0679, U+067C, U+067E, U+0681, U+0685-0686, U+0688-0689, U+0691, U+0693, U+0695-0696, U+0698, U+069A, U+06A0-06A1, U+06A4, U+06A9-06AD, U+06AF, U+06B5, U+06BA, U+06BC-06BE, U+06C0-06C3, U+06C6-06D0, U+06D2-06D5, U+06DC-06DE, U+06E9, U+06F0-06F9, U+0762-0763, U+200C-200E, U+2010-2011, U+FB50-FB51, U+FB56-FB59, U+FB66-FB6D, U+FB7A-FB7D, U+FB88-FB95, U+FB9E-FB9F, U+FBA5, U+FBA7-FBB1, U+FBBF-FBC0, U+FBD3-FBDC, U+FBDE-FBDF, U+FBE2-FBE3, U+FBE8-FBE9, U+FBFC-FBFF, U+FD3E-FD3F, U+FDF2, U+FDFC, U+FE70-FE74, U+FE76-FEFC;
+}
+
+/* Size-adjusted local fallbacks, one per family, computed against the regular
+ * weight. Bold is synthesized in the fallback for the swap window. */
+@font-face {
+  font-family: "Geist Fallback";
+  font-style: normal;
+  font-weight: 400;
+  src: local("Arial");
+  size-adjust: 133.44%;
+  ascent-override: 76.16%;
+  descent-override: 77.8%;
+  line-gap-override: 229.08%;
+}
+
+@font-face {
+  font-family: "Geist Mono Fallback";
+  font-style: normal;
+  font-weight: 400;
+  src: local("Courier New");
+  size-adjust: 99.98%;
+  ascent-override: 120.74%;
+  descent-override: 98.25%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: "Vazirmatn Fallback";
+  font-style: normal;
+  font-weight: 400;
+  src: local("Tahoma");
+  size-adjust: 126.7%;
+  ascent-override: 80.89%;
+  descent-override: 205.24%;
+  line-gap-override: 0%;
+}

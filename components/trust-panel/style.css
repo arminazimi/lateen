@@ -1,0 +1,165 @@
+/* Trust panel: a chip under the page title that opens a native disclosure with the page's examples,
+   drift, last reviewer, and why it has its level. The chip is the <summary>, so the panel opens and
+   closes without JavaScript. Logical properties and inline edges keep it working under RTL, and every
+   colour and length comes from a token, so dark mode follows. */
+
+.trust-panel {
+  position: relative;
+  display: inline-block;
+  margin-block: 0 var(--space-4);
+  margin-inline-end: var(--space-2);
+  vertical-align: middle;
+}
+
+.trust-panel-chip {
+  display: inline-flex;
+  gap: var(--space-1);
+  align-items: center;
+  padding-block: 0;
+  padding-inline: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background-color: var(--color-surface);
+  color: var(--color-muted);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-sm);
+  font-weight: var(--type-weight-medium);
+  line-height: var(--type-leading-tight);
+  white-space: nowrap;
+  cursor: pointer;
+  list-style: none;
+}
+
+/* The native disclosure marker is replaced by the chip's border and level colour. */
+.trust-panel-chip::-webkit-details-marker {
+  display: none;
+}
+
+.trust-panel-chip::marker {
+  content: "";
+}
+
+.trust-panel-chip:hover {
+  border-color: var(--color-border-strong);
+  color: var(--color-heading);
+}
+
+.trust-panel-chip:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: 2px;
+}
+
+.trust-panel[open] .trust-panel-chip {
+  border-color: var(--color-border-strong);
+  color: var(--color-heading);
+}
+
+.trust-panel-icon {
+  flex: none;
+  inline-size: var(--space-3);
+  block-size: var(--space-3);
+}
+
+.trust-panel-verified .trust-panel-icon {
+  color: var(--color-success);
+}
+
+.trust-panel-review-due .trust-panel-icon {
+  color: var(--color-warning);
+}
+
+.trust-panel-at-risk .trust-panel-icon {
+  color: var(--color-danger);
+}
+
+.trust-panel-level {
+  color: inherit;
+}
+
+.trust-panel-body {
+  position: absolute;
+  inset-block-start: calc(100% + var(--space-1));
+  inset-inline-start: 0;
+  z-index: var(--layer-popover);
+  inline-size: max-content;
+  max-inline-size: var(--type-measure-min);
+  padding-block: var(--space-3);
+  padding-inline: var(--space-4);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-card);
+  background-color: var(--color-surface-raised);
+  box-shadow: var(--shadow-popover);
+  color: var(--color-text);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-sm);
+  line-height: var(--type-leading-body);
+}
+
+.trust-panel-rows {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+}
+
+.trust-panel-label {
+  color: var(--color-muted);
+  font-weight: var(--type-weight-medium);
+}
+
+.trust-panel-value {
+  margin: 0;
+  color: var(--color-text);
+}
+
+.trust-panel-reasons-label {
+  margin-block: var(--space-3) var(--space-1);
+  color: var(--color-muted);
+  font-weight: var(--type-weight-medium);
+}
+
+.trust-panel-reasons {
+  margin-block: 0;
+  padding-inline-start: var(--space-4);
+  color: var(--color-muted);
+}
+
+.trust-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-block-start: var(--space-3);
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--color-border);
+}
+
+.trust-panel-action {
+  color: var(--color-link);
+  font-weight: var(--type-weight-medium);
+  text-decoration-thickness: 1px;
+}
+
+.trust-panel-action:hover {
+  color: var(--color-link-hover);
+}
+
+.trust-panel-action:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: 2px;
+}
+
+/* On a narrow screen the panel sits in the flow instead of over the content, so it cannot run off
+   the inline edge and the chip's row can wrap. */
+@media (max-width: 40rem) {
+  .trust-panel {
+    position: static;
+    display: block;
+  }
+
+  .trust-panel-body {
+    position: static;
+    inline-size: auto;
+    max-inline-size: none;
+    margin-block-start: var(--space-2);
+  }
+}

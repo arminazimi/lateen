@@ -1,0 +1,62 @@
+/* Theme toggle: light, system, and dark as a segmented control; hidden until client.ts runs it. */
+
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.theme-toggle-legend {
+  padding: 0;
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-sm);
+  color: var(--color-muted);
+}
+
+.theme-toggle-options {
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+}
+
+.theme-toggle-option {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  color: var(--color-muted);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-sm);
+  cursor: pointer;
+}
+
+.theme-toggle-option:hover {
+  background: var(--state-hover-bg);
+  color: var(--color-text);
+}
+
+/* The native radio and the status region stay in the accessibility tree, out of sight. */
+.theme-toggle-input,
+.theme-toggle-status {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.theme-toggle-option:has(.theme-toggle-input:checked) {
+  background: var(--state-selected-bg);
+  color: var(--color-heading);
+}
+
+.theme-toggle-option:has(.theme-toggle-input:focus-visible) {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: 2px;
+}

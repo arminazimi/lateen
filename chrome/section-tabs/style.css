@@ -1,0 +1,38 @@
+/* Section tabs: one row of section links for the header slot; the active section is underlined. */
+
+.section-tabs {
+  display: flex;
+  gap: var(--space-1);
+  block-size: 100%;
+  overflow-inline: auto;
+}
+
+.section-tab {
+  display: inline-flex;
+  align-items: center;
+  padding-inline: var(--space-3);
+  border-block-end: 2px solid transparent;
+  margin-block-end: -1px;
+  color: var(--color-muted);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-sm);
+  white-space: nowrap;
+  text-decoration: none;
+  transition: color var(--motion-fast) var(--motion-ease);
+}
+
+.section-tab:hover {
+  color: var(--color-heading);
+  text-decoration: none;
+}
+
+.section-tab[aria-current="page"] {
+  border-block-end-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+/* The scroll container clips outward rings, so the ring sits inside. */
+.section-tab:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: -2px;
+}

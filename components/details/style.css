@@ -1,0 +1,78 @@
+/* Details: a styled disclosure block. Native <details>, so it works without JavaScript. */
+
+.details {
+  margin-block: var(--space-6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+}
+
+.details-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-block: var(--space-3);
+  padding-inline: var(--space-4);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  list-style: none;
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-base);
+  font-weight: var(--type-weight-medium);
+  line-height: var(--type-leading-body);
+  color: var(--color-heading);
+}
+
+.details-summary::-webkit-details-marker {
+  display: none;
+}
+
+.details-summary:hover {
+  background-color: var(--state-hover-bg);
+}
+
+.details-summary:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: calc(var(--space-1) * -1);
+}
+
+/* Chevron: a rotated corner, turned to point inline-end when closed and down when open. */
+.details-summary::before {
+  flex: none;
+  content: "";
+  inline-size: 0.5em;
+  block-size: 0.5em;
+  border-block-start: 2px solid currentcolor;
+  border-inline-end: 2px solid currentcolor;
+  transform: rotate(45deg);
+  transition: transform var(--motion-base) var(--motion-ease);
+}
+
+.details[open] > .details-summary::before {
+  transform: rotate(135deg);
+}
+
+.details-summary:dir(rtl)::before {
+  transform: rotate(-45deg);
+}
+
+.details[open] > .details-summary:dir(rtl)::before {
+  transform: rotate(-135deg);
+}
+
+.details-body {
+  padding-block: var(--space-2) var(--space-4);
+  padding-inline: var(--space-4);
+  border-block-start: 1px solid var(--color-border);
+  background-color: var(--color-canvas);
+  border-end-start-radius: var(--radius-md);
+  border-end-end-radius: var(--radius-md);
+}
+
+.details-body > :first-child {
+  margin-block-start: 0;
+}
+
+.details-body > :last-child {
+  margin-block-end: 0;
+}

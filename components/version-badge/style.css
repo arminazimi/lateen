@@ -1,0 +1,63 @@
+/* Version badge: a small label that says when a feature was added, changed, or removed. The icon
+   differs per variant, so color is never the only signal. The version value stays left to right. */
+
+.version-badge {
+  display: inline-flex;
+  gap: var(--space-1);
+  align-items: baseline;
+  padding-block: 0;
+  padding-inline: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background-color: var(--color-canvas);
+  color: var(--color-text);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-sm);
+  font-weight: var(--type-weight-medium);
+  line-height: var(--type-leading-tight);
+  white-space: nowrap;
+  vertical-align: baseline;
+}
+
+.version-badge-block {
+  display: flex;
+  inline-size: fit-content;
+  margin-block: var(--space-3);
+}
+
+.version-badge-added {
+  border-color: var(--color-success);
+  color: var(--color-success);
+}
+
+.version-badge-changed {
+  border-color: var(--color-info);
+  color: var(--color-info);
+}
+
+.version-badge-removed {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+.version-badge-icon {
+  font-family: var(--type-font-mono);
+  font-weight: var(--type-weight-bold);
+}
+
+.version-badge-value {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--type-font-mono);
+}
+
+/* The sentence for screen readers, in the accessibility tree but out of sight. */
+.version-badge-sr {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

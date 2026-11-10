@@ -1,0 +1,184 @@
+/* Print: only the article, in the light palette, with link addresses and code that does not clip.
+   This file is discovered with the other shared stylesheets and applies only to printed pages.
+   Every color and type size comes from a token; the page geometry in `@page` is physical, so it
+   uses mm and is deliberately not tokenized. Logical properties only, so right-to-left prints too. */
+
+@page {
+  size: A4 portrait;
+  /* Symmetric inline margins: the page box has no direction, so left and right are the same. */
+  margin: 18mm 16mm;
+}
+
+@media print {
+  /* Tokens are `light-dark()` pairs and the visitor may have picked dark. Printing is always on
+     white, so force the light color scheme: every token then resolves to its light value without
+     overriding the tokens themselves. `!important` is needed because theme CSS and a site's token
+     overrides may set `color-scheme` on `:root[data-theme]` with higher specificity. */
+  :root {
+    color-scheme: light !important;
+  }
+
+  html,
+  body {
+    background-color: var(--color-surface-raised);
+    color: var(--color-text);
+  }
+
+  /* Chrome and controls that only make sense on screen. The page is the article. */
+  .skip-link,
+  body > header,
+  body > footer,
+  .header,
+  .section-tabs,
+  .drawer,
+  .sidebar,
+  .sidebar-nav,
+  .aside,
+  .toc,
+  .toc-fold,
+  .breadcrumb,
+  .pager,
+  .page-footer,
+  .page-agent-menu,
+  [data-page-agent-menu],
+  .feedback,
+  [data-feedback],
+  .block-actions,
+  [data-block-actions],
+  .search,
+  [data-search],
+  .theme-toggle,
+  [data-theme-toggle],
+  .terminal-copy,
+  .page-footer-copy,
+  .page-agent-menu-copy,
+  .heading-anchor,
+  .code-tabs-list {
+    display: none !important;
+  }
+
+  /* The three-column grid and the article's screen width have no meaning on paper. */
+  .layout {
+    display: block;
+    max-inline-size: none;
+    margin-inline: 0;
+    padding-inline: 0;
+  }
+
+  .layout > main,
+  .doc {
+    display: block;
+    max-inline-size: none;
+    padding-block: 0;
+  }
+
+  .doc-body {
+    max-inline-size: none;
+  }
+
+  /* Links keep their text weight and color; their address follows in a smaller, muted face. */
+  a {
+    color: inherit;
+  }
+
+  .doc a[href]:not([href=""]):not([href^="#" i]):not([href^="javascript:" i]):not([href^="mailto:" i])::after {
+    content: " (" attr(href) ")";
+    color: var(--color-muted);
+    font-family: var(--type-font-mono);
+    font-size: var(--type-size-xs);
+    /* Addresses are left-to-right even on a right-to-left page; isolate them from the surrounding text. */
+    direction: ltr;
+    unicode-bidi: isolate;
+    overflow-wrap: anywhere;
+  }
+
+  /* A closed disclosure must print its body. The `!important` beats the UA rule that hides a
+     closed `<details>`'s non-summary children. */
+  details:not([open]) > :not(summary) {
+    display: block !important;
+  }
+
+  .details-summary {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  /* The chevron is a screen affordance; the summary text is enough on paper. */
+  .details-summary::before {
+    display: none;
+  }
+
+  /* Code tabs stack without JavaScript, but the island hides every panel except the selected one.
+     Print shows them all, each under its title, and drops the tab list. */
+  .code-tabs-panel,
+  .code-tabs-panel[hidden] {
+    display: block !important;
+  }
+
+  .code-tabs-title {
+    display: block !important;
+  }
+
+  /* Screen code scrolls sideways. Paper cannot, so wrap long lines instead of clipping them. */
+  .code,
+  .terminal,
+  .terminal-body,
+  .file-tree,
+  .table-scroll,
+  .schema-table-scroll {
+    overflow: visible;
+    max-inline-size: none;
+  }
+
+  .code code,
+  .terminal-body,
+  .terminal-body code {
+    inline-size: auto;
+    min-inline-size: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  /* Tables shrink to the page and lose the sticky first column and its edge shadow. */
+  .table-scroll > .table,
+  .table-scroll > table,
+  .schema-table {
+    inline-size: 100%;
+    min-inline-size: 0;
+  }
+
+  .table-scroll th:first-child,
+  .table-scroll td:first-child {
+    position: static;
+    box-shadow: none;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  /* A paired figure shows the light image: dark artwork would be unreadable on white paper. */
+  .figure-paired .figure-img-light {
+    display: block !important;
+  }
+
+  .figure-paired .figure-img-dark {
+    display: none !important;
+  }
+
+  /* Keep headings with the text that follows and keep blocks whole where the page allows it. */
+  :where(h1, h2, h3, h4, h5, h6) {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  :where(pre, code, figure, .figure, .embed, img, svg, blockquote, table, tr, .terminal, .code-tabs-panel) {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  :where(p, li) {
+    orphans: 3;
+    widows: 3;
+  }
+}

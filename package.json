@@ -1,0 +1,36 @@
+{
+  "name": "@velella/lateen",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A docs theme for people and agents, built on Mizzen.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "tokens": "node scripts/tokens.ts",
+    "tokens:check": "node scripts/tokens.ts --check",
+    "test": "node scripts/tokens.ts --check && node --test \"test/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@velella/mizzen": "0.1.0",
+    "jsdom": "^31.0.0",
+    "mermaid": "^12.3.0",
+    "shiki": "^4.6.0"
+  },
+  "peerDependencies": {
+    "preact": "^11.2.0"
+  },
+  "devDependencies": {
+    "@types/jsdom": "^30.0.0",
+    "@types/node": "^26.6.6",
+    "preact": "^11.2.0",
+    "preact-render-to-string": "^6.8.2",
+    "typescript": "^7.0.2"
+  }
+}

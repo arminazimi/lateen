@@ -1,0 +1,105 @@
+/* Video: a 16:9 poster with a play button that loads the provider's player on click, plus a link that works without JavaScript. Colors come from tokens, so dark mode follows. */
+
+.video {
+  position: relative;
+  inline-size: 100%;
+  max-inline-size: 100%;
+  aspect-ratio: 16 / 9;
+  margin-block: var(--space-6);
+  margin-inline: auto;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+}
+
+.video-poster {
+  position: absolute;
+  inset: 0;
+}
+
+.video-poster-image {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+
+/* The player replaces the poster in the same box, so the ratio never changes and nothing shifts. */
+.video-frame {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  border: 0;
+}
+
+.video-play {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: 50%;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-block: var(--space-2);
+  padding-inline: var(--space-4);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-full);
+  background-color: var(--color-accent);
+  color: var(--color-on-accent);
+  font: inherit;
+  font-weight: var(--type-weight-medium);
+  cursor: pointer;
+}
+
+/* The button sets display, so the hidden attribute needs its own rule to keep it out of sight. */
+.video-play[hidden],
+.video-poster[hidden] {
+  display: none;
+}
+
+.video-play:hover {
+  border-color: var(--color-accent-hover);
+  background-color: var(--color-accent-hover);
+}
+
+.video-play:focus-visible,
+.video-link:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: 2px;
+}
+
+/* The text link sits over the poster's lower edge, so the poster keeps its full height. */
+.video-link {
+  position: absolute;
+  inset-block-end: var(--space-2);
+  inset-inline-start: var(--space-2);
+  padding-block: var(--space-1);
+  padding-inline: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface-raised);
+  color: var(--color-link);
+  font-size: var(--type-size-sm);
+  text-decoration: none;
+}
+
+.video-link:hover {
+  color: var(--color-link-hover);
+  text-decoration: underline;
+}
+
+/* The message for a video without a title: a visible note, styled like the callouts' text. */
+.video-diagnostic {
+  margin-block: var(--space-6);
+  padding-block: var(--space-3);
+  padding-inline: var(--space-4);
+  border-inline-start: 4px solid var(--color-warning);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--type-size-sm);
+  line-height: var(--type-leading-body);
+  text-align: start;
+}

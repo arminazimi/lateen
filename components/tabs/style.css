@@ -1,0 +1,102 @@
+/* Content tabs: one group of sections, shown as tabs once the island runs. Without JavaScript the
+ * tab list stays hidden and every section shows stacked under its title. The same rules style the
+ * engine's `:::tabs`/`::tab` markup, whose tab list, tabs, and panels carry roles, not our classes. */
+
+.tabs {
+  margin-block: var(--space-6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+}
+
+/* The tab list starts hidden; `[hidden]` must win over `display: flex`, or it would show without JavaScript. */
+.tabs > [role="tablist"] {
+  display: flex;
+  gap: var(--space-1);
+  overflow-x: auto;
+  padding-block: var(--space-1);
+  padding-inline: var(--space-2);
+  border-block-end: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+}
+
+.tabs > [role="tablist"][hidden] {
+  display: none;
+}
+
+.tabs > [role="tablist"] > [role="tab"] {
+  flex: none;
+  margin: 0;
+  padding-block: var(--space-2);
+  padding-inline: var(--space-3);
+  border: 0;
+  border-block-end: 2px solid transparent;
+  border-start-start-radius: var(--radius-sm);
+  border-start-end-radius: var(--radius-sm);
+  background-color: transparent;
+  color: var(--color-muted);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-sm);
+  font-weight: var(--type-weight-medium);
+  line-height: var(--type-leading-tight);
+  cursor: pointer;
+  transition: background-color var(--motion-fast) var(--motion-ease);
+}
+
+.tabs > [role="tablist"] > [role="tab"]:hover {
+  background-color: var(--state-hover-bg);
+  color: var(--color-heading);
+}
+
+.tabs > [role="tablist"] > [role="tab"][aria-selected="true"] {
+  border-block-end-color: var(--color-accent);
+  color: var(--color-heading);
+}
+
+.tabs > [role="tablist"] > [role="tab"]:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: calc(var(--space-1) * -1);
+}
+
+.tabs > [role="tabpanel"] {
+  padding-block: var(--space-3);
+  padding-inline: var(--space-4);
+}
+
+.tabs > [role="tabpanel"][hidden] {
+  display: none;
+}
+
+.tabs > [role="tabpanel"] + [role="tabpanel"] {
+  border-block-start: 1px solid var(--color-border);
+}
+
+/* Without JavaScript each section's title stands above it. With the island, the tab shows the title instead. */
+.tabs-title {
+  margin-block: 0 var(--space-2);
+  margin-inline: 0;
+  color: var(--color-heading);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-sm);
+  font-weight: var(--type-weight-medium);
+  line-height: var(--type-leading-tight);
+}
+
+.tabs[data-enhanced] .tabs-title {
+  display: none;
+}
+
+.tabs-body > :first-child {
+  margin-block-start: 0;
+}
+
+.tabs-body > :last-child {
+  margin-block-end: 0;
+}
+
+/* A code block inside a section loses its own frame: the group draws the border. */
+.tabs-body > .code {
+  margin-block: 0;
+  border: 0;
+  border-radius: 0;
+}

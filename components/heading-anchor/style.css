@@ -1,0 +1,42 @@
+/* Heading anchors: a link icon after each h2 to h4. Hidden until hover or focus; always shown on touch. */
+
+.heading-anchor {
+  display: inline-flex;
+  align-items: center;
+  margin-inline-start: var(--space-2);
+  padding: var(--space-1);
+  border-radius: var(--radius-sm);
+  color: var(--color-muted);
+  text-decoration: none;
+  vertical-align: middle;
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
+}
+
+.heading-anchor svg {
+  display: block;
+  inline-size: 1em;
+  block-size: 1em;
+  fill: currentColor;
+}
+
+:is(h2, h3, h4):hover > .heading-anchor,
+:is(h2, h3, h4):focus-within > .heading-anchor,
+.heading-anchor:focus-visible {
+  opacity: 1;
+}
+
+.heading-anchor:hover {
+  color: var(--color-link-hover);
+}
+
+.heading-anchor:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: var(--space-1);
+}
+
+@media (hover: none) {
+  .heading-anchor {
+    opacity: 1;
+  }
+}

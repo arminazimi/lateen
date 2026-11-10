@@ -1,0 +1,135 @@
+/* Header: sticky bar with logo and title at the start, section tabs in the middle, and actions at the end. */
+
+.header {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 10;
+  background: var(--color-canvas);
+  border-block-end: 1px solid var(--color-border);
+}
+
+.header-inner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-block-size: var(--space-16);
+  padding-inline: var(--space-4);
+}
+
+.header-home {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-heading);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-lg);
+  font-weight: var(--type-weight-bold);
+  text-decoration: none;
+}
+
+.header-logo {
+  display: block;
+  block-size: var(--space-8);
+  inline-size: auto;
+}
+
+.header-logo-dark {
+  display: none;
+}
+
+:root[data-theme="dark"] .header-home--split .header-logo-light {
+  display: none;
+}
+
+:root[data-theme="dark"] .header-home--split .header-logo-dark {
+  display: block;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .header-home--split .header-logo-light {
+    display: none;
+  }
+
+  :root:not([data-theme="light"]) .header-home--split .header-logo-dark {
+    display: block;
+  }
+}
+
+.header-tabs {
+  flex: 1;
+  min-inline-size: 0;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-inline-start: auto;
+}
+
+.header-search,
+.header-menu,
+.header-repo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: var(--space-8);
+  min-inline-size: var(--space-8);
+  padding: var(--space-1);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  text-decoration: none;
+  transition: background var(--motion-fast) var(--motion-ease);
+}
+
+.header-search:hover,
+.header-menu:hover,
+.header-repo:hover {
+  background: var(--state-hover-bg);
+  color: var(--color-heading);
+}
+
+.header-search:focus-visible,
+.header-menu:focus-visible,
+.header-repo:focus-visible,
+.header-home:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: 2px;
+}
+
+.header-search svg,
+.header-repo svg {
+  inline-size: var(--space-6);
+  block-size: var(--space-6);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* JavaScript removes `hidden` when it enhances these controls; the display rule must not override it. */
+.header-search[hidden],
+.header-menu[hidden] {
+  display: none;
+}
+
+.header-menu {
+  display: none;
+}
+
+/* Narrow screens: logo, search icon, and menu button only. */
+@media (max-width: 40rem) {
+  .header-title,
+  .header-tabs,
+  .header-repo {
+    display: none;
+  }
+
+  .header-menu:not([hidden]) {
+    display: inline-flex;
+  }
+}

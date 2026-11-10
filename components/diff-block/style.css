@@ -1,0 +1,121 @@
+/* Diff block: added lines with a green edge and a +, removed lines with a red edge and a −, and
+   context lines in between. The markers and prefixes, not the colour, carry the meaning. Colours are
+   tokens with a light and a dark value, so both modes follow the theme, and every property is logical
+   so a right-to-left page mirrors the frame while the code itself stays left to right. */
+
+.diff-block {
+  margin-block: var(--space-4);
+  max-inline-size: 100%;
+  border: 1px solid var(--code-border);
+  border-radius: var(--radius-md);
+  background-color: var(--code-bg);
+  color: var(--code-fg);
+  font-family: var(--type-font-mono);
+  font-size: var(--type-size-sm);
+  line-height: var(--type-leading-code);
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: start;
+}
+
+.diff-block-bar {
+  display: flex;
+  justify-content: flex-end;
+  padding-block: var(--space-1);
+  padding-inline: var(--space-2);
+  border-block-end: 1px solid var(--code-border);
+}
+
+.diff-block-copy {
+  padding-block: 0;
+  padding-inline: var(--space-2);
+  font: inherit;
+  color: var(--code-fg);
+  background-color: transparent;
+  border: 1px solid var(--code-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+/* The button sets display, so the hidden attribute needs its own rule to keep it out of sight. */
+.diff-block-copy[hidden] {
+  display: none;
+}
+
+.diff-block-copy:hover {
+  background-color: var(--state-hover-bg);
+}
+
+.diff-block-copy:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: 2px;
+}
+
+.diff-block-lines {
+  margin: 0;
+  padding-block: var(--space-2);
+  padding-inline: 0;
+  list-style: none;
+}
+
+.diff-block-line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-block-size: 1lh;
+  padding-inline: var(--space-3);
+  border-inline-start: var(--space-1) solid transparent;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.diff-block-added {
+  background-color: color-mix(in srgb, var(--color-success) 12%, var(--code-bg));
+  border-inline-start-color: var(--color-success);
+}
+
+.diff-block-removed {
+  background-color: color-mix(in srgb, var(--color-danger) 12%, var(--code-bg));
+  border-inline-start-color: var(--color-danger);
+}
+
+.diff-block-context {
+  border-inline-start-color: transparent;
+}
+
+.diff-block-marker {
+  flex: none;
+  inline-size: var(--space-4);
+  text-align: center;
+  color: var(--color-muted);
+  user-select: none;
+}
+
+.diff-block-added > .diff-block-marker {
+  color: var(--color-success);
+}
+
+.diff-block-removed > .diff-block-marker {
+  color: var(--color-danger);
+}
+
+.diff-block-removed > .diff-block-text {
+  text-decoration: line-through;
+}
+
+.diff-block-text {
+  min-inline-size: 0;
+}
+
+/* The block's label and each line's kind: read by assistive tech, never seen. */
+.diff-block-sr {
+  position: absolute;
+  inline-size: var(--space-1);
+  block-size: var(--space-1);
+  padding: 0;
+  margin: calc(var(--space-1) * -1);
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}

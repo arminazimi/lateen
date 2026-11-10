@@ -1,0 +1,163 @@
+/* Changelog entry: a release heading that links to itself, a date, category badges, and the entry text.
+   Category badges always pair an icon and a label, so color is never the only signal. Tokens keep dark mode
+   and right-to-left pages consistent. */
+
+.changelog-entry {
+  margin-block: var(--space-8);
+  padding-block-start: var(--space-6);
+  border-block-start: 1px solid var(--color-border);
+}
+
+.changelog-entry:first-child {
+  margin-block-start: 0;
+  padding-block-start: 0;
+  border-block-start: 0;
+}
+
+.changelog-entry-version {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-block: 0 var(--space-2);
+  font-family: var(--type-font-heading);
+  font-size: var(--type-size-xl);
+  font-weight: var(--type-weight-bold);
+  line-height: var(--type-leading-heading);
+  color: var(--color-heading);
+}
+
+.changelog-entry-version-text {
+  font-variant-numeric: tabular-nums;
+}
+
+.changelog-entry-anchor {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  padding: var(--space-1);
+  border-radius: var(--radius-sm);
+  color: var(--color-muted);
+  text-decoration: none;
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
+}
+
+.changelog-entry-anchor svg {
+  display: block;
+  inline-size: 1em;
+  block-size: 1em;
+  fill: currentColor;
+}
+
+.changelog-entry:hover > .changelog-entry-version > .changelog-entry-anchor,
+.changelog-entry-version:focus-within > .changelog-entry-anchor,
+.changelog-entry-anchor:focus-visible {
+  opacity: 1;
+}
+
+.changelog-entry-anchor:hover {
+  color: var(--color-link-hover);
+}
+
+.changelog-entry-anchor:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: var(--space-1);
+}
+
+@media (hover: none) {
+  .changelog-entry-anchor {
+    opacity: 1;
+  }
+}
+
+.changelog-entry-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin-block: 0 var(--space-3);
+}
+
+.changelog-entry-date {
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-sm);
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.changelog-entry-categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.changelog-entry-category {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding-block: 0;
+  padding-inline: var(--space-2);
+  border: 1px solid currentcolor;
+  border-radius: var(--radius-full);
+  background-color: var(--color-surface);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-xs);
+  font-weight: var(--type-weight-medium);
+  line-height: var(--type-leading-tight);
+  white-space: nowrap;
+}
+
+.changelog-entry-category-icon {
+  flex: none;
+  inline-size: 1em;
+  block-size: 1em;
+}
+
+.changelog-entry-category-added {
+  color: var(--color-success);
+}
+
+.changelog-entry-category-changed {
+  color: var(--color-info);
+}
+
+.changelog-entry-category-fixed {
+  color: var(--color-accent);
+}
+
+.changelog-entry-category-removed {
+  color: var(--color-muted);
+}
+
+.changelog-entry-category-security {
+  color: var(--color-danger);
+}
+
+.changelog-entry-body {
+  color: var(--color-text);
+  line-height: var(--type-leading-body);
+}
+
+.changelog-entry-body > :first-child {
+  margin-block-start: 0;
+}
+
+.changelog-entry-body > :last-child {
+  margin-block-end: 0;
+}
+
+.changelog-entry-empty {
+  margin: 0;
+  color: var(--color-muted);
+  font-style: italic;
+}
+
+/* The version numbers stay left to right inside a right-to-left page, as code does. */
+.changelog-entry:dir(rtl) .changelog-entry-version-text,
+.changelog-entry:dir(rtl) .changelog-entry-date {
+  direction: ltr;
+  unicode-bidi: isolate;
+}

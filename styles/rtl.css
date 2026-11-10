@@ -1,0 +1,45 @@
+/* Right-to-left typography: a Persian or Arabic page gets Vazirmatn for Arabic-script text,
+   Geist for the Latin words and identifiers mixed into it, a line height that leaves room for
+   the script's ascenders and descenders, and no letter spacing (spacing between joined Arabic
+   letters is wrong; ADR 0020). Code stays left to right inside a right-to-left paragraph.
+
+   The values are tokens (`tokens/rtl.json`). This file only maps them onto the `--type-*` tokens
+   that `styles/base.css` and every unit already read, so a component follows the language
+   without knowing about direction. Load it after `styles/tokens.css`.
+
+   A page's language comes from `<html lang>`; `:lang(fa)` also matches `fa-IR`, and the same for
+   `:lang(ar)` and its regional tags. Direction itself stays with the `dir` attribute: a page may
+   hold a right-to-left quotation or a left-to-right code sample, and the language selector must
+   not overrule that. */
+
+:root:lang(fa),
+:root:lang(ar) {
+  --type-font-body: var(--rtl-font-body);
+  --type-font-heading: var(--rtl-font-heading);
+  --type-font-ui: var(--rtl-font-ui);
+  --type-leading-body: var(--rtl-leading-body);
+  --type-leading-heading: var(--rtl-leading-heading);
+  --type-leading-tight: var(--rtl-leading-tight);
+}
+
+/* Some units set letter spacing on the element itself (the home title, the search group title),
+   so inheriting it from the root would not reach them. The extra `*` outranks a single unit class
+   without `!important`, and it is why this rule names the root as well as its descendants. */
+:root:lang(fa),
+:root:lang(ar),
+:root:lang(fa) *,
+:root:lang(ar) * {
+  letter-spacing: var(--rtl-letter-spacing);
+}
+
+/* Code is left to right even inside a right-to-left sentence: a tag name, a path, or a flag keeps
+   its own direction and `unicode-bidi: isolate` stops it from reordering the words around it.
+   Geist Mono is named here so no body stack inherited from the RTL root can reach code. */
+:where(pre, code, kbd):lang(fa),
+:where(pre, code, kbd):lang(ar),
+:lang(fa) :where(pre, code, kbd),
+:lang(ar) :where(pre, code, kbd) {
+  direction: ltr;
+  font-family: var(--type-font-mono);
+  unicode-bidi: isolate;
+}

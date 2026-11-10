@@ -1,0 +1,62 @@
+/* Edit this page: the footer link to the page's source, and opt-in per-heading "suggest an edit" links.
+   A link placed inside a heading starts hidden and is revealed on hover or keyboard focus, like the heading
+   anchor; the footer list stays visible because it sits outside a heading. */
+
+.edit-page {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-6);
+  margin-block-start: var(--space-4);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-sm);
+  color: var(--color-muted);
+}
+
+.edit-page-link,
+.edit-page-heading-link {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.edit-page-link:hover,
+.edit-page-heading-link:hover {
+  color: var(--color-accent-hover);
+  text-decoration: underline;
+}
+
+.edit-page-link:focus-visible,
+.edit-page-heading-link:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: 2px;
+}
+
+.edit-page-headings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Opacity, not visibility: the link stays in the tab order, and focusing it reveals it. */
+.doc-body :is(h2, h3, h4) .edit-page-heading-link {
+  margin-inline-start: var(--space-2);
+  font-size: var(--type-size-sm);
+  font-weight: var(--type-weight-regular);
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--motion-ease);
+}
+
+.doc-body :is(h2, h3, h4):hover .edit-page-heading-link,
+.doc-body :is(h2, h3, h4):focus-within .edit-page-heading-link,
+.edit-page-heading-link:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .doc-body :is(h2, h3, h4) .edit-page-heading-link {
+    opacity: 1;
+  }
+}

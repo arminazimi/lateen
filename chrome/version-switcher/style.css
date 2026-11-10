@@ -1,0 +1,128 @@
+/* Version switcher: a native disclosure in the header that lists the same page in every documentation version. */
+
+.version-switcher {
+  position: relative;
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-sm);
+}
+
+.version-switcher-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-block-size: var(--space-8);
+  padding-inline: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-ctl);
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  list-style: none;
+  transition:
+    background var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease);
+}
+
+.version-switcher-summary::-webkit-details-marker {
+  display: none;
+}
+
+.version-switcher-summary:hover {
+  background: var(--state-hover-bg);
+  color: var(--color-heading);
+}
+
+.version-switcher-summary:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: 2px;
+}
+
+.version-switcher-label {
+  color: var(--color-muted);
+}
+
+.version-switcher-value {
+  color: var(--color-heading);
+  font-weight: var(--type-weight-medium);
+}
+
+.version-switcher-marker {
+  font-size: var(--type-size-xs);
+  transition: transform var(--motion-fast) var(--motion-ease);
+}
+
+.version-switcher-details[open] > .version-switcher-summary .version-switcher-marker {
+  transform: rotate(180deg);
+}
+
+.version-switcher-list {
+  position: absolute;
+  inset-block-start: calc(100% + var(--space-1));
+  inset-inline-end: 0;
+  z-index: var(--layer-popover);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-inline-size: calc(var(--space-16) * 2);
+  max-inline-size: calc(100vw - var(--space-8));
+  margin: 0;
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-popover);
+  list-style: none;
+}
+
+.version-switcher-item {
+  display: flex;
+}
+
+.version-switcher-link {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-block: var(--space-1);
+  padding-inline: var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.version-switcher-link:hover {
+  background: var(--state-hover-bg);
+  color: var(--color-heading);
+}
+
+.version-switcher-link:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: 2px;
+}
+
+.version-switcher-version {
+  font-variant-numeric: tabular-nums;
+}
+
+.version-switcher-link[aria-current="true"] {
+  color: var(--color-heading);
+  font-weight: var(--type-weight-medium);
+}
+
+.version-switcher-current {
+  color: var(--color-muted);
+  font-size: var(--type-size-xs);
+}
+
+/* Narrow screens: the label shrinks to the current version, which is what a visitor needs to read. */
+@media (max-width: 40rem) {
+  .version-switcher-label {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}

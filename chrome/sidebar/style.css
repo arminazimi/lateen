@@ -1,0 +1,107 @@
+/* The left column: sticky, with its own scroll; matches the guide mockup's `aside.side`. */
+
+.sidebar-nav {
+  position: sticky;
+  inset-block-start: var(--space-16);
+  align-self: start;
+  max-block-size: calc(100vh - var(--space-16));
+  overflow-y: auto;
+  padding-block: var(--space-6) var(--space-8);
+  padding-inline-end: var(--space-2);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-sm);
+}
+
+.sidebar-nav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.sidebar-nav > :first-child {
+  margin-block-start: 0;
+}
+
+.sidebar-nav h2,
+.sidebar-nav h3,
+.sidebar-nav h4,
+.sidebar-nav h5,
+.sidebar-nav h6 {
+  margin-block: var(--space-4) var(--space-1);
+  padding-inline: var(--space-3);
+  font-weight: var(--type-weight-medium);
+  line-height: var(--type-leading-tight);
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.sidebar-nav h2[aria-current="true"],
+.sidebar-nav h3[aria-current="true"],
+.sidebar-nav h4[aria-current="true"],
+.sidebar-nav h5[aria-current="true"],
+.sidebar-nav h6[aria-current="true"] {
+  color: var(--state-selected-fg);
+}
+
+.sidebar-nav a {
+  display: block;
+  padding-block: var(--space-1);
+  padding-inline: var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--color-muted);
+  text-decoration: none;
+}
+
+.sidebar-nav a:hover {
+  background: var(--state-hover-bg);
+  color: var(--color-text);
+}
+
+.sidebar-nav a:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: 2px;
+}
+
+.sidebar-nav a[aria-current="page"] {
+  background: var(--state-selected-bg);
+  color: var(--state-selected-fg);
+  font-weight: var(--type-weight-medium);
+}
+
+.sidebar-nav a[aria-current="true"] {
+  color: var(--state-selected-fg);
+  font-weight: var(--type-weight-medium);
+}
+
+.sidebar-nav ul ul a {
+  padding-inline-start: var(--space-6);
+}
+
+/* A group is a <details>: its title is the summary, with a marker that shows the state. */
+
+.sidebar-nav summary {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  list-style: none;
+}
+
+.sidebar-nav summary::-webkit-details-marker {
+  display: none;
+}
+
+.sidebar-nav summary::after {
+  content: "+";
+  margin-inline-start: auto;
+  padding-inline-end: var(--space-3);
+  color: var(--color-muted);
+}
+
+.sidebar-nav details[open] > summary::after {
+  content: "\2212";
+}
+
+.sidebar-nav summary:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: 2px;
+}

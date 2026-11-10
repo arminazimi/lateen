@@ -1,0 +1,24 @@
+{
+  "name": "lateen-dark",
+  "type": "dark",
+  "colors": {
+    "editor.background": "#2a2a37",
+    "editor.foreground": "#dcd7ba"
+  },
+  "settings": [
+    {
+      "settings": { "foreground": "#dcd7ba", "background": "#2a2a37" }
+    },
+    { "scope": "comment, punctuation.definition.comment", "settings": { "foreground": "#96938e" } },
+    { "scope": "keyword, storage, storage.type, keyword.operator.new", "settings": { "foreground": "#9f8fc0" } },
+    { "scope": "string, string.regexp", "settings": { "foreground": "#98bb6c" } },
+    { "scope": "constant.numeric, constant.language, constant", "settings": { "foreground": "#ffa066" } },
+    { "scope": "entity.name.function, support.function, meta.function-call", "settings": { "foreground": "#7e9cd8" } },
+    {
+      "scope": "entity.name.tag, support.class.component, entity.name.type, entity.other.attribute-name",
+      "settings": { "foreground": "#7aa89f" }
+    },
+    { "scope": "variable", "settings": { "foreground": "#e6c384" } },
+    { "scope": "punctuation, meta.brace", "settings": { "foreground": "#c8c093" } }
+  ]
+}

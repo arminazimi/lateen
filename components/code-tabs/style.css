@@ -1,0 +1,90 @@
+/* Code tabs: a group of code blocks. Without JavaScript the blocks stack, each under its title. With the island, a tab list shows one block at a time. */
+
+.code-tabs {
+  margin-block: var(--space-6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--code-bg);
+}
+
+/* The tab list starts hidden; `[hidden]` must win over `display: flex`, or it would show without JavaScript. */
+.code-tabs-list {
+  display: flex;
+  gap: var(--space-1);
+  overflow-x: auto;
+  padding-block: var(--space-1);
+  padding-inline: var(--space-2);
+  border-block-end: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+}
+
+.code-tabs-list[hidden] {
+  display: none;
+}
+
+.code-tabs-tab {
+  flex: none;
+  margin: 0;
+  padding-block: var(--space-2);
+  padding-inline: var(--space-3);
+  border: 0;
+  border-block-end: 2px solid transparent;
+  border-start-start-radius: var(--radius-sm);
+  border-start-end-radius: var(--radius-sm);
+  background-color: transparent;
+  color: var(--color-muted);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-sm);
+  font-weight: var(--type-weight-medium);
+  line-height: var(--type-leading-tight);
+  cursor: pointer;
+  transition: background-color var(--motion-fast) var(--motion-ease);
+}
+
+.code-tabs-tab:hover {
+  background-color: var(--state-hover-bg);
+  color: var(--color-heading);
+}
+
+.code-tabs-tab[aria-selected="true"] {
+  border-block-end-color: var(--color-accent);
+  color: var(--color-heading);
+}
+
+.code-tabs-tab:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: calc(var(--space-1) * -1);
+}
+
+/* Without JavaScript each block's title stands above it. With the island, the tab shows the title instead. */
+.code-tabs-title {
+  margin: 0;
+  padding-block: var(--space-2);
+  padding-inline: var(--space-4);
+  border-block-end: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+  color: var(--color-heading);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-sm);
+  font-weight: var(--type-weight-medium);
+  line-height: var(--type-leading-tight);
+}
+
+.code-tabs[data-enhanced] .code-tabs-title {
+  display: none;
+}
+
+.code-tabs-panel + .code-tabs-panel {
+  border-block-start: 1px solid var(--color-border);
+}
+
+.code-tabs-panel[hidden] {
+  display: none;
+}
+
+/* The code block inside a panel loses its own frame: the group draws the border. */
+.code-tabs-body > .code {
+  margin-block: 0;
+  border: 0;
+  border-radius: 0;
+}

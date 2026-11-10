@@ -1,0 +1,146 @@
+/* Page agent menu: copy the page's Markdown, view it as a plain link, or open the page in an agent. */
+
+.page-agent-menu {
+  position: relative;
+  display: inline-block;
+}
+
+.page-agent-menu-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-block: var(--space-1);
+  padding-inline: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-sm);
+  cursor: pointer;
+  list-style: none;
+}
+
+/* The marker is the chevron beside the label, in both directions. */
+.page-agent-menu-summary::-webkit-details-marker {
+  display: none;
+}
+
+.page-agent-menu-summary:hover {
+  border-color: var(--color-accent);
+  color: var(--color-heading);
+}
+
+.page-agent-menu-summary:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: 2px;
+}
+
+.page-agent-menu-chevron {
+  flex: none;
+  inline-size: 1em;
+  block-size: 1em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform var(--motion-fast) var(--motion-ease);
+}
+
+.page-agent-menu[open] .page-agent-menu-chevron {
+  transform: rotate(180deg);
+}
+
+.page-agent-menu-panel {
+  position: absolute;
+  inset-block-start: calc(100% + var(--space-1));
+  inset-inline-end: 0;
+  z-index: 20;
+  display: grid;
+  gap: var(--space-1);
+  min-inline-size: 15rem;
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-md);
+}
+
+.page-agent-menu-copy,
+.page-agent-menu-view,
+.page-agent-menu-provider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-block: var(--space-1);
+  padding-inline: var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-sm);
+  text-align: start;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+/* A button element has no marker, and its display must not override the hidden attribute. */
+.page-agent-menu-copy[hidden] {
+  display: none;
+}
+
+.page-agent-menu-copy:hover,
+.page-agent-menu-view:hover,
+.page-agent-menu-provider:hover {
+  background: var(--state-hover-bg);
+  color: var(--color-heading);
+  text-decoration: none;
+}
+
+.page-agent-menu-copy:focus-visible,
+.page-agent-menu-view:focus-visible,
+.page-agent-menu-provider:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: -2px;
+}
+
+.page-agent-menu-heading {
+  margin: 0;
+  padding-block: var(--space-1);
+  padding-inline: var(--space-2);
+  color: var(--color-muted);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-xs);
+}
+
+.page-agent-menu-providers {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.page-agent-menu-status {
+  min-block-size: 1em;
+  margin: 0;
+  padding-inline: var(--space-2);
+  color: var(--color-muted);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-xs);
+}
+
+/* Narrow screens: the panel sits under the summary in the flow, so it never leaves the viewport. */
+@media (max-width: 48rem) {
+  .page-agent-menu {
+    display: block;
+  }
+
+  .page-agent-menu-panel {
+    position: static;
+    margin-block-start: var(--space-1);
+    box-shadow: none;
+  }
+}

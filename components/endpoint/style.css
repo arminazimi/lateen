@@ -1,0 +1,100 @@
+/* Endpoint: an API route on a reference page. A method badge and the path (parameters highlighted), the parameters the path names, and the body. Colors come from tokens, so dark mode follows. The path stays left to right under RTL. */
+
+.endpoint {
+  margin-block: var(--space-4);
+  padding-block: var(--space-3);
+  padding-inline: var(--space-4);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  line-height: var(--type-leading-body);
+}
+
+.endpoint-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.endpoint-method {
+  display: inline-block;
+  padding-block: 0;
+  padding-inline: var(--space-2);
+  border: 1px solid var(--color-muted);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-canvas);
+  color: var(--color-muted);
+  font-family: var(--type-font-mono);
+  font-size: var(--type-size-sm);
+  font-weight: var(--type-weight-bold);
+  line-height: var(--type-leading-tight);
+  white-space: nowrap;
+}
+
+.endpoint-method-get {
+  border-color: var(--color-info);
+  color: var(--color-info);
+}
+
+.endpoint-method-post {
+  border-color: var(--color-success);
+  color: var(--color-success);
+}
+
+.endpoint-method-put,
+.endpoint-method-patch {
+  border-color: var(--color-warning);
+  color: var(--color-warning);
+}
+
+.endpoint-method-delete {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+.endpoint-path {
+  min-inline-size: 0;
+  padding: 0;
+  background-color: transparent;
+  color: var(--color-heading);
+  font-family: var(--type-font-mono);
+  font-size: var(--type-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.endpoint-param {
+  padding-inline: var(--space-1);
+  border-radius: var(--radius-sm);
+  background-color: color-mix(in srgb, var(--color-accent) 12%, var(--color-canvas));
+  color: var(--color-accent);
+  font-weight: var(--type-weight-bold);
+}
+
+.endpoint-params {
+  margin-block: var(--space-3) 0;
+  padding-inline-start: var(--space-4);
+}
+
+.endpoint-params > li {
+  margin-block: var(--space-1);
+}
+
+.endpoint-params .endpoint-param {
+  background-color: transparent;
+  font-family: var(--type-font-mono);
+  font-size: var(--type-size-sm);
+}
+
+.endpoint-body {
+  margin-block-start: var(--space-3);
+}
+
+.endpoint-body > :first-child {
+  margin-block-start: 0;
+}
+
+.endpoint-body > :last-child {
+  margin-block-end: 0;
+}

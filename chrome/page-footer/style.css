@@ -1,0 +1,68 @@
+/* Page footer: last updated, edit and feedback links, and the agent prompt button, under the article. */
+
+.page-footer {
+  display: grid;
+  gap: var(--space-3);
+  margin-block-start: var(--space-8);
+  padding-block-start: var(--space-4);
+  border-block-start: 1px solid var(--color-border);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-sm);
+  color: var(--color-muted);
+}
+
+.page-footer-meta,
+.page-footer-feedback {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-6);
+  margin: 0;
+}
+
+.page-footer-updated time {
+  color: var(--color-text);
+}
+
+.page-footer-copy {
+  justify-self: start;
+  padding: var(--space-1) var(--space-3);
+  font: inherit;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+/* The button sets display, so the hidden attribute needs its own rule to keep it out of sight. */
+.page-footer-copy[hidden] {
+  display: none;
+}
+
+.page-footer-copy:hover {
+  background: var(--state-hover-bg);
+}
+
+.page-footer-copy:focus-visible,
+.page-footer-edit:focus-visible,
+.page-footer-feedback a:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: 2px;
+}
+
+.page-footer-edit,
+.page-footer-feedback a {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.page-footer-edit:hover,
+.page-footer-feedback a:hover {
+  color: var(--color-accent-hover);
+  text-decoration: underline;
+}
+
+.page-footer-feedback {
+  margin-inline-start: auto;
+}

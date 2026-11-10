@@ -1,0 +1,40 @@
+/* Key-value list: a semantic <dl> in two columns, one below 40rem. Long values wrap instead of widening the page. */
+
+.key-value {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  gap: var(--space-2) var(--space-4);
+  min-inline-size: 0;
+  margin-block: var(--space-6);
+}
+
+.key-value-key {
+  min-inline-size: 0;
+  color: var(--color-heading);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-sm);
+  font-weight: var(--type-weight-medium);
+  line-height: var(--type-leading-body);
+  overflow-wrap: anywhere;
+}
+
+.key-value-value {
+  min-inline-size: 0;
+  margin: 0;
+  color: var(--color-text);
+  font-family: var(--type-font-body);
+  font-size: var(--type-size-sm);
+  line-height: var(--type-leading-body);
+  overflow-wrap: anywhere;
+}
+
+/* A value long enough to wrap: keep it inside its column and allow breaks inside a word or URL. */
+.key-value-long {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 40rem) {
+  .key-value {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

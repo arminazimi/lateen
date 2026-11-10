@@ -1,0 +1,109 @@
+/* OS tabs: install instructions grouped by operating system. Without JavaScript the sections stack,
+ * each under its title. With the island, a tab list shows the reader's OS and remembers a manual choice. */
+
+.os-tabs {
+  margin-block: var(--space-6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+}
+
+/* The tab list starts hidden; `[hidden]` must win over `display: flex`, or it would show without JavaScript. */
+.os-tabs-list {
+  display: flex;
+  gap: var(--space-1);
+  overflow-x: auto;
+  padding-block: var(--space-1);
+  padding-inline: var(--space-2);
+  border-block-end: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+}
+
+.os-tabs-list[hidden] {
+  display: none;
+}
+
+.os-tabs-tab {
+  flex: none;
+  margin: 0;
+  padding-block: var(--space-2);
+  padding-inline: var(--space-3);
+  border: 0;
+  border-block-end: 2px solid transparent;
+  border-start-start-radius: var(--radius-sm);
+  border-start-end-radius: var(--radius-sm);
+  background-color: transparent;
+  color: var(--color-muted);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-sm);
+  font-weight: var(--type-weight-medium);
+  line-height: var(--type-leading-tight);
+  cursor: pointer;
+  transition: background-color var(--motion-fast) var(--motion-ease);
+}
+
+.os-tabs-tab:hover {
+  background-color: var(--state-hover-bg);
+  color: var(--color-heading);
+}
+
+.os-tabs-tab[aria-selected="true"] {
+  border-block-end-color: var(--color-accent);
+  color: var(--color-heading);
+}
+
+.os-tabs-tab:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: calc(var(--space-1) * -1);
+}
+
+/* Without JavaScript each section's title stands above it. With the island, the tab shows the title instead. */
+.os-tabs-title {
+  margin: 0;
+  padding-block: var(--space-2);
+  padding-inline: var(--space-4);
+  border-block-end: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+  color: var(--color-heading);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-sm);
+  font-weight: var(--type-weight-medium);
+  line-height: var(--type-leading-tight);
+}
+
+.os-tabs[data-enhanced] .os-tabs-title {
+  display: none;
+}
+
+.os-tabs-panel + .os-tabs-panel {
+  border-block-start: 1px solid var(--color-border);
+}
+
+.os-tabs-panel[hidden] {
+  display: none;
+}
+
+.os-tabs-body {
+  padding-block: var(--space-3);
+  padding-inline: var(--space-4);
+}
+
+.os-tabs-body > :first-child {
+  margin-block-start: 0;
+}
+
+.os-tabs-body > :last-child {
+  margin-block-end: 0;
+}
+
+/* A code block inside a section loses its own frame: the group draws the border. */
+.os-tabs-body > .code {
+  margin-block: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+/* With no headings, the component keeps the body whole and there is no tab list to frame. */
+.os-tabs > .os-tabs-body:only-child {
+  padding-block: var(--space-4);
+}

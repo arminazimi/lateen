@@ -1,0 +1,93 @@
+/* Status banner: a page-level banner for deprecated, experimental, and old-version pages. The accent
+   sits on the inline start edge, so it moves under RTL. Each status has its own icon and visible
+   label, so colour is never the only signal. Colors come from tokens, so dark mode follows. */
+
+.status-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  align-items: center;
+  margin-block: var(--space-4);
+  padding-block: var(--space-3);
+  padding-inline: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-inline-start-width: 4px;
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  font-size: var(--type-size-sm);
+  line-height: var(--type-leading-body);
+}
+
+.status-banner-deprecated {
+  border-inline-start-color: var(--color-danger);
+  background-color: color-mix(in srgb, var(--color-danger) 8%, var(--color-canvas));
+}
+
+.status-banner-deprecated .status-banner-icon {
+  color: var(--color-danger);
+}
+
+.status-banner-experimental {
+  border-inline-start-color: var(--color-info);
+  background-color: color-mix(in srgb, var(--color-info) 8%, var(--color-canvas));
+}
+
+.status-banner-experimental .status-banner-icon {
+  color: var(--color-info);
+}
+
+.status-banner-old-version {
+  border-inline-start-color: var(--color-warning);
+  background-color: color-mix(in srgb, var(--color-warning) 8%, var(--color-canvas));
+}
+
+.status-banner-old-version .status-banner-icon {
+  color: var(--color-warning);
+}
+
+.status-banner-icon {
+  flex: none;
+  inline-size: var(--space-4);
+  block-size: var(--space-4);
+}
+
+.status-banner-label {
+  color: var(--color-heading);
+  font-weight: var(--type-weight-bold);
+}
+
+.status-banner-version,
+.status-banner-replacement {
+  display: inline-flex;
+  gap: var(--space-1);
+  align-items: baseline;
+}
+
+.status-banner-version-label {
+  color: var(--color-muted);
+}
+
+.status-banner-version-value {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: var(--type-font-mono);
+}
+
+.status-banner-replacement {
+  color: var(--color-link);
+  font-weight: var(--type-weight-medium);
+  text-decoration-thickness: 1px;
+}
+
+.status-banner-replacement:hover {
+  color: var(--color-link-hover);
+}
+
+.status-banner-replacement:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: 2px;
+}
+
+.status-banner-replacement-target {
+  font-family: var(--type-font-mono);
+}

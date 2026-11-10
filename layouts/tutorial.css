@@ -1,0 +1,124 @@
+/* Tutorial layout: a numbered progress list under the title, and one section per step with its
+   own "Step n of N" text and previous/next step links. Token names and logical properties only. */
+
+.tutorial-progress {
+  margin-block: var(--space-6);
+  padding: var(--space-4);
+  background-color: var(--color-surface);
+  border: thin solid var(--color-border);
+  border-radius: var(--radius-card);
+}
+
+.tutorial-step-list {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tutorial-step-link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding-block: var(--space-1);
+  padding-inline: var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.tutorial-step-link:hover {
+  background-color: var(--state-hover-bg);
+  color: var(--color-accent);
+}
+
+.tutorial-step-link:focus-visible {
+  outline: thin solid var(--state-focus-ring);
+  outline-offset: var(--space-1);
+}
+
+.tutorial-step-count {
+  flex: none;
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-sm);
+  font-weight: var(--type-weight-medium);
+  color: var(--color-muted);
+}
+
+.tutorial-step-title {
+  color: var(--color-heading);
+  font-weight: var(--type-weight-medium);
+}
+
+.tutorial-step {
+  margin-block-start: var(--space-8);
+}
+
+.tutorial-step-progress {
+  margin-block: 0 var(--space-2);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-sm);
+  font-weight: var(--type-weight-medium);
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+.tutorial-step-nav {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  margin-block-start: var(--space-6);
+  padding-block-start: var(--space-4);
+  border-block-start: thin solid var(--color-border);
+}
+
+.tutorial-step-prev,
+.tutorial-step-next {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--color-surface);
+  border: thin solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.tutorial-step-next {
+  grid-column: 2;
+  text-align: end;
+}
+
+.tutorial-step-prev:hover,
+.tutorial-step-next:hover {
+  border-color: var(--color-accent);
+}
+
+.tutorial-step-prev:only-child,
+.tutorial-step-next:only-child {
+  grid-column: 1 / -1;
+}
+
+.tutorial-step-nav-label {
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-xs);
+  color: var(--color-muted);
+}
+
+.tutorial-step-nav-title {
+  font-weight: var(--type-weight-medium);
+  color: var(--color-heading);
+}
+
+/* One column on narrow screens: next goes under previous, as the pager does. */
+@media (max-width: 48rem) {
+  .tutorial-step-nav {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tutorial-step-next {
+    grid-column: 1;
+  }
+}

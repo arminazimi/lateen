@@ -1,0 +1,58 @@
+{
+  "hover-bg": {
+    "$value": "#d8dee98c",
+    "$extensions": {
+      "lateen": {
+        "dark": "#3636468c"
+      }
+    }
+  },
+  "active-bg": {
+    "$value": "#c5cddc",
+    "$extensions": {
+      "lateen": {
+        "dark": "#54546d"
+      }
+    }
+  },
+  "selected-bg": {
+    "$value": "#d8dee9",
+    "$extensions": {
+      "lateen": {
+        "dark": "#363646"
+      }
+    }
+  },
+  "selected-fg": {
+    "$value": "#3f5f88",
+    "$extensions": {
+      "lateen": {
+        "dark": "#7fb4ca"
+      }
+    }
+  },
+  "disabled-fg": {
+    "$value": "#8892a6",
+    "$extensions": {
+      "lateen": {
+        "dark": "#727169"
+      }
+    }
+  },
+  "focus-ring": {
+    "$value": "#5e81ac",
+    "$extensions": {
+      "lateen": {
+        "dark": "#7e9cd8"
+      }
+    }
+  },
+  "overlay": {
+    "$value": "#00000066",
+    "$extensions": {
+      "lateen": {
+        "dark": "#000000b3"
+      }
+    }
+  }
+}

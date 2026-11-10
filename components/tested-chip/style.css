@@ -1,0 +1,72 @@
+/* Tested chip: the pass or fail result of a page's examples, next to a code block. The icon's shape,
+   the visible label, and the counts carry the meaning, so colour is never the only signal. */
+
+.tested-chip {
+  display: inline-flex;
+  gap: var(--space-1);
+  align-items: center;
+  padding-block: 0;
+  padding-inline: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background-color: var(--color-canvas);
+  color: var(--color-text);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-sm);
+  font-weight: var(--type-weight-medium);
+  line-height: var(--type-leading-tight);
+  white-space: nowrap;
+  vertical-align: baseline;
+}
+
+.tested-chip-passed {
+  border-color: var(--color-success);
+}
+
+.tested-chip-passed .tested-chip-icon {
+  color: var(--color-success);
+}
+
+.tested-chip-failed {
+  border-color: var(--color-danger);
+}
+
+.tested-chip-failed .tested-chip-icon {
+  color: var(--color-danger);
+}
+
+.tested-chip-icon {
+  flex: none;
+  inline-size: var(--space-3);
+  block-size: var(--space-3);
+}
+
+.tested-chip-label {
+  color: var(--color-heading);
+}
+
+.tested-chip-count-passed {
+  color: var(--color-success);
+}
+
+.tested-chip-count-failed {
+  color: var(--color-danger);
+}
+
+/* Counts line up when chips stack, and the number stays left to right inside right-to-left text. */
+.tested-chip-count {
+  font-variant-numeric: tabular-nums;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* The last-passed sentence, in the accessibility tree but out of sight. */
+.tested-chip-sr {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

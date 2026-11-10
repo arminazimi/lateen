@@ -1,0 +1,19 @@
+/* Keyboard keys: `<kbd>` and `:kbd[Ctrl+K]`. Keys stay left-to-right inside right-to-left text. Colors come from tokens, so dark mode follows. */
+
+kbd,
+.kbd {
+  display: inline-block;
+  padding-block: 0;
+  padding-inline: var(--space-1);
+  border: 1px solid var(--color-border-strong);
+  border-block-end-width: 2px;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--type-font-mono);
+  font-size: var(--type-size-sm);
+  line-height: var(--type-leading-tight);
+  white-space: nowrap;
+  direction: ltr;
+  unicode-bidi: isolate;
+}

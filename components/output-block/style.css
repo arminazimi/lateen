@@ -1,0 +1,76 @@
+/* Output blocks: the result of a command, tied to the command above it. A dashed edge and the surface color set it apart from input code; the code tokens keep dark mode in step. */
+
+.output-block {
+  /* One step closer than a code block, so the result reads as part of the command above it. */
+  margin-block: var(--space-1) var(--space-4);
+  max-inline-size: 100%;
+  border: 1px dashed var(--code-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  color: var(--code-fg);
+  font-family: var(--type-font-mono);
+  font-size: var(--type-size-sm);
+  line-height: var(--type-leading-body);
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: start;
+}
+
+.output-block-bar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--space-2);
+  padding-block: var(--space-1);
+  padding-inline: var(--space-2);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-xs);
+  color: var(--color-muted);
+}
+
+.output-block-copy {
+  padding-block: 0;
+  padding-inline: var(--space-2);
+  font: inherit;
+  color: var(--code-fg);
+  background-color: var(--color-canvas);
+  border: 1px solid var(--code-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+/* The button sets display, so the hidden attribute needs its own rule to keep it out of sight. */
+.output-block-copy[hidden] {
+  display: none;
+}
+
+.output-block-copy:hover {
+  background-color: var(--state-hover-bg);
+}
+
+.output-block-copy:focus-visible,
+.output-block-body:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: 2px;
+}
+
+/* Scroll inside the block, never the page. Output stays left to right inside right-to-left text. */
+.output-block-body {
+  margin: 0;
+  padding-block: var(--space-3);
+  padding-inline: var(--space-4);
+  max-inline-size: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  font: inherit;
+  color: inherit;
+  white-space: pre;
+  tab-size: 2;
+}
+
+.output-block-body code {
+  display: block;
+  inline-size: max-content;
+  min-inline-size: 100%;
+  font: inherit;
+}

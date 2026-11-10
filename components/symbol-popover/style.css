@@ -1,0 +1,84 @@
+/* Symbol popover: an inline code chip whose signature and reference appear on hover or keyboard
+   focus. The tooltip is hidden with CSS, so it works without JavaScript; the island only adds
+   Escape-to-hide. */
+
+.symbol-popover {
+  position: relative;
+  display: inline-block;
+  padding-block: 0;
+  padding-inline: var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--code-bg);
+  color: var(--color-text);
+  font-family: var(--type-font-mono);
+  font-size: var(--type-size-sm);
+  line-height: var(--type-leading-tight);
+  white-space: nowrap;
+  vertical-align: baseline;
+  cursor: help;
+}
+
+.symbol-popover:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: 2px;
+}
+
+/* Hidden by default; hover or focus inside the chip reveals it. `data-dismissed`, set by the
+   island on Escape, keeps it hidden until focus or the pointer leaves the chip. */
+.symbol-popover-tooltip {
+  display: none;
+  position: absolute;
+  inset-block-start: calc(100% + var(--space-1));
+  inset-inline-start: 0;
+  z-index: var(--layer-popover);
+  max-inline-size: var(--type-measure-min);
+  padding-block: var(--space-2);
+  padding-inline: var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-raised);
+  box-shadow: var(--shadow-popover);
+  color: var(--color-text);
+  font-family: var(--type-font-mono);
+  font-size: var(--type-size-sm);
+  line-height: var(--type-leading-code);
+  white-space: normal;
+}
+
+.symbol-popover:hover .symbol-popover-tooltip,
+.symbol-popover:focus-within .symbol-popover-tooltip {
+  display: block;
+}
+
+.symbol-popover[data-dismissed] .symbol-popover-tooltip {
+  display: none;
+}
+
+/* A signature is code, so it stays left to right inside a right-to-left page. */
+.symbol-popover-signature {
+  display: block;
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: start;
+  overflow-wrap: anywhere;
+  color: var(--color-heading);
+}
+
+.symbol-popover-link {
+  display: inline-block;
+  margin-block-start: var(--space-1);
+  color: var(--color-link);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-sm);
+}
+
+.symbol-popover-link:hover {
+  color: var(--color-link-hover);
+  text-decoration: underline;
+}
+
+.symbol-popover-link:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: 2px;
+}

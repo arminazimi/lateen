@@ -1,0 +1,86 @@
+/* Terminal blocks: a shell session with prompts and output. Only the commands are copied, and prompts are never selected. Colors come from the code tokens, so dark mode follows. */
+
+.terminal {
+  margin-block: var(--space-4);
+  max-inline-size: 100%;
+  border: 1px solid var(--code-border);
+  border-radius: var(--radius-md);
+  background-color: var(--code-bg);
+  color: var(--code-fg);
+  font-family: var(--type-font-mono);
+  font-size: var(--type-size-sm);
+  line-height: var(--type-leading-body);
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: start;
+}
+
+.terminal-bar {
+  display: flex;
+  justify-content: flex-end;
+  padding-block: var(--space-1);
+  padding-inline: var(--space-2);
+  border-block-end: 1px solid var(--code-border);
+}
+
+.terminal-copy {
+  padding-block: 0;
+  padding-inline: var(--space-2);
+  font: inherit;
+  color: var(--code-fg);
+  background-color: transparent;
+  border: 1px solid var(--code-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+/* The button sets display, so the hidden attribute needs its own rule to keep it out of sight. */
+.terminal-copy[hidden] {
+  display: none;
+}
+
+.terminal-copy:hover {
+  background-color: var(--state-hover-bg);
+}
+
+.terminal-copy:focus-visible,
+.terminal-body:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: 2px;
+}
+
+/* Scroll inside the block, never the page. */
+.terminal-body {
+  margin: 0;
+  padding-block: var(--space-3);
+  padding-inline: var(--space-4);
+  max-inline-size: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  font: inherit;
+  color: inherit;
+  white-space: pre;
+  tab-size: 2;
+}
+
+.terminal-body code {
+  display: block;
+  inline-size: max-content;
+  min-inline-size: 100%;
+  font: inherit;
+}
+
+/* Each line is a block, so an empty output line keeps its height. */
+.terminal-line {
+  display: block;
+  min-block-size: 1lh;
+}
+
+.terminal-prompt {
+  color: var(--color-muted);
+  user-select: none;
+}
+
+.terminal-output {
+  color: var(--code-fg);
+}

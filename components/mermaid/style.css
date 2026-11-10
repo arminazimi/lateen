@@ -1,0 +1,129 @@
+/* Mermaid diagrams rendered to inline SVG at build time. Mermaid's own style element uses literal
+   colors; these rules repaint the common shapes with the theme tokens, so light, dark, and forced
+   colors follow the page without a second render. */
+
+.mermaid {
+  margin-block: var(--space-6);
+  margin-inline: 0;
+  text-align: start;
+}
+
+.mermaid-diagram {
+  display: block;
+  max-inline-size: 100%;
+  overflow-x: auto;
+  text-align: center;
+}
+
+.mermaid svg {
+  display: inline-block;
+  max-inline-size: 100%;
+  block-size: auto;
+  font-family: var(--type-font-body);
+}
+
+.mermaid svg .node rect,
+.mermaid svg .node circle,
+.mermaid svg .node ellipse,
+.mermaid svg .node polygon,
+.mermaid svg .node path,
+.mermaid svg .cluster rect,
+.mermaid svg .actor,
+.mermaid svg .note,
+.mermaid svg .labelBox {
+  fill: var(--color-surface) !important;
+  stroke: var(--color-border-strong) !important;
+}
+
+.mermaid svg .nodeLabel,
+.mermaid svg .label,
+.mermaid svg .labelText,
+.mermaid svg text,
+.mermaid svg tspan {
+  fill: var(--color-text) !important;
+  color: var(--color-text) !important;
+}
+
+.mermaid svg .edgePath .path,
+.mermaid svg .flowchart-link,
+.mermaid svg .messageLine0,
+.mermaid svg .messageLine1,
+.mermaid svg .relation,
+.mermaid svg line {
+  stroke: var(--color-border-strong) !important;
+}
+
+.mermaid svg marker path,
+.mermaid svg .marker,
+.mermaid svg .arrowMarkerPath {
+  fill: var(--color-border-strong) !important;
+  stroke: var(--color-border-strong) !important;
+}
+
+.mermaid svg .edgeLabel,
+.mermaid svg .edgeLabel rect,
+.mermaid svg .labelBkg {
+  background-color: var(--color-canvas) !important;
+  fill: var(--color-canvas) !important;
+}
+
+.mermaid svg .titleText,
+.mermaid svg .sectionTitle,
+.mermaid svg .taskText,
+.mermaid svg .messageText {
+  fill: var(--color-heading) !important;
+}
+
+.mermaid svg .grid .tick line,
+.mermaid svg .grid .domain {
+  stroke: var(--color-border) !important;
+}
+
+.mermaid svg .today {
+  stroke: var(--color-accent) !important;
+}
+
+.mermaid-fallback {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding-block: var(--space-3);
+  padding-inline: var(--space-4);
+  background-color: var(--color-surface);
+  color: var(--color-muted);
+}
+
+.mermaid-fallback p {
+  margin: 0;
+}
+
+.mermaid-source {
+  margin-block-start: var(--space-3);
+}
+
+.mermaid-source summary {
+  cursor: pointer;
+  color: var(--color-muted);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-sm);
+}
+
+.mermaid-source pre {
+  margin-block: var(--space-2) 0;
+  padding-block: var(--space-3);
+  padding-inline: var(--space-4);
+  border: 1px solid var(--code-border);
+  border-radius: var(--radius-md);
+  background-color: var(--code-bg);
+  color: var(--code-fg);
+  font-family: var(--type-font-mono);
+  font-size: var(--type-size-sm);
+  line-height: var(--type-leading-code);
+  overflow-x: auto;
+  direction: ltr;
+  text-align: start;
+}
+
+.mermaid-source pre code {
+  font: inherit;
+  white-space: pre;
+}

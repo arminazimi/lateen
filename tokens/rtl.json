@@ -1,0 +1,9 @@
+{
+  "font-body": "Vazirmatn, Geist, \"Vazirmatn Fallback\", \"Geist Fallback\", system-ui, sans-serif",
+  "font-heading": "Vazirmatn, Geist, \"Vazirmatn Fallback\", \"Geist Fallback\", system-ui, sans-serif",
+  "font-ui": "Vazirmatn, Geist, \"Vazirmatn Fallback\", \"Geist Fallback\", system-ui, sans-serif",
+  "leading-body": "1.8",
+  "leading-heading": "1.4",
+  "leading-tight": "1.35",
+  "letter-spacing": "normal"
+}

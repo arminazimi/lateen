@@ -1,0 +1,42 @@
+{
+  "fast": {
+    "$value": "100ms",
+    "$extensions": {
+      "lateen": {
+        "reduced": "0ms"
+      }
+    }
+  },
+  "base": {
+    "$value": "200ms",
+    "$extensions": {
+      "lateen": {
+        "reduced": "0ms"
+      }
+    }
+  },
+  "slow": {
+    "$value": "400ms",
+    "$extensions": {
+      "lateen": {
+        "reduced": "0ms"
+      }
+    }
+  },
+  "ease": {
+    "$value": "cubic-bezier(0.2, 0, 0, 1)",
+    "$extensions": {
+      "lateen": {
+        "reduced": "linear"
+      }
+    }
+  },
+  "ease-in-out": {
+    "$value": "cubic-bezier(0.4, 0, 0.2, 1)",
+    "$extensions": {
+      "lateen": {
+        "reduced": "linear"
+      }
+    }
+  }
+}

@@ -1,0 +1,52 @@
+/* Block actions: "Edit with your agent" beside a block on hover or focus. The control starts hidden
+   and is stamped in by client.ts, so the page reads the same without JavaScript. Logical insets keep
+   it at the top-inline-end of the block in both writing directions. */
+
+.doc-body [data-src] {
+  position: relative;
+}
+
+.block-action {
+  position: absolute;
+  inset-block-start: var(--space-1);
+  inset-inline-end: var(--space-1);
+  z-index: var(--layer-popover);
+  padding-block: var(--space-1);
+  padding-inline: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-sm);
+  color: var(--color-text);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-xs);
+  line-height: var(--type-leading-tight);
+  white-space: nowrap;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-fast) var(--motion-ease);
+}
+
+/* The element sets its own display, so the hidden attribute needs a rule to keep it out of sight. */
+.block-action[hidden] {
+  display: none;
+}
+
+/* Opacity, not visibility: the button stays in the tab order, and focusing it reveals the action
+   through its block's :focus-within. */
+.doc-body [data-src]:hover > .block-action,
+.doc-body [data-src]:focus-within > .block-action {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.block-action:hover {
+  background: var(--state-hover-bg);
+  color: var(--color-heading);
+}
+
+.block-action:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: 2px;
+}

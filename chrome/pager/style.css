@@ -1,0 +1,80 @@
+/* Pager: previous and next cards at the end of the article. Prev takes the inline-start column, next the inline-end one. */
+
+.pager {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  margin-block-start: var(--space-6);
+}
+
+.pager-link {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.pager-next {
+  grid-column: 2;
+  text-align: end;
+}
+
+.pager-link:hover {
+  border-color: var(--color-accent);
+}
+
+.pager-link:hover .pager-title {
+  color: var(--color-accent);
+}
+
+.pager-link:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: 2px;
+}
+
+.pager-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-sm);
+  color: var(--color-muted);
+}
+
+.pager-title {
+  font-family: var(--type-font-ui);
+  font-weight: var(--type-weight-medium);
+  color: var(--color-heading);
+}
+
+.pager-arrow {
+  display: inline-block;
+  flex: none;
+  inline-size: var(--space-4);
+  block-size: var(--space-4);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Arrows point the way the reader moves: mirror them when the page is right-to-left. */
+[dir="rtl"] .pager-arrow {
+  transform: scaleX(-1);
+}
+
+/* One column on narrow screens: next goes under previous. */
+@media (max-width: 48rem) {
+  .pager {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pager-next {
+    grid-column: 1;
+  }
+}

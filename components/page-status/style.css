@@ -1,0 +1,55 @@
+/* Page status: a banner above the title for experimental, beta, and deprecated pages. The accent sits on the inline start edge, so it moves under RTL. Colors come from tokens, so dark mode follows. */
+
+.page-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  align-items: baseline;
+  margin-block: 0 var(--space-4);
+  padding-block: var(--space-3);
+  padding-inline: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-inline-start-width: 4px;
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--type-size-sm);
+  line-height: var(--type-leading-body);
+}
+
+.page-status-experimental {
+  border-inline-start-color: var(--color-info);
+}
+
+.page-status-beta {
+  border-inline-start-color: var(--color-warning);
+}
+
+.page-status-deprecated {
+  border-inline-start-color: var(--color-danger);
+}
+
+.page-status-label {
+  color: var(--color-heading);
+  font-weight: var(--type-weight-bold);
+}
+
+.page-status-since {
+  color: var(--color-muted);
+  font-family: var(--type-font-mono);
+}
+
+.page-status-replacement {
+  color: var(--color-link);
+  font-weight: var(--type-weight-medium);
+  text-decoration-thickness: 1px;
+}
+
+.page-status-replacement:hover {
+  color: var(--color-link-hover);
+}
+
+.page-status-replacement:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: 2px;
+}

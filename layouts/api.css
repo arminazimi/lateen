@@ -1,0 +1,107 @@
+/* The API reference layout: the article and a sticky examples panel side by side on wide screens,
+   one column below the breakpoint. Tokens and logical properties only; the panel reuses the
+   table-of-contents treatment for its heading so the two asides read alike. */
+
+/* The api page brings its own second column, so the shell's table-of-contents column goes away:
+   the article and the examples share the main column. */
+.layout:has(> main > .api-page) {
+  grid-template-columns: var(--doc-side-w) minmax(0, 1fr);
+}
+
+.api-page {
+  --api-examples-w: 20rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-6);
+  align-items: start;
+  min-inline-size: 0;
+}
+
+.api-page > .doc {
+  min-inline-size: 0;
+}
+
+.api-examples {
+  padding-block: var(--space-6) var(--space-8);
+  font-family: var(--type-font-ui);
+}
+
+.api-examples-title {
+  margin-block: 0 var(--space-3);
+  color: var(--color-muted);
+  font-size: var(--type-size-sm);
+  font-weight: var(--type-weight-medium);
+  line-height: var(--type-leading-tight);
+  text-transform: uppercase;
+}
+
+.api-examples-list {
+  display: grid;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.api-example {
+  padding: var(--space-3);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.api-example-title {
+  margin-block: 0 var(--space-2);
+  color: var(--color-heading);
+  font-size: var(--type-size-sm);
+  font-weight: var(--type-weight-bold);
+  line-height: var(--type-leading-tight);
+}
+
+.api-example-lang {
+  margin-block: 0 var(--space-2);
+  color: var(--color-muted);
+  font-family: var(--type-font-mono);
+  font-size: var(--type-size-xs);
+}
+
+.api-example-code {
+  margin: 0;
+  padding: var(--space-3);
+  background-color: var(--color-canvas);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+  color: var(--color-text);
+  font-family: var(--type-font-mono);
+  font-size: var(--type-size-xs);
+  line-height: var(--type-leading-code);
+}
+
+.api-example-code code {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+/* Wide screens only: the panel sticks while the reference body scrolls. 80rem keeps the article
+   column above 34rem once the sidebar and the panel take theirs; narrower screens stack. */
+@media (min-width: 80rem) {
+  .api-page {
+    grid-template-columns: minmax(0, 1fr) var(--api-examples-w);
+    gap: var(--space-6);
+  }
+
+  .api-examples {
+    position: sticky;
+    inset-block-start: var(--space-16);
+    max-block-size: calc(100vh - var(--space-16) * 2);
+    overflow-y: auto;
+  }
+}
+
+/* Same single-column shell as the docs page once the drawer carries the navigation. */
+@media (max-width: 767.98px) {
+  .layout:has(> main > .api-page) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

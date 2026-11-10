@@ -1,0 +1,64 @@
+/* Copy page as Markdown: the copy button, the plain link to the twin, and the status region. */
+
+.copy-markdown {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-block-start: var(--space-2);
+}
+
+.copy-markdown-button,
+.copy-markdown-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding-block: var(--space-1);
+  padding-inline: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-sm);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+/* A button element has no marker, and its display must not override the hidden attribute. */
+.copy-markdown-button[hidden] {
+  display: none;
+}
+
+.copy-markdown-button:hover,
+.copy-markdown-link:hover {
+  border-color: var(--color-accent);
+  color: var(--color-heading);
+  text-decoration: none;
+}
+
+.copy-markdown-button:focus-visible,
+.copy-markdown-link:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: 2px;
+}
+
+.copy-markdown-key {
+  padding-block: 0;
+  padding-inline: var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-muted);
+  font-family: var(--type-font-mono);
+  font-size: var(--type-size-xs);
+  line-height: var(--type-leading-tight);
+}
+
+/* The confirmation is short and quiet, but visible to a reader who asked for the copy. */
+.copy-markdown-status {
+  min-block-size: 1em;
+  margin: 0;
+  color: var(--color-muted);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-xs);
+}

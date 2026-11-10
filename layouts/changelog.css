@@ -1,0 +1,83 @@
+/* Changelog layout: the release list with a compact version contents above it. The entries
+   themselves are styled by components/changelog-entry/style.css; this file places the page and
+   the contents. Tokens and logical properties only. */
+
+.changelog {
+  max-inline-size: 46rem;
+  min-inline-size: 0;
+  padding-block: var(--space-6) var(--space-12);
+}
+
+.changelog > h1 {
+  margin-block: var(--space-4) var(--space-6);
+}
+
+.changelog-toc {
+  margin-block: 0 var(--space-8);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+}
+
+.changelog-toc-title {
+  margin-block: 0 var(--space-2);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-xs);
+  font-weight: var(--type-weight-medium);
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.changelog-toc-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.changelog-toc-list a {
+  display: inline-flex;
+  padding-block: var(--space-1);
+  padding-inline: var(--space-2);
+  border-radius: var(--radius-sm);
+  font-family: var(--type-font-mono);
+  font-size: var(--type-size-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-link);
+  text-decoration: none;
+  transition: background-color var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease);
+}
+
+.changelog-toc-list a:hover {
+  background-color: var(--state-hover-bg);
+  color: var(--color-link-hover);
+}
+
+.changelog-toc-list a:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: var(--space-1);
+}
+
+.changelog-releases {
+  margin-block-start: var(--space-4);
+}
+
+/* A version link targets the entry section, so the section carries the sticky header's offset
+   that base.css gives headings. */
+.changelog .changelog-entry {
+  scroll-margin-block-start: var(--space-16);
+}
+
+.changelog-body {
+  line-height: var(--type-leading-body);
+}
+
+/* Version numbers read left to right inside a right-to-left page, as code does. */
+.changelog-toc:dir(rtl) .changelog-toc-list a {
+  direction: ltr;
+  unicode-bidi: isolate;
+}

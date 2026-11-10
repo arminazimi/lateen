@@ -1,0 +1,141 @@
+/* Search results layout: the form, the status region, and the result list on a page of their own.
+   Every color and length comes from a token, and every rule uses logical properties so the page
+   mirrors under `dir="rtl"`. The inline module in `search-results.ts` fills the list. */
+
+.search-results {
+  max-inline-size: 46rem;
+  padding-block: var(--space-6) var(--space-12);
+}
+
+.search-results-title-page {
+  margin-block: 0 var(--space-6);
+}
+
+.search-results-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-block-end: var(--space-4);
+}
+
+.search-results-label {
+  flex-basis: 100%;
+  color: var(--color-heading);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-sm);
+  font-weight: var(--type-weight-medium);
+}
+
+.search-results-input {
+  flex: 1;
+  min-inline-size: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-ctl);
+  background-color: var(--color-canvas);
+  color: var(--color-text);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-base);
+}
+
+.search-results-input:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: 2px;
+}
+
+.search-results-submit {
+  padding-block: var(--space-2);
+  padding-inline: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-ctl);
+  background-color: var(--color-surface);
+  color: var(--color-heading);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-base);
+  font-weight: var(--type-weight-medium);
+  cursor: pointer;
+}
+
+.search-results-submit:hover {
+  background-color: var(--state-hover-bg);
+}
+
+.search-results-submit:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: 2px;
+}
+
+.search-results-status {
+  margin: 0;
+  padding-block: var(--space-2);
+  color: var(--color-muted);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-sm);
+}
+
+.search-results-status:empty {
+  display: none;
+}
+
+.search-results-nojs {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  color: var(--color-muted);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-sm);
+}
+
+.search-results-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.search-results-list > li {
+  border-block-end: 1px solid var(--color-border);
+}
+
+.search-results-link {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-block: var(--space-3);
+  padding-inline: var(--space-2);
+  border-inline-start: 2px solid transparent;
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.search-results-link:hover {
+  background-color: var(--state-hover-bg);
+}
+
+.search-results-link:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: -2px;
+  border-inline-start-color: var(--color-accent);
+}
+
+.search-results-title {
+  color: var(--color-heading);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-lg);
+  font-weight: var(--type-weight-medium);
+}
+
+.search-results-excerpt {
+  color: var(--color-muted);
+  font-family: var(--type-font-body);
+  font-size: var(--type-size-sm);
+  line-height: var(--type-leading-body);
+}
+
+.search-results-excerpt mark {
+  border-radius: var(--radius-sm);
+  background-color: var(--color-selection);
+  color: var(--color-heading);
+}
