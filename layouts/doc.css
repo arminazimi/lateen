@@ -69,3 +69,46 @@
     grid-row: 2;
   }
 }
+
+/* Plain Markdown tables and code blocks. The engine writes a bare `table` and `pre`; the table and
+   code components style their own wrappers, so these rules give the bare elements a readable default. */
+.doc-body table {
+  display: block;
+  max-inline-size: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  margin-block: var(--space-6);
+  font-size: var(--type-size-sm);
+}
+
+.doc-body th,
+.doc-body td {
+  padding-block: var(--space-2);
+  padding-inline: var(--space-3);
+  border-block-end: 1px solid var(--color-border);
+  text-align: start;
+  vertical-align: top;
+}
+
+.doc-body th {
+  border-block-end-color: var(--color-muted);
+  white-space: nowrap;
+}
+
+.doc-body pre {
+  margin-block: var(--space-6);
+  padding: var(--space-4);
+  overflow-x: auto;
+  background-color: var(--code-bg);
+  color: var(--code-fg);
+  border: 1px solid var(--code-border);
+  border-radius: var(--radius-md);
+  font-size: var(--type-size-sm);
+  line-height: 1.6;
+}
+
+.doc-body pre code {
+  padding: 0;
+  border: 0;
+  background: none;
+}
