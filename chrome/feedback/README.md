@@ -14,7 +14,7 @@ optional: the unit renders nothing at all unless the site configures an endpoint
 - `client.ts`: the island. It reveals the widget, reads `data-endpoint` and `data-url` from the root,
   POSTs `{ "url": "<page url>", "helpful": true | false }` as JSON when a button is pressed, and
   writes the outcome on the `role="status"` region. A failed request still shows a neutral
-  thank-you. The only stored value is `sessionStorage["slipway-feedback:<page url>"]` (`yes` or
+  thank-you. The only stored value is `sessionStorage["lateen-feedback:<page url>"]` (`yes` or
   `no`); the island never reads or writes cookies or `localStorage`. A page answered earlier in the
   same session shows the stored acknowledgement instead of the buttons.
 

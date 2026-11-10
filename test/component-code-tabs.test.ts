@@ -58,9 +58,9 @@ const page: Page = {
 
 const site: Site = { config, pages: [page], nav: {}, data: {} };
 
-const PRE_NPM = '<pre class="code" data-lang="bash"><code>npm install slipway</code></pre>';
-const PRE_PNPM = '<pre class="code" data-lang="bash"><code>pnpm add slipway</code></pre>';
-const PRE_YARN = '<pre class="code" data-lang="bash"><code>yarn add slipway</code></pre>';
+const PRE_NPM = '<pre class="code" data-lang="bash"><code>npm install mizzen</code></pre>';
+const PRE_PNPM = '<pre class="code" data-lang="bash"><code>pnpm add mizzen</code></pre>';
+const PRE_YARN = '<pre class="code" data-lang="bash"><code>yarn add mizzen</code></pre>';
 
 function render(props: CodeTabsProps, body = `${PRE_NPM}${PRE_PNPM}`): string {
   return html(codeTabs({ props, page, site, html: body }));

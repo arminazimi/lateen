@@ -6,7 +6,7 @@
 import { GROUP_SELECTOR, PANEL_SELECTOR, TAB_SELECTOR, select, type TabsElement } from "./client.ts";
 
 /** localStorage key the chosen label is remembered under. */
-export const STORAGE_KEY = "slipway-code-tabs";
+export const STORAGE_KEY = "lateen-code-tabs";
 
 /** Query parameter whose value chooses the label and beats what is remembered. */
 export const LANG_PARAM = "lang";

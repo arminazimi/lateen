@@ -75,7 +75,7 @@ test("the whole card is one link with its title, description, and icon", () => {
   const out = output({
     href: "/guide/install/",
     title: "Install",
-    description: "Put Slipway in a project.",
+    description: "Put Mizzen in a project.",
     icon: "<svg><path d=\"M1 1\"></path></svg>",
   });
 
@@ -84,7 +84,7 @@ test("the whole card is one link with its title, description, and icon", () => {
     `<a class="${LINK_CARD_CLASS}" href="/guide/install/">` +
       `<span class="${ICON_CLASS}" aria-hidden="true"><svg><path d="M1 1"></path></svg></span>` +
       `<span class="${TITLE_CLASS}">Install</span>` +
-      `<span class="${DESCRIPTION_CLASS}">Put Slipway in a project.</span>` +
+      `<span class="${DESCRIPTION_CLASS}">Put Mizzen in a project.</span>` +
       `</a>`,
   );
   assert.equal((out.match(/<a\b/g) ?? []).length, 1);

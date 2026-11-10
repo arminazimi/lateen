@@ -32,7 +32,7 @@ The same data also works in a page's `versionDiff` front matter, or as the engin
 
 ## Example
 
-:::version-diff{from="0.2" to="0.3" changes='[{"kind":"added","title":"Version diff","after":"## Version diff\n\nA section-by-section comparison."},{"kind":"changed","title":"Install","before":"npm install slipway","after":"npm install @velella/mizzen"},{"kind":"removed","title":"Legacy blocks"},{"kind":"moved","title":"Upgrade","from":"2","to":"4"}]'}
+:::version-diff{from="0.2" to="0.3" changes='[{"kind":"added","title":"Version diff","after":"## Version diff\n\nA section-by-section comparison."},{"kind":"changed","title":"Install","before":"npm install mizzen","after":"npm install @velella/mizzen"},{"kind":"removed","title":"Legacy blocks"},{"kind":"moved","title":"Upgrade","from":"2","to":"4"}]'}
 :::
 
 The Previous and Next buttons and the change count start hidden; the island reveals them and makes

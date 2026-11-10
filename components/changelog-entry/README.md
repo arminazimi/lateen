@@ -5,7 +5,7 @@ the release touches, and the entry text. It is a container directive, so the bod
 
 ```markdown
 :::changelog-entry{version="1.2.0" date="2026-11-09" categories="added,fixed"}
-- Add the `--verbose` flag to `slipway build`.
+- Add the `--verbose` flag to `mizzen build`.
 - Fix a crash when `site.config.md` is missing.
 :::
 ```

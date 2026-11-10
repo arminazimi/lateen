@@ -1,5 +1,5 @@
-/** The prefix of the key a dismissal is stored under: `slipway-announcement:<id>`. */
-export const STORAGE_PREFIX = "slipway-announcement:";
+/** The prefix of the key a dismissal is stored under: `lateen-announcement:<id>`. */
+export const STORAGE_PREFIX = "lateen-announcement:";
 
 /** The selector of the dismiss button inside the bar. */
 export const DISMISS_SELECTOR = "[data-announcement-dismiss]";

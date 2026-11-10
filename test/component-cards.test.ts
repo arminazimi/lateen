@@ -45,7 +45,7 @@ test("card is one link with its title, description, and icon", () => {
     card({
       href: "/guide/install/",
       title: "Install",
-      description: "Put Slipway in a project.",
+      description: "Put Mizzen in a project.",
       icon: "i",
     }),
   );
@@ -55,7 +55,7 @@ test("card is one link with its title, description, and icon", () => {
     `<a class="${CARD_CLASS}" href="/guide/install/">` +
       `<span class="card-icon" aria-hidden="true">i</span>` +
       `<span class="card-title">Install</span>` +
-      `<span class="card-description">Put Slipway in a project.</span>` +
+      `<span class="card-description">Put Mizzen in a project.</span>` +
       `</a>`,
   );
 });

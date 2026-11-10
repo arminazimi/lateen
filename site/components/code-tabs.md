@@ -16,11 +16,11 @@ A container directive whose body is one or more fenced code blocks:
 ````markdown
 :::code-tabs{labels='["npm","pnpm"]'}
 ```bash
-npm install slipway
+npm install mizzen
 ```
 
 ```bash
-pnpm add slipway
+pnpm add mizzen
 ```
 :::
 ````
@@ -38,11 +38,11 @@ The value of `labels` is JSON, so use single quotes around it in the directive a
 
 :::code-tabs{labels='["npm","pnpm"]'}
 ```bash
-npm install slipway
+npm install mizzen
 ```
 
 ```bash
-pnpm add slipway
+pnpm add mizzen
 ```
 :::
 

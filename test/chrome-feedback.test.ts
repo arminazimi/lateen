@@ -363,12 +363,12 @@ test("without an endpoint the island leaves the widget hidden and wires nothing"
 });
 
 test("a vote is stored under one session key per page, and storage failures are tolerated", () => {
-  assert.equal(KEY_PREFIX, "slipway-feedback:");
-  assert.equal(keyFor(PAGE_URL), "slipway-feedback:/example/guide/install/");
+  assert.equal(KEY_PREFIX, "lateen-feedback:");
+  assert.equal(keyFor(PAGE_URL), "lateen-feedback:/example/guide/install/");
 
   const storage = fakeStorage();
   save(storage, PAGE_URL, "no");
-  assert.deepEqual(storage.writes, ["slipway-feedback:/example/guide/install/"]);
+  assert.deepEqual(storage.writes, ["lateen-feedback:/example/guide/install/"]);
   assert.equal(read(storage, PAGE_URL), "no");
   assert.equal(read(fakeStorage({ [keyFor(PAGE_URL)]: "maybe" }), PAGE_URL), undefined);
 

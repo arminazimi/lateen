@@ -11,7 +11,7 @@ heading in its body names an OS — macOS, Windows, or Linux — and starts that
 - `style.css`: the tab list and panels, styled with tokens and logical properties. Without JavaScript the
   list stays hidden and every panel shows stacked under its title.
 - `client.ts`: the island. `detectOs()` maps `navigator.platform` to `mac`, `win`, `linux`, or `unknown`;
-  the remembered choice in `localStorage["slipway-os-tabs"]` wins over it, and `unknown` falls back to the
+  the remembered choice in `localStorage["lateen-os-tabs"]` wins over it, and `unknown` falls back to the
   first tab. A click is remembered and applied to every other `os-tabs` group on the page, keeping the
   scroll offset where it was.
 

@@ -63,11 +63,11 @@ const site: Site = { config, pages: [page], nav: {}, data: {} };
 
 const BODY = [
   "<h3>macOS</h3>",
-  "<p>brew install slipway</p>",
+  "<p>brew install mizzen</p>",
   "<h3>Windows</h3>",
-  "<p>winget install slipway</p>",
+  "<p>winget install mizzen</p>",
   "<h3>Linux</h3>",
-  "<p>curl -fsSL https://get.slipway.dev | sh</p>",
+  "<p>curl -fsSL https://get.mizzen.dev | sh</p>",
 ].join("\n");
 
 function render(props: TabsProps, body = BODY): string {
@@ -258,7 +258,7 @@ test("the component renders a hidden tab list and one labelled panel per heading
   assert.match(out, /id="install-tab-2" aria-controls="install-panel-2" aria-selected="false" tabindex="-1"/);
   assert.match(out, /role="tabpanel" id="install-panel-2" aria-labelledby="install-tab-2"/);
   assert.match(out, /<h3 class="tabs-title" id="install-title-2">Windows<\/h3>/);
-  assert.match(out, /<div class="tabs-body"><p>winget install slipway<\/p><\/div>/);
+  assert.match(out, /<div class="tabs-body"><p>winget install mizzen<\/p><\/div>/);
 });
 
 test("the component keeps a body with no heading whole, with no tab list", () => {

@@ -14,7 +14,7 @@ Steps turn an ordered list into a numbered sequence with a line between the numb
 ```markdown
 :::steps
 1. Install the package.
-2. Add a `slipway.yml`.
+2. Add a `mizzen.yml`.
 3. Run the build.
 :::
 ```
@@ -27,8 +27,8 @@ None.
 
 :::steps
 1. Create the folder.
-2. Add `slipway.yml` with the site's title and language.
-3. Run `npm create slipway` or build the site with the engine.
+2. Add `mizzen.yml` with the site's title and language.
+3. Run `npm create mizzen` or build the site with the engine.
 4. Open the output folder and check the first page.
 :::
 

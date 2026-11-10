@@ -8,7 +8,7 @@ import { activate, copy, RESET_MS, type Clipboard, type CopyButton, type CopyEnv
 
 const pos: SourcePos = { file: "docs/guide/install.md", line: 3, column: 1, endLine: 9, endColumn: 1 };
 
-const repository: RepositoryConfig = { url: "https://github.com/arminazimi/slipway/", branch: "main", dir: "docs" };
+const repository: RepositoryConfig = { url: "https://github.com/velella-sh/lateen/", branch: "main", dir: "docs" };
 
 function siteConfig(repo?: RepositoryConfig): SiteConfig {
   return {
@@ -106,7 +106,7 @@ test("the button carries the copied and failure messages for the island", () => 
 test("the edit link points at the source file on the repository's branch, with the trailing slash dropped", () => {
   const out = html(pageFooter(props(pageWith(), repository)));
 
-  assert.match(out, /<a class="page-footer-edit" href="https:\/\/github\.com\/arminazimi\/slipway\/edit\/main\/docs\/guide\/install\.md">Edit this page on GitHub<\/a>/);
+  assert.match(out, /<a class="page-footer-edit" href="https:\/\/github\.com\/velella-sh\/lateen\/edit\/main\/docs\/guide\/install\.md">Edit this page on GitHub<\/a>/);
 });
 
 test("the edit link uses the configured branch and encodes each path segment", () => {
@@ -125,7 +125,7 @@ test("the edit link defaults to the main branch when the config leaves it out", 
 test("the feedback link opens a new issue with the page's address and source", () => {
   const out = html(pageFooter(props(pageWith(), repository)));
 
-  assert.match(out, /<p class="page-footer-feedback">Was this helpful\? <a href="https:\/\/github\.com\/arminazimi\/slipway\/issues\/new\?title=Feedback%3A%20Install&body=Page%3A%20%2Fexample%2Fguide%2Finstall%2F%0ASource%3A%20docs%2Fguide%2Finstall\.md%0A">Give feedback<\/a><\/p>/);
+  assert.match(out, /<p class="page-footer-feedback">Was this helpful\? <a href="https:\/\/github\.com\/velella-sh\/lateen\/issues\/new\?title=Feedback%3A%20Install&body=Page%3A%20%2Fexample%2Fguide%2Finstall%2F%0ASource%3A%20docs%2Fguide%2Finstall\.md%0A">Give feedback<\/a><\/p>/);
 });
 
 test("without a repository, the edit and feedback links are left out and the prompt stays", () => {

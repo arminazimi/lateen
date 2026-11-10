@@ -12,7 +12,7 @@
 import type { PaletteAction, PalettePayload, PaletteRun, ThemeChoice } from "../command-palette/actions.ts";
 
 /** localStorage key for the visitor's theme choice; keep in step with `layouts/base.ts`. */
-export const THEME_KEY = "slipway-theme";
+export const THEME_KEY = "lateen-theme";
 
 /** The group heading when the server sends no label. */
 export const ACTIONS_LABEL = "Actions";

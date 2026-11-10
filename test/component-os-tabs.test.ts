@@ -72,11 +72,11 @@ const site: Site = { config, pages: [page], nav: {}, data: {} };
 
 const BODY = [
   "<h3 id=\"macos\">macOS</h3>",
-  "<p>brew install slipway</p>",
+  "<p>brew install mizzen</p>",
   "<h3 id=\"windows\">Windows</h3>",
-  "<p>winget install slipway</p>",
+  "<p>winget install mizzen</p>",
   "<h3 id=\"linux\">Linux</h3>",
-  "<p>curl -fsSL https://get.slipway.dev | sh</p>",
+  "<p>curl -fsSL https://get.mizzen.dev | sh</p>",
 ].join("\n");
 
 function render(props: OsTabsProps, body = BODY): string {
@@ -126,7 +126,7 @@ test("without JavaScript, the tab list starts hidden and every section shows sta
   assert.match(out, new RegExp(`<h3 class="${TITLE_CLASS}" id="os-tabs-title-2">Windows</h3>`));
   assert.match(out, new RegExp(`<h3 class="${TITLE_CLASS}" id="os-tabs-title-3">Linux</h3>`));
   assert.equal(out.split(`class="${PANEL_CLASS}"`).length - 1, 3);
-  assert.ok(out.indexOf("brew install slipway") < out.indexOf("winget install slipway"), "sections keep source order");
+  assert.ok(out.indexOf("brew install mizzen") < out.indexOf("winget install mizzen"), "sections keep source order");
 });
 
 test("the root carries the class and the data attribute the island finds", () => {
@@ -136,8 +136,8 @@ test("the root carries the class and the data attribute the island finds", () =>
 
 test("each section sits in a body element inside its panel", () => {
   const out = render({});
-  assert.match(out, new RegExp(`<div class="${BODY_CLASS}"><p>brew install slipway</p></div>`));
-  assert.match(out, new RegExp(`<div class="${BODY_CLASS}"><p>winget install slipway</p></div>`));
+  assert.match(out, new RegExp(`<div class="${BODY_CLASS}"><p>brew install mizzen</p></div>`));
+  assert.match(out, new RegExp(`<div class="${BODY_CLASS}"><p>winget install mizzen</p></div>`));
 });
 
 test("tabs are buttons that point at their panels and name their OS", () => {

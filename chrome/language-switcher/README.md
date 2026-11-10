@@ -69,7 +69,7 @@ keyboard operable with no JavaScript and no `client.ts`.
 
 ## Keeping the reader's theme
 
-Every language lives on the same origin, and the theme choice is stored under `slipway-theme`
+Every language lives on the same origin, and the theme choice is stored under `lateen-theme`
 (`THEME_KEY`, shared with the theme switch). A switch to another language therefore keeps the
 reader's light, dark, or system choice without a query string or any other hand-off.
 

@@ -56,7 +56,7 @@ export interface FeedbackEnv {
 }
 
 /** Every stored vote lives under this prefix plus the page's URL. */
-export const KEY_PREFIX = "slipway-feedback:";
+export const KEY_PREFIX = "lateen-feedback:";
 
 /** The session-storage key for one page's vote. */
 export function keyFor(url: string): string {

@@ -1,7 +1,7 @@
 /* Sidebar groups: each group is a native <details>. The group that holds the page stays open; the rest remember their open or closed state in localStorage. */
 
 /** localStorage key for the sidebar's group states (per site: one origin per site). */
-export const STORAGE_KEY = "slipway-sidebar";
+export const STORAGE_KEY = "lateen-sidebar";
 
 const GROUP_SELECTOR = "details[data-sidebar-group]";
 

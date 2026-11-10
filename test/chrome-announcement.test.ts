@@ -140,19 +140,19 @@ test("renders nothing when the config sets no announcement, or sets no usable te
 });
 
 test("renders a labelled region with the text and a dismiss button hidden until the island runs", () => {
-  const out = render({ announcement: { id: "v0-4", text: "Slipway 0.4 is out." } });
+  const out = render({ announcement: { id: "v0-4", text: "Mizzen 0.4 is out." } });
 
   assert.match(out, /^<div class="announcement" role="region" aria-label="Announcement"/);
   assert.match(out, /data-announcement="true"/);
   assert.match(out, /data-announcement-id="v0-4"/);
-  assert.match(out, /<p class="announcement-text">Slipway 0\.4 is out\.<\/p>/);
+  assert.match(out, /<p class="announcement-text">Mizzen 0\.4 is out\.<\/p>/);
   assert.match(out, /<button type="button" class="announcement-dismiss" aria-label="Dismiss announcement" hidden data-announcement-dismiss="true">/);
   assert.match(out, /<span aria-hidden="true">×<\/span>/);
   assert.doesNotMatch(out, /announcement-link/);
 });
 
 test("names the region and the dismiss button in the page's language", () => {
-  const options = { announcement: { id: "v0-4", text: "Slipway 0.4 is out." } };
+  const options = { announcement: { id: "v0-4", text: "Mizzen 0.4 is out." } };
 
   const english = render(options);
   assert.match(english, new RegExp(`aria-label="${stringsOf("en").announcement}"`));
@@ -208,7 +208,7 @@ test("isDismissed reads only this announcement's key, and treats any other value
 test("remember writes true under this announcement's key and survives a broken store", () => {
   const storage = store();
   remember(storage, "v0-4");
-  assert.deepEqual(storage.data, { "slipway-announcement:v0-4": "true" });
+  assert.deepEqual(storage.data, { "lateen-announcement:v0-4": "true" });
   assert.doesNotThrow(() => remember(brokenStore(), "v0-4"));
 });
 
@@ -223,7 +223,7 @@ test("activate reveals the dismiss button; a click hides the bar and remembers t
 
   bar.button.clicks[0]!();
   assert.equal(bar.hidden, true);
-  assert.equal(storage.data["slipway-announcement:v0-4"], "true");
+  assert.equal(storage.data["lateen-announcement:v0-4"], "true");
 });
 
 test("activate hides a bar dismissed on an earlier visit and leaves the button hidden", () => {
@@ -256,7 +256,7 @@ test("activate survives a broken store, still hiding the bar for this view", () 
 
 test("the base layout places the bar above the header", () => {
   const out = renderToString(
-    base({ ...layoutProps({ announcement: { id: "v0-4", text: "Slipway 0.4 is out." } }), header: h("span", null, "H") }) as never,
+    base({ ...layoutProps({ announcement: { id: "v0-4", text: "Mizzen 0.4 is out." } }), header: h("span", null, "H") }) as never,
   );
 
   const bar = out.indexOf('class="announcement"');

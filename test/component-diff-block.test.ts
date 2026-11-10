@@ -22,8 +22,8 @@ import { bodyText, copyText, parseDiff } from "../components/diff-block/lines.ts
 import { activate, copy, RESET_MS, type Clipboard, type CopyButton, type CopyEnv } from "../components/diff-block/client.ts";
 
 const DIFF = `<pre><code class="language-diff">${[
-  "--- a/slipway.yml",
-  "+++ b/slipway.yml",
+  "--- a/mizzen.yml",
+  "+++ b/mizzen.yml",
   "@@ -1,3 +1,3 @@",
   " publish:",
   "-  dir: build",

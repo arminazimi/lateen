@@ -13,7 +13,7 @@ A terminal shows a shell session: lines that start with `$` are commands, and ev
 
 ```markdown
 :::terminal
-$ npm install slipway
+$ npm install mizzen
 added 1 package
 
 $ npm run build
@@ -28,7 +28,7 @@ None. The prompt is `$ `.
 ## Example
 
 :::terminal
-$ npm install slipway
+$ npm install mizzen
 added 1 package
 
 $ npx mizzen build site --out dist

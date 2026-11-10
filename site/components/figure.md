@@ -43,7 +43,7 @@ Or a leaf directive with `caption`:
 
 ## Example
 
-:::figure{src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22640%22 height=%22360%22%3E%3Crect width=%22640%22 height=%22360%22 fill=%22%23e7dfd2%22/%3E%3Ctext x=%22320%22 y=%22180%22 text-anchor=%22middle%22 font-family=%22Georgia%22 font-size=%2232%22 fill=%22%23554%22%3EA figure example%3C/text%3E%3C/svg%3E" alt="A blank diagram with the words A figure example." caption="A figure with a caption and a credit." credit="Lateen" credit_url="https://arminazimi.github.io/slipway/"}
+:::figure{src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22640%22 height=%22360%22%3E%3Crect width=%22640%22 height=%22360%22 fill=%22%23e7dfd2%22/%3E%3Ctext x=%22320%22 y=%22180%22 text-anchor=%22middle%22 font-family=%22Georgia%22 font-size=%2232%22 fill=%22%23554%22%3EA figure example%3C/text%3E%3C/svg%3E" alt="A blank diagram with the words A figure example." caption="A figure with a caption and a credit." credit="Lateen" credit_url="https://velella.sh/lateen/"}
 :::
 
 ## Notes

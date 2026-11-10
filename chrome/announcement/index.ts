@@ -46,7 +46,7 @@ function hrefOf(base: string, url: string): string {
  *   options:
  *     announcement:
  *       id: v0-4
- *       text: Slipway 0.4 is out.
+ *       text: Mizzen 0.4 is out.
  *       href: /changelog/
  * ```
  *

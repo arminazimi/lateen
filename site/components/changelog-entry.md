@@ -11,7 +11,7 @@ A changelog entry is one release: a version heading that links to itself, the re
 
 ```markdown
 :::changelog-entry{version="1.2.0" date="2026-11-09" categories="added,fixed"}
-- Add the `--verbose` flag to `slipway build`.
+- Add the `--verbose` flag to `mizzen build`.
 - Fix a crash when `site.config.md` is missing.
 :::
 ```
@@ -33,7 +33,7 @@ The engine caches the Markdown stage, so a second build skips pages whose source
 
 ### Fixed
 
-A missing `site.config.md` no longer stops a build that takes its config from `slipway.yml`.
+A missing `site.config.md` no longer stops a build that takes its config from `mizzen.yml`.
 :::
 
 :::changelog-entry{version="1.1.0" date="2026-10-02" categories="removed,security"}

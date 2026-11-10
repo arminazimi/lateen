@@ -38,8 +38,8 @@ the diff but left out of the copy.
 
 :::diff-block
 ```diff
---- a/slipway.yml
-+++ b/slipway.yml
+--- a/mizzen.yml
++++ b/mizzen.yml
  publish:
 -  dir: build
 +  dir: dist

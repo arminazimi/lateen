@@ -12,23 +12,23 @@ OS tabs group install instructions by operating system. The reader sees the tab 
 A container directive whose body holds one `##` or `###` heading per operating system. The heading's text is the tab label and starts that section:
 
 ````markdown
-:::os-tabs{id="install-slipway"}
+:::os-tabs{id="install-mizzen"}
 ### macOS
 
 ```bash
-brew install slipway
+brew install mizzen
 ```
 
 ### Windows
 
 ```powershell
-winget install slipway
+winget install mizzen
 ```
 
 ### Linux
 
 ```bash
-curl -fsSL https://get.slipway.dev | sh
+curl -fsSL https://get.mizzen.dev | sh
 ```
 :::
 ````
@@ -47,19 +47,19 @@ The labels macOS, Windows, and Linux (also `Mac`, `Win32`, `Ubuntu`, and a few o
 ### macOS
 
 ```bash
-brew install slipway
+brew install mizzen
 ```
 
 ### Windows
 
 ```powershell
-winget install slipway
+winget install mizzen
 ```
 
 ### Linux
 
 ```bash
-curl -fsSL https://get.slipway.dev | sh
+curl -fsSL https://get.mizzen.dev | sh
 ```
 :::
 
@@ -67,7 +67,7 @@ curl -fsSL https://get.slipway.dev | sh
 
 - The tab list starts `hidden`; without JavaScript the sections stack, each under its label.
 - The island reads the browser's platform, chooses that tab, and falls back to the first tab when it cannot tell.
-- Choosing a tab by hand is remembered in `localStorage["slipway-os-tabs"]` and switches every OS tab group on the page and on later pages that offers the same system.
+- Choosing a tab by hand is remembered in `localStorage["lateen-os-tabs"]` and switches every OS tab group on the page and on later pages that offers the same system.
 - Arrow keys move between tabs, `Home` and `End` go to the ends, and the arrows follow the reading direction in right-to-left pages.
 - Component islands are not wired into built pages yet, so a built site shows the no-JavaScript state — every section stacked — until island wiring lands.
 - Use [code tabs](../code-tabs/) when the choice is a language or package manager rather than an operating system.

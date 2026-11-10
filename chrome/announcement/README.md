@@ -10,7 +10,7 @@ theme:
   options:
     announcement:
       id: v0-4
-      text: Slipway 0.4 is out.
+      text: Mizzen 0.4 is out.
       href: /changelog/
 ```
 
@@ -23,7 +23,7 @@ theme:
 ## Behaviour
 
 The bar renders in the document, so it is readable without JavaScript. Its dismiss button starts `hidden`; the island
-reveals it and stores `slipway-announcement:<id>` in `localStorage` on a click. A later visit reads that key and hides
+reveals it and stores `lateen-announcement:<id>` in `localStorage` on a click. A later visit reads that key and hides
 the bar.
 
 Reading storage needs JavaScript, and the engine's inline theme script is the only non-deferred script a page ships, so

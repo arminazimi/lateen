@@ -105,7 +105,7 @@ test("links from the config keep their order, get the site base for root-relativ
         footer: {
           links: [
             { title: "Changelog", url: "/changelog/" },
-            { title: "Source", url: "https://github.com/arminazimi/slipway" },
+            { title: "Source", url: "https://github.com/velella-sh/lateen" },
             { title: "Write", url: "mailto:hello@example.com" },
           ],
         },
@@ -117,7 +117,7 @@ test("links from the config keep their order, get the site base for root-relativ
   assert.ok(out.indexOf("Changelog") < out.indexOf("Source"));
   assert.ok(out.indexOf("Source") < out.indexOf("Write"));
   assert.match(out, /<a href="\/example\/changelog\/">Changelog<\/a>/);
-  assert.match(out, /<a href="https:\/\/github\.com\/arminazimi\/slipway" rel="noopener">Source<\/a>/);
+  assert.match(out, /<a href="https:\/\/github\.com\/velella-sh\/lateen" rel="noopener">Source<\/a>/);
   assert.match(out, /<a href="mailto:hello@example\.com">Write<\/a>/);
 });
 

@@ -567,7 +567,7 @@ test("liveHandlers writes the theme key, applies data-theme, and resolves system
   assert.equal(attrs["data-theme"], "light");
   assert.equal(resolveTheme("dark", true), "dark");
   assert.equal(resolveTheme("system", false), "dark");
-  assert.equal(THEME_KEY, "slipway-theme");
+  assert.equal(THEME_KEY, "lateen-theme");
 });
 
 test("liveHandlers copies the Markdown twin and jumps to a heading", async () => {

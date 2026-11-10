@@ -20,7 +20,7 @@ theme:
       radius: "0.5rem"
 ```
 
-The keys are the 0.2 `slipway.tokens` names that the config contract maps into the theme's CSS variables: `accent`, `canvas`, `text`, `font_body`, and `radius`. `font_display` left with the blog layouts and is not read. An unset color keeps the theme's light and dark pair; a set one replaces both, so check the contrast in both modes.
+The keys are the token names that the config maps into the theme's CSS variables: `accent`, `canvas`, `text`, `font_body`, and `radius`. `font_display` left with the blog layouts and is not read. An unset color keeps the theme's light and dark pair; a set one replaces both, so check the contrast in both modes.
 
 The rest of `theme.options` is the theme's as well. Lateen reads these blocks:
 

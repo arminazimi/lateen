@@ -14,7 +14,7 @@ import { t } from "../i18n/index.ts";
  * examples on wide screens, stacked below them on narrow ones.
  *
  * Pages choose it with `layout: api` in front matter, or `layout: api` in `defaults` in
- * `slipway.yml` for a folder. The examples come from front matter:
+ * `mizzen.yml` for a folder. The examples come from front matter:
  *
  * - `examples: [{ title, lang, code }]` — one panel entry per example; `title` and `lang` are
  *   optional, `code` is what the panel shows.

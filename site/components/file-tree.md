@@ -15,7 +15,7 @@ A file tree turns a nested list into a folder structure with icons, indentation,
 :::file-tree{label="Project layout"}
 - content/ # the pages of the site
   - **index.md** # the home page
-- slipway.yml
+- mizzen.yml
 :::
 ```
 
@@ -32,7 +32,7 @@ A file tree turns a nested list into a folder structure with icons, indentation,
   - **index.md** # the home page
   - guides/
     - install.md
-- slipway.yml # site settings
+- mizzen.yml # site settings
 - assets/
   - logo.svg
 :::

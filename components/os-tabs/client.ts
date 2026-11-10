@@ -9,7 +9,7 @@ export const TAB_SELECTOR = "[role=tab]";
 export const PANEL_SELECTOR = ".os-tabs-panel";
 
 /** localStorage key the chosen operating system is remembered under. */
-export const STORAGE_KEY = "slipway-os-tabs";
+export const STORAGE_KEY = "lateen-os-tabs";
 
 /** The operating systems a tab can name. `unknown` means the browser did not say, or a tab named none. */
 export type Os = "mac" | "win" | "linux" | "unknown";

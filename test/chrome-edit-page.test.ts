@@ -23,7 +23,7 @@ import editPage, {
 
 const source: SourcePos = { file: "docs/guide/install.md", line: 3, column: 1, endLine: 9, endColumn: 1 };
 
-const github: RepositoryConfig = { url: "https://github.com/arminazimi/slipway/", dir: "docs" };
+const github: RepositoryConfig = { url: "https://github.com/velella-sh/lateen/", dir: "docs" };
 
 function configWith(
   options: Readonly<Record<string, unknown>> = {},
@@ -103,7 +103,7 @@ test("GitHub: the edit link points at the source on main, with the trailing slas
 
   assert.match(
     out,
-    /<a class="edit-page-link" href="https:\/\/github\.com\/arminazimi\/slipway\/edit\/main\/docs\/guide\/install\.md" rel="noopener">Edit this page<\/a>/,
+    /<a class="edit-page-link" href="https:\/\/github\.com\/velella-sh\/lateen\/edit\/main\/docs\/guide\/install\.md" rel="noopener">Edit this page<\/a>/,
   );
 });
 
@@ -155,7 +155,7 @@ test("site data wins over the computed URL, keyed by page URL as a string", () =
   const out = render(props(pageWith(), github, {}, data));
 
   assert.match(out, /href="https:\/\/github\.com\/o\/r\/edit\/trunk\/guide\/install\.md"/);
-  assert.doesNotMatch(out, /arminazimi/);
+  assert.doesNotMatch(out, /example/);
 });
 
 test("site data also reads the engine's array of edit links and an object with editUrl", () => {
@@ -180,7 +180,7 @@ test("an unsafe or non-web data value is ignored, and the computed URL is used i
 test("data with no entry for the page falls back to the repository", () => {
   const data = { "edit-links": { "/other/": "https://github.com/o/r/edit/main/other.md" } };
 
-  assert.match(render(props(pageWith(), github, {}, data)), /arminazimi\/slipway\/edit\/main/);
+  assert.match(render(props(pageWith(), github, {}, data)), /velella-sh\/lateen\/edit\/main/);
 });
 
 test("heading helper: GitHub's new-issue URL carries the page, source line, and heading id", () => {
@@ -189,7 +189,7 @@ test("heading helper: GitHub's new-issue URL carries the page, source line, and 
 
   assert.ok(url !== undefined);
   const parsed = new URL(url);
-  assert.equal(parsed.origin + parsed.pathname, "https://github.com/arminazimi/slipway/issues/new");
+  assert.equal(parsed.origin + parsed.pathname, "https://github.com/velella-sh/lateen/issues/new");
   assert.equal(parsed.searchParams.get("title"), "Suggest edit: Install — Run the build");
   assert.equal(
     parsed.searchParams.get("body"),
@@ -233,7 +233,7 @@ test("with theme.options.editPage.headingLinks the footer lists one issue link p
   const out = render(props(pageWith(), github, { editPage: { headingLinks: true } }));
 
   assert.match(out, /<ul class="edit-page-headings">/);
-  assert.match(out, /href="https:\/\/github\.com\/arminazimi\/slipway\/issues\/new\?[^"]*"/);
+  assert.match(out, /href="https:\/\/github\.com\/velella-sh\/lateen\/issues\/new\?[^"]*"/);
   assert.match(out, /aria-label="Suggest an edit to “Run the build”">Run the build<\/a>/);
   assert.match(out, /aria-label="Suggest an edit to “Configure the cache”">Configure the cache<\/a>/);
   assert.equal((out.match(/<li>/g) ?? []).length, 2);

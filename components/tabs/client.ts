@@ -23,7 +23,7 @@ export const TABLIST_SELECTOR = "[role=tablist]";
 export const PANEL_SELECTOR = "[role=tabpanel]";
 
 /** localStorage key the chosen label is remembered under. Content tabs keep their own, apart from code tabs. */
-export const STORAGE_KEY = "slipway-tabs";
+export const STORAGE_KEY = "lateen-tabs";
 
 /** Query parameter whose value chooses the label and beats what is remembered. */
 export const TAB_PARAM = "tab";

@@ -61,7 +61,7 @@ Use the `windows` archive and add its folder to `Path`.
 ## Notes
 
 - Without JavaScript the tab list stays hidden and every section shows stacked under its title, so nothing is locked behind a control that does not run.
-- Choosing a tab by hand is remembered in `localStorage["slipway-tabs"]` and switches every group on the page and on later pages that offers the same label.
+- Choosing a tab by hand is remembered in `localStorage["lateen-tabs"]` and switches every group on the page and on later pages that offers the same label.
 - `?tab=` in the URL chooses a label and beats what is remembered; `?lang=` works too, because the sync module is shared with code tabs.
 - Arrow keys move between tabs, `Home` and `End` go to the ends, and the arrows follow the reading direction in right-to-left pages.
 - Use [OS tabs](../os-tabs/) when the sections are operating systems and the reader's system should win, or [code tabs](../code-tabs/) when the choice is a language or package manager.

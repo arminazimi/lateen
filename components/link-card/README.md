@@ -5,7 +5,7 @@ title, and an optional plain-text description. The whole card is a single `<a>` 
 ring, so a reader can tab to it and activate it anywhere.
 
 ```markdown
-::link-card{href="/guide/install/" title="Install" description="Put Slipway in a project."}
+::link-card{href="/guide/install/" title="Install" description="Put Mizzen in a project."}
 ```
 
 The `link-card` directive is a leaf directive. `href` must be root-relative (`/guide/`, but not the
