@@ -1,8 +1,8 @@
 {
-  "font-body": "Geist, Vazirmatn, system-ui, sans-serif",
-  "font-heading": "Geist, Vazirmatn, system-ui, sans-serif",
-  "font-ui": "Geist, Vazirmatn, system-ui, sans-serif",
-  "font-mono": "Geist Mono, ui-monospace, monospace",
+  "font-body": "Geist, \"Geist Fallback\", Vazirmatn, system-ui, sans-serif",
+  "font-heading": "Geist, \"Geist Fallback\", Vazirmatn, system-ui, sans-serif",
+  "font-ui": "Geist, \"Geist Fallback\", Vazirmatn, system-ui, sans-serif",
+  "font-mono": "Geist Mono, \"Geist Mono Fallback\", ui-monospace, monospace",
   "size-xs": "clamp(0.75rem, calc(0.7188rem + 0.1042vw), 0.8125rem)",
   "size-sm": "clamp(0.8125rem, calc(0.7812rem + 0.1042vw), 0.875rem)",
   "size-base": "1rem",

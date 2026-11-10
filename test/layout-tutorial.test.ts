@@ -103,7 +103,8 @@ test("front matter steps win over headings, and an id-less step gets a slug anch
 
   assert.match(page, /href="#setup"><span class="tutorial-step-count">Step 1 of 2<\/span><span class="tutorial-step-title">Set up<\/span>/);
   assert.match(page, /href="#deploy"><span class="tutorial-step-count">Step 2 of 2<\/span><span class="tutorial-step-title">Deploy!<\/span>/);
-  assert.doesNotMatch(page, /Ignored/);
+  // The search dialog lists every section as an action, so the title may appear there; no step takes it.
+  assert.doesNotMatch(page, /tutorial-step-title">Ignored/);
   assert.doesNotMatch(page, /href="#ignored"/);
 });
 
@@ -165,7 +166,7 @@ test("a page with no steps renders its body whole and no progress list", () => {
 test("the page pager still follows the last step", () => {
   const page = out(threeSteps());
 
-  assert.match(page, /data-step="3"[\s\S]*<\/section><\/div><div class="page-footer">/);
+  assert.match(page, /data-step="3"[\s\S]*<\/section><\/div><div class="doc-actions"><div class="page-footer">/);
   assert.match(page, /<nav class="pager" aria-label="Previous and next pages"><a class="pager-link pager-prev" href="\/guide\/" rel="prev">/);
 });
 

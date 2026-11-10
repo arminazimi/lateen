@@ -20,10 +20,10 @@
   --color-warning: light-dark(#a47428, #d4a72c);
   --color-danger: light-dark(#94638a, #ff7b72);
   --color-info: light-dark(#5d80aa, #58a6ff);
-  --type-font-body: Geist, Vazirmatn, system-ui, sans-serif;
-  --type-font-heading: Geist, Vazirmatn, system-ui, sans-serif;
-  --type-font-ui: Geist, Vazirmatn, system-ui, sans-serif;
-  --type-font-mono: Geist Mono, ui-monospace, monospace;
+  --type-font-body: Geist, "Geist Fallback", Vazirmatn, system-ui, sans-serif;
+  --type-font-heading: Geist, "Geist Fallback", Vazirmatn, system-ui, sans-serif;
+  --type-font-ui: Geist, "Geist Fallback", Vazirmatn, system-ui, sans-serif;
+  --type-font-mono: Geist Mono, "Geist Mono Fallback", ui-monospace, monospace;
   --type-size-xs: clamp(0.75rem, calc(0.7188rem + 0.1042vw), 0.8125rem);
   --type-size-sm: clamp(0.8125rem, calc(0.7812rem + 0.1042vw), 0.875rem);
   --type-size-base: 1rem;

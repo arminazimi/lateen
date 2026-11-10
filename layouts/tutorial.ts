@@ -235,8 +235,7 @@ function article(props: LayoutProps): ComponentChildren {
     readingTime({ props: {}, page, site: props.site, html: "" }) as ComponentChildren,
     steps.length === 0 ? null : progress(page, steps),
     body(page, steps),
-    pageFooter(props) as ComponentChildren,
-    copyMarkdown(props) as ComponentChildren,
+    h("div", { class: "doc-actions" }, pageFooter(props) as ComponentChildren, copyMarkdown(props) as ComponentChildren),
     feedback(props) as ComponentChildren,
     pager(props) as ComponentChildren,
   );

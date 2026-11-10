@@ -8,13 +8,14 @@ import copyMarkdown from "../chrome/copy-markdown/index.ts";
 import drawer from "../chrome/drawer/index.ts";
 import editPage from "../chrome/edit-page/index.ts";
 import feedback from "../chrome/feedback/index.ts";
-import siteFooter from "../chrome/site-footer/index.ts";
 import header from "../chrome/header/index.ts";
 import lastUpdated from "../chrome/last-updated/index.ts";
+import pageAgentMenu from "../chrome/page-agent-menu/index.ts";
 import pageFooter from "../chrome/page-footer/index.ts";
 import pager from "../chrome/pager/index.ts";
 import sidebar from "../chrome/sidebar/index.ts";
 import toc from "../chrome/toc/index.ts";
+import { highlightFences } from "../components/code/index.ts";
 import driftBanner from "../components/drift-banner/index.ts";
 import pageStatus, { type PageStatusProps } from "../components/page-status/index.ts";
 import readingTime from "../components/reading-time/index.ts";
@@ -58,10 +59,15 @@ function article(props: LayoutProps): ComponentChildren {
     trustPanel({ props: {}, page, site: props.site, html: "" }) as ComponentChildren,
     lastUpdated(props) as ComponentChildren,
     readingTime({ props: {}, page, site: props.site, html: "" }) as ComponentChildren,
-    h("div", { class: "doc-body", dangerouslySetInnerHTML: { __html: page.html } }),
+    h("div", { class: "doc-body", dangerouslySetInnerHTML: { __html: highlightFences(page.html) } }),
     editPage(props) as ComponentChildren,
-    pageFooter(props) as ComponentChildren,
-    copyMarkdown(props) as ComponentChildren,
+    h(
+      "div",
+      { class: "doc-actions" },
+      pageFooter(props) as ComponentChildren,
+      copyMarkdown(props) as ComponentChildren,
+      pageAgentMenu(props) as ComponentChildren,
+    ),
     feedback(props) as ComponentChildren,
     pager(props) as ComponentChildren,
   );
@@ -84,7 +90,6 @@ const doc: Layout = (props) =>
     sidebar: sidebar(props) as ComponentChildren,
     main: h(Fragment, null, article(props), blockActions(props) as ComponentChildren),
     aside: toc(props) as ComponentChildren,
-    footer: siteFooter(props) as ComponentChildren,
   });
 
 export default doc;

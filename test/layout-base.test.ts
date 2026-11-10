@@ -186,3 +186,23 @@ test("islands load as modules at the end of body", () => {
   const html = out(layoutProps());
   assert.match(html, /<script type="module" src="\/assets\/copy\.js"><\/script><\/body>/);
 });
+
+test("the favicon option adds icon links under the site base, and nothing when unset", () => {
+  const props = layoutProps();
+  const withIcons: LayoutProps = {
+    ...props,
+    site: {
+      ...props.site,
+      config: {
+        ...config,
+        base: "/docs",
+        theme: { options: { favicon: { svg: "/brand/favicon.svg", ico: "/brand/favicon.ico", apple: "/brand/apple-touch-icon.png" } } },
+      },
+    },
+  };
+  const out = JSON.stringify(base(withIcons));
+  assert.match(out, /"rel":"icon","href":"\/docs\/brand\/favicon\.ico"/);
+  assert.match(out, /"type":"image\/svg\+xml"/);
+  assert.match(out, /"rel":"apple-touch-icon","href":"\/docs\/brand\/apple-touch-icon\.png"/);
+  assert.doesNotMatch(JSON.stringify(base(props)), /"rel":"icon"/);
+});

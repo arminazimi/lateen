@@ -70,45 +70,48 @@
   }
 }
 
-/* Plain Markdown tables and code blocks. The engine writes a bare `table` and `pre`; the table and
-   code components style their own wrappers, so these rules give the bare elements a readable default. */
-.doc-body table {
-  display: block;
-  max-inline-size: 100%;
-  overflow-x: auto;
-  border-collapse: collapse;
-  margin-block: var(--space-6);
+/* Fences highlighted by the layout (`highlightFences`): each token carries both colors, and the
+   page's color scheme picks one, as in components/code/style.css. */
+.doc-body pre span {
+  color: light-dark(var(--shiki-light, inherit), var(--shiki-dark, inherit));
+}
+
+/* The page footer, copy, view, and agent controls share one row under the article. */
+.doc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-2);
+  margin-block-start: var(--space-8);
+  padding-block-start: var(--space-4);
+  border-block-start: 1px solid var(--color-border);
+  font-family: var(--type-font-ui);
   font-size: var(--type-size-sm);
+  color: var(--color-muted);
 }
 
-.doc-body th,
-.doc-body td {
-  padding-block: var(--space-2);
-  padding-inline: var(--space-3);
-  border-block-end: 1px solid var(--color-border);
-  text-align: start;
-  vertical-align: top;
+.doc-actions .copy-markdown-status:empty {
+  display: none;
 }
 
-.doc-body th {
-  border-block-end-color: var(--color-muted);
-  white-space: nowrap;
+/* The article already ends with an "Edit this page" link, so the footer's own edit link would repeat it. */
+.edit-page + .doc-actions .page-footer-edit {
+  display: none;
 }
 
-.doc-body pre {
-  margin-block: var(--space-6);
-  padding: var(--space-4);
-  overflow-x: auto;
-  background-color: var(--code-bg);
-  color: var(--code-fg);
-  border: 1px solid var(--code-border);
-  border-radius: var(--radius-md);
-  font-size: var(--type-size-sm);
-  line-height: 1.6;
-}
+/* On a phone the controls are touch targets of at least 44px, and the feedback line sits on its own
+   line at the start of the row instead of floating at the end of whatever line is left over. */
+@media (max-width: 40rem) {
+  .doc-actions :is(.page-footer-copy, .copy-markdown-button, .copy-markdown-link, .page-agent-menu-summary) {
+    min-block-size: calc(var(--space-8) + var(--space-3));
+  }
 
-.doc-body pre code {
-  padding: 0;
-  border: 0;
-  background: none;
+  .doc-actions .page-footer-copy {
+    flex: 1 1 100%;
+  }
+
+  .doc-actions .page-footer-feedback {
+    flex: 1 1 100%;
+    margin-inline-start: 0;
+  }
 }

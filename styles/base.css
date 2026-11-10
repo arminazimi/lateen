@@ -119,6 +119,18 @@ body {
   color: var(--code-fg);
 }
 
+/* A plain code block, one without the code-block component around it, gets the same chip colours. */
+:where(pre) {
+  overflow-x: auto;
+  padding: var(--space-4);
+  border: thin solid var(--code-border);
+  border-radius: var(--radius-md);
+  background-color: var(--code-bg);
+  color: var(--code-fg);
+  line-height: var(--type-leading-body);
+  tab-size: 2;
+}
+
 :where(blockquote) {
   padding-inline-start: var(--space-4);
   border-inline-start: thin solid var(--color-border);
@@ -148,4 +160,36 @@ body {
 :where(:disabled, [aria-disabled="true"]) {
   color: var(--state-disabled-fg);
   cursor: not-allowed;
+}
+
+/* Tables: the header cells start at the reading start, rows are separated by a hairline, and code never breaks inside a cell. */
+table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-size: var(--type-size-sm);
+}
+
+th,
+td {
+  padding-block: var(--space-2);
+  padding-inline: var(--space-3);
+  border-block-end: thin solid var(--color-border);
+  text-align: start;
+  vertical-align: top;
+}
+
+th {
+  font-weight: var(--type-weight-medium);
+  color: var(--color-heading);
+}
+
+td code {
+  white-space: nowrap;
+}
+
+/* A table wider than the article scrolls inside it, so the page never gains a horizontal scrollbar. */
+.doc-body > table {
+  display: block;
+  max-inline-size: 100%;
+  overflow-x: auto;
 }

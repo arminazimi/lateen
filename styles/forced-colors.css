@@ -200,8 +200,7 @@
   .sidebar-nav h6[aria-current="true"],
   .toc a[aria-current="true"],
   .section-tab[aria-current="page"],
-  .code-tabs-tab[aria-selected="true"],
-  .theme-toggle-option:has(.theme-toggle-input:checked) {
+  .code-tabs-tab[aria-selected="true"] {
     background-color: Highlight !important;
     color: HighlightText !important;
     text-decoration: underline;
@@ -290,10 +289,6 @@
      shorthand is more specific and loads later, so repeat the system color for interactive
      elements only. This complements the base rule; it does not copy its generic selector. */
   :is(a, button, input, select, summary, textarea, [tabindex], [role="button"]):focus-visible {
-    outline-color: Highlight !important;
-  }
-
-  .theme-toggle-option:has(.theme-toggle-input:focus-visible) {
     outline-color: Highlight !important;
   }
 }

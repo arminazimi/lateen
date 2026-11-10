@@ -94,6 +94,8 @@ export function promptFor(template: string, source: string, text: string): strin
 export interface BlockElement {
   readonly parentElement: BlockElement | null;
   readonly textContent: string | null;
+  /** Upper-case tag name, as the DOM gives it. A fake without one is treated as a block that can hold a button. */
+  readonly tagName?: string;
   getAttribute(name: string): string | null;
   appendChild(child: ActionButton): unknown;
 }
@@ -126,6 +128,12 @@ export interface ActivateEnv {
   schedule(callback: () => void, ms: number): unknown;
 }
 
+/**
+ * Blocks whose content model allows only list items, rows, or the like: a button appended to one is invalid HTML and
+ * fails the list and table checks of screen readers and axe. They get no action of their own.
+ */
+const NO_BUTTON = new Set(["UL", "OL", "DL", "TABLE", "THEAD", "TBODY", "TR"]);
+
 /** True when the block already sits inside another sourced block, so only the outermost gets an action. */
 export function isNested(block: BlockElement): boolean {
   for (let parent = block.parentElement; parent !== null; parent = parent.parentElement) {
@@ -141,6 +149,7 @@ export function topLevel(blocks: Iterable<BlockElement>): BlockElement[] {
     const source = block.getAttribute("data-src");
     if (source === null || parseSpan(source) === undefined) continue;
     if (isNested(block)) continue;
+    if (block.tagName !== undefined && NO_BUTTON.has(block.tagName)) continue;
     out.push(block);
   }
   return out;

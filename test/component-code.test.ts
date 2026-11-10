@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { renderToString } from "preact-render-to-string";
 import type { ComponentProps } from "@velella/mizzen/contracts";
-import code, { buildTheme, loadGrammars, loadedLanguages, sourceText } from "../components/code/index.ts";
+import code, { DEFAULT_LANGUAGES, buildTheme, highlightFences, loadGrammars, loadedLanguages, sourceText } from "../components/code/index.ts";
 
 function render(props: Record<string, string>, html: string): string {
   const input = { props, html, page: {}, site: {} } as unknown as ComponentProps<never>;
@@ -33,11 +33,35 @@ test("sourceText strips tags and decodes entities", () => {
   assert.equal(sourceText('<pre><code class="language-ts">a &lt; b &amp;&amp; c\n</code></pre>'), "a < b && c");
 });
 
-test("loads only the grammars asked for", async () => {
-  assert.deepEqual(loadedLanguages().filter((l) => l !== "text"), []);
-  await loadGrammars(["json", "nope"]);
-  assert.ok(loadedLanguages().includes("json"));
-  assert.ok(!loadedLanguages().includes("typescript"));
+test("loads the default grammars with the module, and others only when asked", async () => {
+  for (const lang of DEFAULT_LANGUAGES) assert.ok(loadedLanguages().includes(lang), lang);
+  assert.ok(!loadedLanguages().includes("python"));
+  await loadGrammars(["python", "nope"]);
+  assert.ok(loadedLanguages().includes("python"));
+  assert.ok(!loadedLanguages().includes("rust"));
+});
+
+test("sourceText decodes numeric entities as well as named ones", () => {
+  assert.equal(sourceText("Record&#x3C;string, string&#62; &amp; x"), "Record<string, string> & x");
+  assert.equal(sourceText("a&#x110000;b&#99999999;c"), "a&#x110000;b&#99999999;c");
+});
+
+test("sourceText drops tags until none is left, and its text is escaped again when highlighted", () => {
+  assert.equal(sourceText('<span class="line"><span>a</span> <span>b</span></span>'), "a b");
+  assert.doesNotMatch(sourceText("<scr<b>ipt>alert(1)</scr</b>ipt>"), /<[^>]*>/);
+  const out = highlightFences("<pre><code>&lt;script&gt;alert(1)&lt;/script&gt;\n</code></pre>");
+  assert.doesNotMatch(out, /<script/);
+});
+
+test("highlightFences highlights a plain fence, keeps data-src, and leaves mermaid alone", () => {
+  const out = highlightFences('<p>a</p><pre data-src="a.md:3:1-5:3"><code class="language-sh">npm test\n</code></pre>');
+  assert.match(out, /^<p>a<\/p><pre class="code" tabindex="0" data-lang="sh" data-src="a\.md:3:1-5:3"><code>/);
+  assert.match(out, /--shiki-dark:#/);
+  const plain = highlightFences("<pre><code>a &lt; b\n</code></pre>");
+  assert.match(plain, /<pre class="code" tabindex="0" data-lang="text"><code>/);
+  assert.match(plain, /a &#x3C; b|a &lt; b/);
+  const diagram = '<pre><code class="language-mermaid">graph TD\n</code></pre>';
+  assert.equal(highlightFences(diagram), diagram);
 });
 
 test("highlights at build time with light and dark variables, keeps data-src", async () => {

@@ -8,6 +8,7 @@ import {
   announce,
   apply,
   choose,
+  next,
   read,
   resolve,
   save,
@@ -77,32 +78,40 @@ function brokenStore(): ThemeStorage {
   };
 }
 
-/** A switch root with three radios, a status region, and the change listeners that were wired. */
+/** A switch root with a button, a status region, and the click listeners that were wired. */
 function fakeToggle(): ThemeToggleRoot & {
-  radios: Array<{ value: string; checked: boolean }>;
-  changes: Array<(event: { target: unknown }) => void>;
-  status: { textContent: string | null };
+  attrs: Record<string, string>;
+  button: { attrs: Record<string, string>; textContent: string | null; setAttribute(n: string, v: string): void };
+  clicks: Array<(event: { target?: unknown }) => void>;
+  status: { textContent: string | null; setAttribute(n: string, v: string): void };
 } {
+  const element = () => {
+    const el = {
+      attrs: {} as Record<string, string>,
+      textContent: "" as string | null,
+      setAttribute(name: string, value: string) {
+        el.attrs[name] = value;
+      },
+    };
+    return el;
+  };
   const fake = {
     hidden: true,
-    radios: [
-      { value: "light", checked: false },
-      { value: "system", checked: false },
-      { value: "dark", checked: false },
-    ],
-    changes: [] as Array<(event: { target: unknown }) => void>,
-    status: { textContent: "" } as { textContent: string | null },
-    querySelectorAll(selector: string) {
-      assert.equal(selector, "input[type=radio]");
-      return fake.radios;
+    attrs: {} as Record<string, string>,
+    button: element(),
+    status: element(),
+    clicks: [] as Array<(event: { target?: unknown }) => void>,
+    setAttribute(name: string, value: string) {
+      fake.attrs[name] = value;
     },
     querySelector(selector: string) {
-      assert.equal(selector, ".theme-toggle-status");
-      return fake.status;
+      if (selector === ".theme-toggle-button") return fake.button;
+      if (selector === ".theme-toggle-status") return fake.status;
+      return null;
     },
-    addEventListener(type: string, listener: (event: { target: unknown }) => void) {
-      assert.equal(type, "change");
-      fake.changes.push(listener);
+    addEventListener(type: string, listener: (event: { target?: unknown }) => void) {
+      assert.equal(type, "click");
+      fake.clicks.push(listener);
     },
   };
   return fake;
@@ -126,25 +135,20 @@ function env<S extends ThemeStorage>(
   return fake;
 }
 
-test("renders a hidden switch with data-theme-toggle, a named group, and a status region", () => {
+test("renders a hidden switch with data-theme-toggle, one named button, and a status region", () => {
   const out = render();
 
-  assert.match(out, /^<fieldset class="theme-toggle" data-theme-toggle hidden>/);
-  assert.match(out, /<legend class="theme-toggle-legend">Color theme<\/legend>/);
-  assert.match(out, /<p class="theme-toggle-status" role="status"><\/p>/);
+  assert.match(out, /^<span class="theme-toggle" data-theme-toggle hidden>/);
+  assert.match(out, /<button class="theme-toggle-button" type="button" aria-label="Color theme">/);
+  assert.match(out, /<span class="theme-toggle-status" role="status"><\/span>/);
+  assert.doesNotMatch(out, /<input|<fieldset|checked/);
 });
 
-test("offers light, system, and dark in that order, none pre-checked", () => {
+test("draws a sun, a screen, and a moon, in the order a press cycles", () => {
   const out = render();
 
-  const values = [...out.matchAll(/<input class="theme-toggle-input" type="radio" name="color-theme" value="([a-z]+)">/g)].map(
-    (match) => match[1],
-  );
-  assert.deepEqual(values, ["light", "system", "dark"]);
-  assert.match(out, /<span class="theme-toggle-option-text">Light<\/span>/);
-  assert.match(out, /<span class="theme-toggle-option-text">System<\/span>/);
-  assert.match(out, /<span class="theme-toggle-option-text">Dark<\/span>/);
-  assert.doesNotMatch(out, /checked/);
+  const kinds = [...out.matchAll(/theme-toggle-icon theme-toggle-icon-([a-z]+)"/g)].map((match) => match[1]);
+  assert.deepEqual(kinds, ["light", "system", "dark"]);
 });
 
 test("resolve: system follows the OS, light and dark win as stored", () => {
@@ -185,14 +189,18 @@ test("apply: sets data-theme on the root, resolving system", () => {
   assert.equal(chosen.attrs["data-theme"], "dark");
 });
 
-test("sync: reveals the switch and checks the one radio for the choice", () => {
+test("next: light, then system, then dark, then light again", () => {
+  assert.equal(next("light"), "system");
+  assert.equal(next("system"), "dark");
+  assert.equal(next("dark"), "light");
+});
+
+test("sync: reveals the switch, marks the choice, and labels the button with it and the next one", () => {
   const toggle = fakeToggle();
   sync(toggle, "dark");
   assert.equal(toggle.hidden, false);
-  assert.deepEqual(
-    toggle.radios.map((radio) => radio.checked),
-    [false, false, true],
-  );
+  assert.equal(toggle.attrs["data-choice"], "dark");
+  assert.equal(toggle.button.attrs["aria-label"], "Color theme: Dark. Switch to light.");
 });
 
 test("announce: names the choice on the status region", () => {
@@ -203,18 +211,15 @@ test("announce: names the choice on the status region", () => {
   }
 });
 
-test("activate: reveals, shows and applies the saved choice, and listens for changes", () => {
+test("activate: reveals, shows and applies the saved choice, and listens for clicks", () => {
   const toggle = fakeToggle();
   const page = env(store("light"));
   activate(toggle, page);
 
   assert.equal(toggle.hidden, false);
-  assert.deepEqual(
-    toggle.radios.map((radio) => radio.checked),
-    [true, false, false],
-  );
+  assert.equal(toggle.attrs["data-choice"], "light");
   assert.equal(page.attrs["data-theme"], "light");
-  assert.equal(toggle.changes.length, 1);
+  assert.equal(toggle.clicks.length, 1);
 });
 
 test("activate with nothing stored: system is the default choice and follows the OS", () => {
@@ -222,40 +227,28 @@ test("activate with nothing stored: system is the default choice and follows the
   const page = env(store(), false);
   activate(toggle, page);
 
-  assert.deepEqual(
-    toggle.radios.map((radio) => radio.checked),
-    [false, true, false],
-  );
+  assert.equal(toggle.attrs["data-choice"], "system");
   assert.equal(page.attrs["data-theme"], "dark");
 });
 
-test("a change saves, applies, reflects, and announces the new choice", () => {
+test("every click saves, applies, reflects, and announces the next choice", () => {
   const toggle = fakeToggle();
-  const page = env(store());
+  const page = env(store("light"));
   activate(toggle, page);
 
-  toggle.changes[0]!({ target: toggle.radios[2] });
+  toggle.clicks[0]!({});
+  assert.equal(page.storage.written, "system");
+  assert.equal(toggle.attrs["data-choice"], "system");
+  assert.equal(toggle.status.textContent, "System theme.");
 
+  toggle.clicks[0]!({});
   assert.equal(page.storage.written, "dark");
   assert.equal(page.attrs["data-theme"], "dark");
-  assert.deepEqual(
-    toggle.radios.map((radio) => radio.checked),
-    [false, false, true],
-  );
   assert.equal(toggle.status.textContent, "Dark theme.");
-});
 
-test("a change from a target that is not one of the radios does nothing", () => {
-  const toggle = fakeToggle();
-  const page = env(store());
-  activate(toggle, page);
-
-  toggle.changes[0]!({ target: {} });
-  toggle.changes[0]!({ target: undefined });
-
-  assert.equal(page.storage.written, undefined);
-  assert.equal(page.attrs["data-theme"], "dark");
-  assert.equal(toggle.status.textContent, "");
+  toggle.clicks[0]!({});
+  assert.equal(page.storage.written, "light");
+  assert.equal(page.attrs["data-theme"], "light");
 });
 
 test("choose: the whole change works without an event, in order", () => {
@@ -278,12 +271,13 @@ test("style.css uses only token names from tokens/names.json for var(--*) refere
   }
 });
 
-test("style.css hides only the radio and status region, and states the switch in logical properties", () => {
+test("style.css draws one icon at a time, hides only the status region visually, and uses logical properties", () => {
   const css = readFileSync(new URL("../chrome/theme-toggle/style.css", import.meta.url), "utf8");
 
-  assert.match(css, /\.theme-toggle-input,\n\.theme-toggle-status \{/);
-  assert.match(css, /\.theme-toggle-option:has\(\.theme-toggle-input:checked\) \{/);
-  assert.match(css, /\.theme-toggle-option:has\(\.theme-toggle-input:focus-visible\) \{/);
+  assert.match(css, /\.theme-toggle-status \{[^}]*clip-path: inset\(50%\)/);
+  assert.match(css, /\.theme-toggle\[hidden\] \{\n  display: none;/);
+  assert.match(css, /\.theme-toggle\[data-choice="dark"\] \.theme-toggle-icon-dark/);
+  assert.match(css, /\.theme-toggle-button:focus-visible \{/);
   assert.doesNotMatch(css, /(^|[;{\s])(left|right|top|bottom)\s*:/);
   assert.doesNotMatch(css, /(?<![\w-])(min-|max-)?(width|height)\s*:/);
 });

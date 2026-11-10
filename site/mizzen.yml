@@ -1,4 +1,4 @@
-# Lateen's documentation site, built by Mizzen with the Lateen theme.
+# Documentation site for lateen, read by Mizzen.
 title: Lateen
 description: A docs theme for people and agents, built on Mizzen.
 lang: en
@@ -10,6 +10,13 @@ repository:
   dir: site
 theme:
   options:
+    logo:
+      light: /brand/mark-light.svg
+      dark: /brand/mark-dark.svg
+    favicon:
+      svg: /brand/favicon.svg
+      ico: /brand/favicon.ico
+      apple: /brand/apple-touch-icon.png
     footer:
       copyright: "© Velella"
       license: "MIT license"
@@ -18,6 +25,10 @@ theme:
           url: https://github.com/arminazimi/lateen
         - title: Mizzen
           url: https://arminazimi.github.io/mizzen/
+        - title: Install
+          url: /install/
+        - title: Accessibility
+          url: /accessibility/
 # Pages removed from the docs site; their old addresses lead to the home page.
 redirects:
   "/audio/": "/"

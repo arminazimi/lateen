@@ -1,9 +1,26 @@
 /* The home layout: hero with action buttons, and card grids for the site's sections.
    Follows docs/design/mockups/home.html; token names and logical properties only. */
 
+/* The page container the doc layout gives its pages: centred, with a gutter. */
+.layout {
+  max-inline-size: var(--home-w);
+  margin-inline: auto;
+  padding-inline: var(--space-6);
+}
+
+/* The header bar shares the home page's width, so its logo and the hero start on the same line. */
+body:has(.home-hero) .header-inner,
+body:has(.home-hero) .site-footer-inner {
+  max-inline-size: var(--home-w);
+}
+
+:root {
+  --home-w: 72rem;
+}
+
 .home-hero {
-  max-inline-size: 46rem;
-  padding-block: var(--space-16) var(--space-12);
+  max-inline-size: 60rem;
+  padding-block: calc(var(--space-16) * 1.5) var(--space-16);
 }
 
 .home-eyebrow {
@@ -32,18 +49,18 @@
 .home-title {
   margin-block: 0;
   font-family: var(--type-font-heading);
-  font-size: var(--type-size-3xl);
+  font-size: clamp(2.75rem, 7vw, 5rem);
   font-weight: var(--type-weight-bold);
-  line-height: var(--type-leading-tight);
-  letter-spacing: -0.03em;
+  line-height: 1.02;
+  letter-spacing: -0.04em;
   text-wrap: balance;
   color: var(--color-heading);
 }
 
 .home-lead {
-  margin-block: var(--space-4) 0;
-  max-inline-size: 38rem;
-  font-size: var(--type-size-lg);
+  margin-block: var(--space-6) 0;
+  max-inline-size: 40rem;
+  font-size: var(--type-size-xl);
   line-height: var(--type-leading-body);
   color: var(--color-muted);
 }
@@ -113,10 +130,16 @@
 .home-sections {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
-  gap: var(--space-8) var(--space-12);
+  gap: var(--space-6);
   margin-block: 0;
-  padding-block: var(--space-8) 0;
-  border-block-start: 1px solid var(--color-border);
+  padding-block: 0 var(--space-16);
+}
+
+.home-sections > * {
+  padding: var(--space-6);
+  border: thin solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface);
 }
 
 .home-section-title {
@@ -197,15 +220,4 @@
 .home-section-links a:focus-visible {
   outline: 2px solid var(--state-focus-ring);
   outline-offset: 2px;
-}
-
-/* The home page has no sidebar or table of contents: its content is one centred column. */
-main:has(> .home-hero) {
-  max-inline-size: 72rem;
-  margin-inline: auto;
-  padding-inline: var(--space-6);
-}
-
-.home-sections + * {
-  margin-block-start: var(--space-12);
 }

@@ -87,11 +87,46 @@ export async function loadGrammars(langs: Iterable<string>): Promise<void> {
   }
 }
 
-const ENTITIES: Record<string, string> = { "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#39;": "'", "&#x27;": "'" };
+/**
+ * Grammars loaded with the module, so a code block is highlighted without the site listing its languages:
+ * the ones a docs site writes most. A site that needs another calls {@link loadGrammars}.
+ */
+export const DEFAULT_LANGUAGES = [
+  "bash", "css", "diff", "html", "javascript", "json", "markdown", "powershell", "shellscript", "toml", "tsx", "typescript", "yaml",
+] as const;
 
-/** The code text inside a rendered body: tags dropped, entities decoded. */
+/** Short names a fence may use for a loaded grammar. */
+const ALIASES: Record<string, string> = { sh: "shellscript", shell: "shellscript", zsh: "shellscript", js: "javascript", ts: "typescript", md: "markdown", yml: "yaml", ps1: "powershell" };
+
+await loadGrammars(DEFAULT_LANGUAGES);
+
+const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
+
+const TAG = /<[^>]*>/g;
+
+/** `html` with every tag dropped. It repeats until nothing is left to drop, so removing one tag cannot join the pieces of another. */
+function stripTags(html: string): string {
+  let text = html;
+  for (;;) {
+    const next = text.replace(TAG, "");
+    if (next === text) return text;
+    text = next;
+  }
+}
+
+/**
+ * The code text inside a rendered body: tags dropped, entities decoded (named, decimal, and hexadecimal).
+ * The result is plain text, not HTML: it may hold `<` again after decoding, and every caller hands it to the
+ * highlighter, which escapes it. A number that is no code point is left as written.
+ */
 export function sourceText(html: string): string {
-  return html.replace(/<[^>]*>/g, "").replace(/&(?:amp|lt|gt|quot|#39|#x27);/g, (m) => ENTITIES[m] ?? m).replace(/\n$/, "");
+  return stripTags(html)
+    .replace(/&(?:(amp|lt|gt|quot|apos)|#x([0-9a-f]+)|#(\d+));/gi, (m, name?: string, hex?: string, dec?: string) => {
+      if (name) return ENTITIES[name.toLowerCase()] ?? m;
+      const point = hex ? parseInt(hex, 16) : Number(dec);
+      return point <= 0x10ffff ? String.fromCodePoint(point) : m;
+    })
+    .replace(/\n$/, "");
 }
 
 /** The language named by a `language-x` class in the body, when the props give none. */
@@ -122,12 +157,35 @@ export default function code({ props, html, page, site }: ComponentProps<CodePro
     return mermaid({ props: { source: text, ...(src ? { src } : {}) }, page, site, html });
   }
   const hl = get();
-  const known = hl.getLoadedLanguages().includes(lang);
-  const out = hl.codeToHtml(text, { lang: known ? lang : "text", themes: { light: "lateen-light", dark: "lateen-dark" }, defaultColor: false });
+  const grammar = ALIASES[lang] ?? lang;
+  const known = hl.getLoadedLanguages().includes(grammar);
+  const out = hl.codeToHtml(text, { lang: known ? grammar : "text", themes: { light: "lateen-light", dark: "lateen-dark" }, defaultColor: false });
   const inner = /<code[^>]*>([\s\S]*)<\/code>/.exec(out)?.[1] ?? "";
   return h(
     "pre",
     { class: CODE_CLASS, tabindex: 0, "data-lang": lang, ...(src ? { "data-src": src } : {}) },
     h("code", { dangerouslySetInnerHTML: { __html: inner } }),
   );
+}
+
+/** A plain Markdown fence as the engine writes it: `<pre data-src><code class="language-x">…</code></pre>`. */
+const FENCE = /<pre((?:\s+data-src="[^"]*")?)><code(?:\s+class="language-([\w+#-]+)")?>([\s\S]*?)<\/code><\/pre>/g;
+
+/**
+ * Highlights the plain fences in a rendered body, so a fence and the `:::code` directive look the same.
+ * Each fence becomes the markup {@link code} writes, with its language as `data-lang` and its `data-src` kept.
+ * A `mermaid` fence is left alone: the engine sends it to the diagram component.
+ */
+export function highlightFences(html: string): string {
+  if (!html.includes("<pre")) return html;
+  const hl = get();
+  return html.replace(FENCE, (match, srcAttr: string, lang: string | undefined, body: string) => {
+    if (lang === "mermaid") return match;
+    const name = lang ?? "text";
+    const grammar = ALIASES[name] ?? name;
+    const known = hl.getLoadedLanguages().includes(grammar);
+    const out = hl.codeToHtml(sourceText(body), { lang: known ? grammar : "text", themes: { light: "lateen-light", dark: "lateen-dark" }, defaultColor: false });
+    const inner = /<code[^>]*>([\s\S]*)<\/code>/.exec(out)?.[1] ?? "";
+    return `<pre class="${CODE_CLASS}" tabindex="0" data-lang="${name}"${srcAttr}><code>${inner}</code></pre>`;
+  });
 }

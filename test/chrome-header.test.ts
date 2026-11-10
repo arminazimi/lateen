@@ -103,7 +103,10 @@ test("repository link appears only when the site sets a repository", () => {
   const withRepo = render(
     configWith({ repository: { url: "https://github.com/example/site" } }),
   );
-  assert.match(withRepo, /<a class="header-repo" href="https:\/\/github\.com\/example\/site" rel="noopener" aria-label="Repository">/);
+  assert.match(withRepo, /<a class="header-repo" href="https:\/\/github\.com\/example\/site" rel="noopener" aria-label="GitHub repository"><svg class="header-repo-mark"/);
+  const elsewhere = render(configWith({ repository: { url: "https://git.example.org/example/site" } }));
+  assert.match(elsewhere, /<a class="header-repo" href="https:\/\/git\.example\.org\/example\/site" rel="noopener" aria-label="Repository">/);
+  assert.doesNotMatch(elsewhere, /header-repo-mark/);
   assert.doesNotMatch(render(configWith()), /header-repo/);
 });
 

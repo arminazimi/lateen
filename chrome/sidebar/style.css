@@ -29,8 +29,10 @@
 .sidebar-nav h6 {
   margin-block: var(--space-4) var(--space-1);
   padding-inline: var(--space-3);
+  font-size: var(--type-size-xs);
   font-weight: var(--type-weight-medium);
   line-height: var(--type-leading-tight);
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--color-muted);
 }

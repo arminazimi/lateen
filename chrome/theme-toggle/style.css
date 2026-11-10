@@ -1,62 +1,64 @@
-/* Theme toggle: light, system, and dark as a segmented control; hidden until client.ts runs it. */
+/* Theme toggle: one icon button the size of the repository link. It shows the icon of the current
+   choice (sun, screen, or moon) and a press moves to the next one. Hidden until client.ts runs it. */
 
 .theme-toggle {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin: 0;
-  padding: 0;
-  border: 0;
+  display: inline-flex;
+  position: relative;
 }
 
-.theme-toggle-legend {
-  padding: 0;
-  font-family: var(--type-font-ui);
-  font-size: var(--type-size-sm);
-  color: var(--color-muted);
+.theme-toggle[hidden] {
+  display: none;
 }
 
-.theme-toggle-options {
-  display: flex;
-  gap: var(--space-1);
-  padding: var(--space-1);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-full);
-}
-
-.theme-toggle-option {
-  padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius-full);
-  color: var(--color-muted);
-  font-family: var(--type-font-ui);
-  font-size: var(--type-size-sm);
-  cursor: pointer;
-}
-
-.theme-toggle-option:hover {
-  background: var(--state-hover-bg);
-  color: var(--color-text);
-}
-
-/* The native radio and the status region stay in the accessibility tree, out of sight. */
-.theme-toggle-input,
 .theme-toggle-status {
   position: absolute;
   inline-size: 1px;
   block-size: 1px;
   margin: -1px;
+  padding: 0;
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
 }
 
-.theme-toggle-option:has(.theme-toggle-input:checked) {
-  background: var(--state-selected-bg);
+.theme-toggle-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: var(--space-8);
+  min-inline-size: var(--space-8);
+  padding: var(--space-1);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+}
+
+.theme-toggle-button:hover {
+  background: var(--state-hover-bg);
   color: var(--color-heading);
 }
 
-.theme-toggle-option:has(.theme-toggle-input:focus-visible) {
+.theme-toggle-button:focus-visible {
   outline: 2px solid var(--state-focus-ring);
   outline-offset: 2px;
+}
+
+.theme-toggle-icon {
+  display: none;
+  inline-size: var(--space-6);
+  block-size: var(--space-6);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Only the icon of the current choice is drawn. */
+.theme-toggle[data-choice="light"] .theme-toggle-icon-light,
+.theme-toggle[data-choice="system"] .theme-toggle-icon-system,
+.theme-toggle[data-choice="dark"] .theme-toggle-icon-dark {
+  display: block;
 }

@@ -1,4 +1,4 @@
-import { THEME_KEY } from "../../layouts/base.ts";
+import { THEME_KEY } from "./key.ts";
 
 /** What the switch can hold: the visitor's choice, stored under `THEME_KEY`. */
 export type ThemeChoice = "light" | "dark" | "system";
@@ -12,28 +12,23 @@ export interface ThemeStorage {
   setItem(key: string, value: string): void;
 }
 
-/** A radio input of the switch. */
-export interface ThemeRadio {
-  value: string;
-  checked: boolean;
-}
-
-/** The status region the switch announces changes on. */
-export interface ThemeStatus {
+/** An element of the switch the script writes to: the button or the status region. */
+export interface ThemeElement {
   textContent: string | null;
+  setAttribute(name: string, value: string): void;
 }
 
-/** A change event as the switch reads it: the radio it came from. */
-export interface ThemeChange {
-  target: unknown;
+/** A click event; the switch needs nothing from it. */
+export interface ThemeClick {
+  target?: unknown;
 }
 
-/** The switch root (a `fieldset`) as the script touches it. */
+/** The switch root as the script touches it. */
 export interface ThemeToggleRoot {
   hidden: boolean;
-  querySelectorAll(selector: string): Iterable<ThemeRadio>;
-  querySelector(selector: string): ThemeStatus | null;
-  addEventListener(type: string, listener: (event: ThemeChange) => void): void;
+  setAttribute(name: string, value: string): void;
+  querySelector(selector: string): ThemeElement | null;
+  addEventListener(type: string, listener: (event: ThemeClick) => void): void;
 }
 
 /** The one element `data-theme` is set on (`document.documentElement`). */
@@ -85,10 +80,20 @@ export function apply(env: ThemeEnv, choice: ThemeChoice): void {
   env.root.setAttribute("data-theme", resolve(choice, env.prefersLight));
 }
 
-/** Reveal the switch and check the radio for `choice` (an unknown choice reads as `system`). */
+/** Light, then system, then dark, then light again. */
+const ORDER: readonly ThemeChoice[] = ["light", "system", "dark"];
+
+/** The choice a press moves to from `choice`. */
+export function next(choice: ThemeChoice): ThemeChoice {
+  return ORDER[(ORDER.indexOf(choice) + 1) % ORDER.length]!;
+}
+
+/** Reveal the switch, show the icon of `choice`, and name the choice and the next one on the button. */
 export function sync(toggle: ThemeToggleRoot, choice: ThemeChoice): void {
   toggle.hidden = false;
-  for (const radio of toggle.querySelectorAll("input[type=radio]")) radio.checked = radio.value === choice;
+  toggle.setAttribute("data-choice", choice);
+  const label = `Color theme: ${WORDS[choice]}. Switch to ${WORDS[next(choice)].toLowerCase()}.`;
+  toggle.querySelector(".theme-toggle-button")?.setAttribute("aria-label", label);
 }
 
 /** Announce the new choice on the switch's status region. */
@@ -105,20 +110,14 @@ export function choose(env: ThemeEnv, toggle: ThemeToggleRoot, choice: ThemeChoi
   announce(toggle, choice);
 }
 
-/** The choice a change event carries, or none when the event came from anything else. */
-function choiceOf(target: unknown): ThemeChoice | undefined {
-  const value = (target as { value?: unknown } | null | undefined)?.value;
-  return value === "light" || value === "dark" || value === "system" ? value : undefined;
-}
-
-/** Reveal the switch, show and apply the saved choice, and wire every later change. */
+/** Reveal the switch, show and apply the saved choice, and move to the next choice on every press. */
 export function activate(toggle: ThemeToggleRoot, env: ThemeEnv): void {
-  const saved = read(env.storage);
-  sync(toggle, saved);
-  apply(env, saved);
-  toggle.addEventListener("change", (event) => {
-    const choice = choiceOf(event.target);
-    if (choice) choose(env, toggle, choice);
+  let current = read(env.storage);
+  sync(toggle, current);
+  apply(env, current);
+  toggle.addEventListener("click", () => {
+    current = next(current);
+    choose(env, toggle, current);
   });
 }
 
