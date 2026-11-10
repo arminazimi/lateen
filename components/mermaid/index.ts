@@ -1,7 +1,5 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { h } from "preact";
 import type { ComponentProps } from "@velella/mizzen/contracts";
 
@@ -34,9 +32,31 @@ type RenderResult =
 /** One render per source string per build process. */
 const cache = new Map<string, RenderResult>();
 
-/** True when Node was started with this module, so the child renderer runs. */
-const invokedDirectly =
-  process.argv[1] !== undefined && fileURLToPath(import.meta.url) === resolve(process.argv[1]);
+/** Set in the child process's environment so that importing this module runs the child renderer. */
+const CHILD_ENV = "LATEEN_MERMAID_CHILD";
+
+/** True in the child process, where importing this module renders the diagram on stdin. */
+const invokedDirectly = process.env[CHILD_ENV] === "1";
+
+/**
+ * The child's start-up script. Node strips types from a `.ts` file on its own, but not from one inside `node_modules`,
+ * where this theme is installed; the hook strips them there, then the script imports this module.
+ */
+const CHILD_BOOT = `
+import { readFileSync } from "node:fs";
+import { registerHooks, stripTypeScriptTypes } from "node:module";
+import { fileURLToPath } from "node:url";
+registerHooks({
+  load(url, context, nextLoad) {
+    if (url.startsWith("file:") && url.endsWith(".ts") && url.includes("/node_modules/")) {
+      const source = stripTypeScriptTypes(readFileSync(fileURLToPath(url), "utf8"), { mode: "strip" });
+      return { format: "module", source, shortCircuit: true };
+    }
+    return nextLoad(url, context);
+  },
+});
+await import(process.env.LATEEN_MERMAID_MODULE);
+`;
 
 function text(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -85,7 +105,8 @@ export function renderDiagram(source: string): RenderResult {
 }
 
 function runRenderer(source: string): RenderResult {
-  const child = spawnSync(process.execPath, [fileURLToPath(import.meta.url), "--render"], {
+  const child = spawnSync(process.execPath, ["--input-type=module", "-e", CHILD_BOOT], {
+    env: { ...process.env, [CHILD_ENV]: "1", LATEEN_MERMAID_MODULE: import.meta.url },
     input: source,
     encoding: "utf8",
     maxBuffer: 32 * 1024 * 1024,

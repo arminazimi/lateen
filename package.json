@@ -1,7 +1,6 @@
 {
   "name": "@velella/lateen",
   "version": "0.1.0",
-  "private": true,
   "description": "A docs theme for people and agents, built on Mizzen.",
   "keywords": [
     "docs",
@@ -29,7 +28,8 @@
     "node": ">=24"
   },
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
   },
   "scripts": {
     "tokens": "node scripts/tokens.ts",
@@ -54,5 +54,20 @@
     "preact": "^11.2.0",
     "preact-render-to-string": "^6.8.2",
     "typescript": "^7.0.2"
+  },
+  "files": [
+    "src",
+    "layouts",
+    "chrome",
+    "components",
+    "styles",
+    "tokens",
+    "fonts",
+    "i18n",
+    "icons",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "public"
   }
 }
