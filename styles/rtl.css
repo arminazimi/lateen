@@ -1,7 +1,7 @@
 /* Right-to-left typography: a Persian or Arabic page gets Vazirmatn for Arabic-script text,
    Geist for the Latin words and identifiers mixed into it, a line height that leaves room for
    the script's ascenders and descenders, and no letter spacing (spacing between joined Arabic
-   letters is wrong; ADR 0020). Code stays left to right inside a right-to-left paragraph.
+   letters is wrong). Code stays left to right inside a right-to-left paragraph.
 
    The values are tokens (`tokens/rtl.json`). This file only maps them onto the `--type-*` tokens
    that `styles/base.css` and every unit already read, so a component follows the language

@@ -5,7 +5,7 @@
  * has a clipboard to write to; a page without JavaScript keeps no controls at all.
  *
  * The island is type-stripped and shipped on its own, so it imports nothing and echoes the small
- * span grammar the engine writes into `data-src` (ADR 0026).
+ * span grammar the engine writes into `data-src`.
  */
 
 /** One source span: `path:line:column-endLine:endColumn`; the end is inclusive. */

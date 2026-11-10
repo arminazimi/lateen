@@ -100,7 +100,7 @@ Each reference page has the syntax, every option, and a live example, and is bui
 
 Every visual decision is a design token, defined once and read from CSS. `tokens/names.json` freezes the names; one file per group (`color.json`, `type.json`, `space.json`, and the rest) sets the values. Run `npm run tokens` after editing a group: it writes `styles/tokens.css`, which `npm test` keeps current. Never edit that CSS by hand, and never put a raw color, length, or duration in a unit's stylesheet; use `var(--color-accent)`, `var(--space-4)`, and the other token variables.
 
-A site changes a token in its config, not in the theme. The site config is `mizzen.yml`; the engine passes `theme.options` to the theme unread (ADR 0024), and the token overrides live under `theme.options.tokens`:
+A site changes a token in its config, not in the theme. The site config is `mizzen.yml`; the engine passes `theme.options` to the theme unread, and the token overrides live under `theme.options.tokens`:
 
 ```yaml
 theme:
@@ -113,7 +113,7 @@ theme:
       radius: "0.5rem"
 ```
 
-The keys are the token names that the config maps into the theme's CSS variables: `accent`, `canvas`, `text`, `font_body`, and `radius`. `font_display` left with the blog layouts and is not read. An unset color keeps the theme's light and dark pair; a set one replaces both, so check the contrast in both modes.
+The keys are the token names that the config maps into the theme's CSS variables: `accent`, `canvas`, `text`, `font_body`, and `radius`. An unset color keeps the theme's light and dark pair; a set one replaces both, so check the contrast in both modes.
 
 ## Overrides
 

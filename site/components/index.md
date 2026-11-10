@@ -63,20 +63,3 @@ The engine turns a directive into the component whose folder has the same name u
 | [Version badge](./version-badge/) | A version badge that says when a feature was added, changed, or removed. |
 | [Version diff](./version-diff/) | A section-by-section comparison of two versions, with a text label for every change. |
 | [Video](./video/) | A click-to-load video with a poster and a link that works without JavaScript. |
-
-## Moving from the old blocks
-
-The 0.2 theme had a larger set of blocks. Some became components; the rest have a lighter Markdown form or belong to a layout. Old URLs redirect to the page that replaces them.
-
-| Old block | What to use now |
-| --- | --- |
-| Annotations, diff | [Code](./code/) |
-| Audio | [Embed](./embed/) |
-| Code group | [Code tabs](./code-tabs/) |
-| Chart, compare, logos, pricing, stats | A [table](./table/) or a plain Markdown list. |
-| Citation, download | A Markdown link. |
-| Gallery | One [figure](./figure/) per image. |
-| Hero | The [home layout](../../guides/) with `hero`, `actions`, and `sections` in front matter. |
-| People, testimonial | A table, a blockquote, or a list. |
-| Pull quote | A blockquote. |
-| Timeline | An ordered list or [steps](./steps/). |

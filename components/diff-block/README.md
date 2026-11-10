@@ -1,7 +1,7 @@
 # Diff block
 
 A diff as an ordered list: added and removed lines are styled and named for screen readers, and a copy
-control takes the new version of the file. One folder per component ([ADR 0023](../../../../docs/adr/0023-engine-theme-boundary.md)).
+control takes the new version of the file. One folder per component.
 
 - `index.ts` is the Preact component, written with `h()`. Its `directive` export is `diff-block`.
 - `lines.ts` parses the directive's body into added, removed, and context lines, and builds the copy

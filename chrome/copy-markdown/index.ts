@@ -3,7 +3,7 @@ import type { Chrome } from "@velella/mizzen/contracts";
 import { t } from "../../i18n/index.ts";
 
 /**
- * The Markdown twin of a page URL, by the same rule as the engine's `twinUrl` (ADR 0006): a pretty
+ * The Markdown twin of a page URL, by the same rule as the engine's `twinUrl`: a pretty
  * URL (`/guide/install/`) gives `/guide/install/index.md`, the site root gives `/index.md`, and
  * `/404.html` gives `/404.md`. A URL that names another file has no twin.
  *

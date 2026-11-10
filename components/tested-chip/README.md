@@ -54,7 +54,7 @@ The chip works wherever it is placed, but automatic per-block placement needs en
 (N01/N06), which tell the engine which code blocks are runnable and where their results belong. Until
 those land, place the chip with the directive beside the block, or let a layout or plugin render it
 from `site.data.examples`. This unit does not edit the code component, the layouts, or the pipeline
-(ADR 0023).
+.
 
 ## Tests
 

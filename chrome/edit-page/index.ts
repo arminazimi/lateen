@@ -8,7 +8,7 @@ import { t } from "../../i18n/index.ts";
  * The engine's `outputs/edit-links.ts` (N35) and `outputs/suggest-links.ts` (N36) compute the same URLs for
  * outputs; a site that writes their result to `_data/edit-links.yml` gets it read here first. Without that
  * data the unit computes the URL from `site.config.repository` by the engine's rules, because a theme may
- * `import type` from the engine's contracts and run none of its code (ADR 0023). The two must agree, so a
+ * `import type` from the engine's contracts and run none of its code. The two must agree, so a
  * change to one belongs in both until the engine exposes the links as site data on every build.
  */
 

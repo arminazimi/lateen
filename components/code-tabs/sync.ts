@@ -1,7 +1,7 @@
 /* Sync part of the code tabs island: the label a visitor chooses applies to every group with that
  * label on the page, and is remembered for the pages they open later. `?lang=` in the URL wins over
  * what is remembered. `client.ts` imports this module for its side effect, because the engine loads
- * exactly one file per component island (ADR 0022, rule 3). */
+ * exactly one file per component island. */
 
 import { GROUP_SELECTOR, PANEL_SELECTOR, TAB_SELECTOR, select, type TabsElement } from "./client.ts";
 

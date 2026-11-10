@@ -17,7 +17,7 @@ function walk(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-// ADR 0025: the theme reaches the engine only through `@velella/mizzen/contracts`, by package name,
+// The theme reaches the engine only through `@velella/mizzen/contracts`, by package name,
 // so it keeps working when the two packages live in separate repositories.
 test("the theme imports the engine only as @velella/mizzen/contracts, never by relative path", () => {
   const bad: string[] = [];

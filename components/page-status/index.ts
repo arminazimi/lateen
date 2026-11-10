@@ -1,7 +1,7 @@
 import { h } from "preact";
 import type { Component } from "@velella/mizzen/contracts";
 
-/** The statuses that get a banner. The ADR states (`proposed`, `accepted`, …) have none. */
+/** The statuses that get a banner. */
 export const STATUSES = ["experimental", "beta", "deprecated"] as const;
 
 export type BannerStatus = (typeof STATUSES)[number];

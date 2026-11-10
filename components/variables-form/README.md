@@ -66,4 +66,4 @@ site data are used. An empty list renders nothing, as does a page with no declar
   `variables_form_hint`.
 
 This unit does not edit the code component, the layouts, the engine, or a shared index; the engine's
-registry finds it by its folder name (ADR 0023).
+registry finds it by its folder name.
