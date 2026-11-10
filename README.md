@@ -1,8 +1,42 @@
-# Lateen (`@velella/lateen`)
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/arminazimi/lateen/main/.github/assets/mark-night.svg">
+    <img src="https://raw.githubusercontent.com/arminazimi/lateen/main/.github/assets/mark-day.svg" width="96" height="96" alt="Lateen">
+  </picture>
+</p>
+
+<h1 align="center">Lateen</h1>
+
+<p align="center">
+  <strong>Easy to read. Safe to edit.</strong><br>
+  A docs theme for people and agents, built on Mizzen.
+</p>
+
+<p align="center">
+  <a href="https://github.com/arminazimi/lateen/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/arminazimi/lateen/ci.yml?branch=main&label=CI&logo=github&logoColor=white&labelColor=1F1F28&color=3F6E66&style=flat"></a>
+  <a href="LICENSE"><img alt="license" src="https://img.shields.io/badge/license-MIT-3F6E66?labelColor=1F1F28&style=flat"></a>
+  <a href="https://arminazimi.github.io/lateen/"><img alt="docs" src="https://img.shields.io/badge/docs-lateen-3F6E66?labelColor=1F1F28&style=flat"></a>
+</p>
+
+<p align="center">
+  <a href="https://arminazimi.github.io/lateen/install/">Quick start</a> ·
+  <a href="https://arminazimi.github.io/lateen/">Documentation</a> ·
+  <a href="#contributing">Contributing</a> ·
+  <a href="https://github.com/arminazimi/mizzen">Mizzen</a>
+</p>
+
+---
 
 A docs theme for people and agents, built on Mizzen: layouts, chrome, components, design tokens, and styles. The engine reads it only by listing the folders below; adding a unit never edits a shared index file.
 
-It lives in its own repository, split from the Slipway monorepo (ADR 0025 in `arminazimi/slipway`). Check out [Mizzen](https://github.com/arminazimi/mizzen) next to it (`../mizzen`) and run `npm ci` in both; the tests and the docs site build with it.
+## Why Lateen
+
+- **Easy to read.** An editorial layout with a sidebar, table of contents, and search that works for people and for agents.
+- **Safe to edit.** Every visual decision is a design token, and a component is a folder, so a change stays in one place.
+- **Accessible.** Tested against WCAG 2.2 AA, with a keyboard gate, a contrast gate, and an RTL gate.
+- **Right-to-left ready.** Direction, language, and mirrored icons are handled for RTL languages.
+
+Check out [Mizzen](https://github.com/arminazimi/mizzen) next to it (`../mizzen`) and run `npm ci` in both; the tests and the docs site build with it.
 
 The theme may `import type` from `@velella/mizzen/contracts`, by package name and never by relative path, and imports nothing else from the engine. Preact is a peer dependency, with `jsx: react-jsx` and `jsxImportSource: preact` in `tsconfig.json`.
 
@@ -138,3 +172,15 @@ The full rules for a unit are in [components/README.md](components/README.md) an
 
 - `src/index.ts`: exports the theme manifest (`name` and `folders`) and nothing else.
 - `test/`: `*.test.ts` files for `node --test`.
+
+## Contributing
+
+Bug reports, fixes, and docs improvements are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) to get started.
+
+## License
+
+[MIT](LICENSE).
+
+---
+
+<p align="center">Lateen is part of <a href="https://velella.sh">Velella</a>. Set the sail. Let the docs carry.</p>
