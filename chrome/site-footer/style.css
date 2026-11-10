@@ -34,8 +34,19 @@
   list-style: none;
 }
 
+.site-footer-links li {
+  margin: 0;
+  padding: 0;
+  line-height: var(--type-leading-normal, 1.5);
+}
+
 .site-footer-links a {
   color: var(--color-link);
+  text-decoration: none;
+}
+
+.site-footer-links a:hover {
+  text-decoration: underline;
 }
 
 .site-footer-links a:hover {
