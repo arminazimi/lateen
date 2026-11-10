@@ -1,62 +1,97 @@
 ---
-title: "Lateen"
-description: "Lateen is the default theme for Mizzen: layouts, chrome, components, design tokens and styles."
+title: Slipway documentation
+description: Install Slipway, write pages, and publish documentation that people and agents can read.
 layout: home
 hero:
-  eyebrow: "v0.1.0 \u00b7 docs theme"
-  title: "A docs theme for people and agents."
-  lead: "Lateen is the default theme for Mizzen: layouts, chrome, components, design tokens and styles."
+  eyebrow: v0.3.0 · docs engine and theme
+  title: Documentation people and agents can edit.
+  lead: Slipway turns a folder of Markdown into a fast, RTL-ready docs site with exact source positions.
 actions:
-  - label: "Read the docs"
-    url: folders/
+  - label: Install Slipway
+    url: install/
     primary: true
-  - label: "Components"
-    url: components/
+  - label: Read the guides
+    url: guides/
 sections:
   - title: Start
-    url: folders/
-    description: "How the theme is laid out in folders."
+    url: install/
+    description: Install Slipway and publish the first page.
     icon: "M5 4h10l4 4v12H5zM14 4v5h5M9 13h6M9 17h6"
     links:
-      - title: "Folders"
-        url: folders/
-        meta: page
-  - title: Build
-    url: layouts/
-    description: "Layouts, components and design tokens."
+      - title: Install and quickstart
+        url: install/
+        meta: 3 ways
+      - title: Migrate from Jekyll
+        url: guides/migration/
+        meta: guide
+  - title: Write
+    url: guides/
+    description: Pages, front matter, and the metadata a shared link shows.
+    icon: "M4 20h4L19 9l-4-4L4 16zM14 5l4 4"
+    links:
+      - title: Guides
+        url: guides/
+        meta: 3 guides
+      - title: Social cards
+        url: guides/social-cards/
+        meta: guide
+      - title: Front matter
+        url: front-matter/
+        meta: reference
+  - title: Components
+    url: blocks/
+    description: Every block the theme provides, with a live example and a copyable snippet.
     icon: "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"
     links:
-      - title: "Layouts"
-        url: layouts/
-        meta: page
-      - title: "Components"
-        url: components/
-        meta: page
-      - title: "Tokens"
-        url: tokens/
-        meta: page
+      - title: Block reference
+        url: blocks/
+        meta: all blocks
+      - title: Callouts
+        url: blocks/callout/
+        meta: block
+      - title: Cards
+        url: blocks/cards/
+        meta: block
+      - title: Code groups
+        url: blocks/code-group/
+        meta: block
   - title: Customize
-    url: overrides/
-    description: "Override units and add your own."
+    url: guides/customize/
+    description: Tokens, presets, and the configuration file that shape the site.
     icon: "M4 7h9M17 7h3M4 17h3M11 17h9M13 4v6M7 14v6"
     links:
-      - title: "Overrides"
-        url: overrides/
-        meta: page
-      - title: "Add a component"
-        url: add-a-component/
-        meta: page
-      - title: "Commands"
-        url: commands/
-        meta: page
-      - title: "Layout"
-        url: layout/
-        meta: page
+      - title: Customization guide
+        url: guides/customize/
+        meta: guide
+      - title: Configuration
+        url: config/
+        meta: reference
+  - title: Deploy
+    url: recipes/
+    description: Build once and host the output anywhere, with its own search.
+    icon: "M12 15V3m0 0-4 4m4-4 4 4M5 19h14"
+    links:
+      - title: Recipes
+        url: recipes/
+        meta: all recipes
+      - title: Netlify
+        url: recipes/netlify/
+        meta: recipe
+      - title: Vercel
+        url: recipes/vercel/
+        meta: recipe
+      - title: Cloudflare Pages
+        url: recipes/cloudflare-pages/
+        meta: recipe
+  - title: Reference
+    url: spec/
+    description: The contracts and the plan behind every build.
+    icon: "M4 5h7a3 3 0 0 1 3 3v11a2 2 0 0 0-2-2H4zM20 5h-6a3 3 0 0 0-3 3v11a2 2 0 0 1 2-2h7z"
+    links:
+      - title: The Spec
+        url: spec/
+        meta: spec
+      - title: Roadmap
+        url: https://github.com/arminazimi/slipway/blob/main/ROADMAP.md
+        meta: repo
 ---
-
-
-A docs theme for people and agents, built on Mizzen: layouts, chrome, components, design tokens, and styles. The engine reads it only by listing the folders below; adding a unit never edits a shared index file.
-
-It lives in its own repository, split from the Slipway monorepo (ADR 0025 in `arminazimi/slipway`). Check out [Mizzen](https://github.com/arminazimi/mizzen) next to it (`../mizzen`) and run `npm ci` in both; the tests and the docs site build with it.
-
-The theme may `import type` from `@velella/mizzen/contracts`, by package name and never by relative path, and imports nothing else from the engine. Preact is a peer dependency, with `jsx: react-jsx` and `jsxImportSource: preact` in `tsconfig.json`.
