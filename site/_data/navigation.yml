@@ -1,0 +1,27 @@
+main:
+  - title: Start
+    children:
+      - title: "Lateen"
+        url: /
+      - title: "Folders"
+        url: /folders/
+  - title: Build
+    tab: true
+    children:
+      - title: "Layouts"
+        url: /layouts/
+      - title: "Components"
+        url: /components/
+      - title: "Tokens"
+        url: /tokens/
+  - title: Customize
+    tab: true
+    children:
+      - title: "Overrides"
+        url: /overrides/
+      - title: "Add a component"
+        url: /add-a-component/
+      - title: "Commands"
+        url: /commands/
+      - title: "Layout"
+        url: /layout/

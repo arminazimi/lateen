@@ -8,6 +8,7 @@ import copyMarkdown from "../chrome/copy-markdown/index.ts";
 import drawer from "../chrome/drawer/index.ts";
 import editPage from "../chrome/edit-page/index.ts";
 import feedback from "../chrome/feedback/index.ts";
+import siteFooter from "../chrome/site-footer/index.ts";
 import header from "../chrome/header/index.ts";
 import lastUpdated from "../chrome/last-updated/index.ts";
 import pageFooter from "../chrome/page-footer/index.ts";
@@ -83,6 +84,7 @@ const doc: Layout = (props) =>
     sidebar: sidebar(props) as ComponentChildren,
     main: h(Fragment, null, article(props), blockActions(props) as ComponentChildren),
     aside: toc(props) as ComponentChildren,
+    footer: siteFooter(props) as ComponentChildren,
   });
 
 export default doc;

@@ -4,3 +4,17 @@ description: A docs theme for people and agents, built on Mizzen.
 lang: en
 url: https://arminazimi.github.io
 base: /lateen
+repository:
+  url: https://github.com/arminazimi/lateen
+  branch: main
+  dir: site
+theme:
+  options:
+    footer:
+      copyright: "© Velella"
+      license: "MIT license"
+      links:
+        - title: GitHub
+          url: https://github.com/arminazimi/lateen
+        - title: Mizzen
+          url: https://arminazimi.github.io/mizzen/
