@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
+import { JSDOM } from "jsdom";
 import type { ChromeProps, NavTree, Page, Site, SiteConfig, SourcePos } from "@velella/mizzen/contracts";
 import sidebar from "../chrome/sidebar/index.ts";
 
@@ -163,6 +164,36 @@ test("a large section renders as one link, active on any of its pages", () => {
 
   const first = html(sidebar(props(tree, "/generated/rule-01/")));
   assert.match(first, /<a href="\/generated\/rule-01\/" aria-current="page">Generated<\/a>/);
+});
+
+test("groups are native disclosures: no control opts out of the tab order, and a closed group's links leave it", () => {
+  type Element = {
+    tagName: string;
+    open?: boolean;
+    firstElementChild: Element | null;
+    querySelector(selector: string): Element | null;
+    querySelectorAll(selector: string): ArrayLike<Element>;
+  };
+  const dom = new JSDOM(html(sidebar(props(tree, "/guide/install/"))));
+  const nav = dom.window.document.querySelector("nav.sidebar-nav") as unknown as Element;
+
+  // The summary is the browser's own disclosure button: Enter and Space toggle it, and it takes focus.
+  const groups = Array.from(nav.querySelectorAll("details.sidebar-group"));
+  assert.ok(groups.length > 0);
+  for (const group of groups) assert.equal(group.firstElementChild?.tagName, "SUMMARY");
+
+  // Everything interactive is a link or a summary, both focusable by default.
+  const controls = Array.from(nav.querySelectorAll("a, summary, button, input, select, textarea"));
+  assert.equal(controls.length, Array.from(nav.querySelectorAll("a, summary")).length);
+  assert.equal(Array.from(nav.querySelectorAll("[tabindex]")).length, 0, "no control is taken out of the tab order");
+
+  // The page's own group is open so its links are reachable; the reader's others stay closed, which
+  // is what keeps their links out of the tab order until the disclosure opens.
+  const current = nav.querySelector("details[data-current]");
+  assert.equal(current?.open, true);
+  const closed = groups.find((group) => group.open !== true);
+  assert.ok(closed, "a group the reader is not in starts closed");
+  assert.ok(closed.querySelector("a[href]"), "its links are still inside, hidden by the closed disclosure");
 });
 
 test("style.css uses only token names from tokens/names.json for var(--*) references", () => {

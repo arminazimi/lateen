@@ -21,7 +21,8 @@ on the same query, and runs the selected action:
 - **Section** scrolls the heading into view, focuses it, and closes the dialog.
 
 `/` and Ctrl/Cmd+K open the dialog. Arrow keys move through actions and page results as one list,
-Enter runs or opens the focused item, Escape closes, and Tab stays inside. Focus rings are visible.
+Enter runs or opens the focused item, Escape or a press on the backdrop closes, and Tab stays inside.
+Focus rings are visible.
 
 ## Known gap
 

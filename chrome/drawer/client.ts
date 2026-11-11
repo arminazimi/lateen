@@ -1,4 +1,4 @@
-/* Mobile drawer: opens the sidebar dialog from the header's menu button, traps focus in it, and closes it on Escape. */
+/* Mobile drawer: opens the sidebar dialog from the header's menu button, traps focus in it, closes it on Escape or a backdrop press, and closes it when the viewport reaches the desktop layout. */
 
 /** A control the drawer reveals, clicks, or returns focus to. */
 export interface DrawerControl {
@@ -40,6 +40,20 @@ export interface DrawerParts {
   closeButton?: DrawerControl;
 }
 
+/** The viewport width at which the header's menu button leaves, matching `chrome/drawer/style.css`. */
+export const DESKTOP_QUERY = "(min-width: 768px)";
+
+/** The viewport state the drawer follows: the reader zooming or turning the phone changes it. */
+export interface DrawerViewport {
+  readonly matches: boolean;
+  addEventListener(type: "change", listener: () => void): void;
+}
+
+/** Everything the drawer reads from the world; the browser passes its viewport, tests a fake. */
+export interface DrawerEnv {
+  readonly viewport?: DrawerViewport | undefined;
+}
+
 /** What can take keyboard focus inside the drawer. */
 const FOCUSABLE = [
   "a[href]",
@@ -52,6 +66,7 @@ const FOCUSABLE = [
 
 // The island runs in a browser; the theme's tsconfig has no DOM lib, so these are the globals it needs.
 declare const document: { querySelector(selector: string): unknown };
+declare const matchMedia: (query: string) => DrawerViewport;
 
 /**
  * Keeps Tab and Shift+Tab inside the drawer: past the last control focus wraps to the first, and before the
@@ -76,22 +91,40 @@ export function trap(dialog: DrawerDialog, event: DrawerEvent): void {
   }
 }
 
-/** Reveals the drawer's controls and wires them: the menu button opens, the close button and Escape close, and Tab stays inside. */
-export function activate({ dialog, button, closeButton }: DrawerParts): void {
+/** Reveals the drawer's controls and wires them: the menu button opens, the close button, Escape, and a backdrop press close, and Tab stays inside. */
+export function activate({ dialog, button, closeButton }: DrawerParts, env: DrawerEnv = {}): void {
   dialog.setAttribute("data-enhanced", "");
   button.hidden = false;
   if (closeButton !== undefined) closeButton.hidden = false;
 
+  // The menu button is hidden on wide screens, so a close from a viewport change must not send focus to it.
+  let returnFocus = true;
+
   button.addEventListener("click", () => {
+    returnFocus = true;
     if (!dialog.open) dialog.showModal();
     button.setAttribute("aria-expanded", "true");
   });
   closeButton?.addEventListener("click", () => dialog.close());
 
-  // Closing by any route (close button, Escape) ends here, so the menu button always reports the state.
+  // Closing by any route (close button, Escape, backdrop, viewport change) ends here, so the menu
+  // button always reports the state and takes focus back while it is on screen.
   dialog.addEventListener("close", () => {
     button.setAttribute("aria-expanded", "false");
-    button.focus();
+    if (returnFocus) button.focus();
+    returnFocus = true;
+  });
+
+  // A press on the modal backdrop lands on the dialog itself; a press on the drawer's content does not.
+  dialog.addEventListener("click", (event) => {
+    if (event.target === dialog) dialog.close();
+  });
+
+  const viewport = env.viewport;
+  viewport?.addEventListener("change", () => {
+    if (viewport.matches !== true || !dialog.open) return;
+    returnFocus = false;
+    dialog.close();
   });
 
   dialog.addEventListener("keydown", (event) => {
@@ -110,10 +143,13 @@ if (typeof document !== "undefined") {
   const button = document.querySelector("[data-drawer-open]");
   if (dialog && button) {
     const closeButton = document.querySelector("[data-drawer] [data-drawer-close]");
-    activate({
-      dialog: dialog as DrawerDialog,
-      button: button as DrawerControl,
-      ...(closeButton ? { closeButton: closeButton as DrawerControl } : {}),
-    });
+    activate(
+      {
+        dialog: dialog as DrawerDialog,
+        button: button as DrawerControl,
+        ...(closeButton ? { closeButton: closeButton as DrawerControl } : {}),
+      },
+      { viewport: matchMedia(DESKTOP_QUERY) },
+    );
   }
 }
