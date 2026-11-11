@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { h } from "preact";
 import type { ComponentProps } from "@velella/mizzen/contracts";
+import type { MermaidConfig } from "mermaid";
 
 /** Class on the outer `<figure>`; `style.css` styles it. */
 export const MERMAID_CLASS = "mermaid";
@@ -29,11 +30,55 @@ type RenderResult =
   | { readonly ok: true; readonly svg: string }
   | { readonly ok: false; readonly error: string };
 
-/** One render per source string per build process. */
+/** Options that shape the generated SVG. They are part of the cache key, so changing one re-renders. */
+export type RenderOptions = {
+  readonly theme: NonNullable<MermaidConfig["theme"]>;
+  readonly htmlLabels: boolean;
+};
+
+/**
+ * The options the theme renders with: Mermaid's neutral base theme, repainted with the page tokens, and
+ * SVG text labels. `htmlLabels: false` keeps labels as text that measures in jsdom, styles from tokens,
+ * and reads as text when JavaScript is off.
+ */
+export const RENDER_OPTIONS: RenderOptions = { theme: "base", htmlLabels: false };
+
+/** Bumped when caching or rendering changes what a render produces, so an older entry is never reused. */
+const CACHE_FORMAT = 1;
+
+/** One render per normalized source and options, for the life of the build process. */
 const cache = new Map<string, RenderResult>();
+
+/** Child renders this process has started; the cache is what keeps it from growing. */
+let renders = 0;
+
+/** How many child renders this process started. Tests use it to prove that a cached diagram is not rendered again. */
+export function diagramRenderCount(): number {
+  return renders;
+}
+
+/** Forgets every cached diagram, as a fresh build process would. */
+export function clearDiagramCache(): void {
+  cache.clear();
+}
+
+/** Source normalized for rendering and caching: LF line endings, no trailing whitespace or blank lines. */
+export function normalizeSource(source: string): string {
+  return source.replace(/\r\n?/g, "\n").replace(/[ \t]+$/gm, "").replace(/^\n+|\n+$/g, "");
+}
+
+/** Stable key for a source and its render options: equal keys mean the same diagram, and so the same SVG. */
+export function diagramKey(source: string, options: RenderOptions = RENDER_OPTIONS): string {
+  return createHash("sha1")
+    .update(`${String(CACHE_FORMAT)}\n${options.theme}\n${String(options.htmlLabels)}\n${normalizeSource(source)}`)
+    .digest("hex");
+}
 
 /** Set in the child process's environment so that importing this module runs the child renderer. */
 const CHILD_ENV = "LATEEN_MERMAID_CHILD";
+
+/** Set in the child process's environment: the render options as JSON. */
+const CHILD_OPTIONS = "LATEEN_MERMAID_OPTIONS";
 
 /** True in the child process, where importing this module renders the diagram on stdin. */
 const invokedDirectly = process.env[CHILD_ENV] === "1";
@@ -95,18 +140,26 @@ export function accessibleSvg(svg: string, alt: string): string {
   return out;
 }
 
-/** Renders a diagram through the child renderer, or returns its cached result. */
-export function renderDiagram(source: string): RenderResult {
-  const cached = cache.get(source);
+/** Renders a diagram through the child renderer, or returns the result cached for the same source and options. */
+export function renderDiagram(source: string, options: RenderOptions = RENDER_OPTIONS): RenderResult {
+  const normalized = normalizeSource(source);
+  const key = diagramKey(normalized, options);
+  const cached = cache.get(key);
   if (cached !== undefined) return cached;
-  const result = runRenderer(source);
-  cache.set(source, result);
+  const result = runRenderer(normalized, options);
+  cache.set(key, result);
   return result;
 }
 
-function runRenderer(source: string): RenderResult {
+function runRenderer(source: string, options: RenderOptions): RenderResult {
+  renders += 1;
   const child = spawnSync(process.execPath, ["--input-type=module", "-e", CHILD_BOOT], {
-    env: { ...process.env, [CHILD_ENV]: "1", LATEEN_MERMAID_MODULE: import.meta.url },
+    env: {
+      ...process.env,
+      [CHILD_ENV]: "1",
+      LATEEN_MERMAID_MODULE: import.meta.url,
+      [CHILD_OPTIONS]: JSON.stringify(options),
+    },
     input: source,
     encoding: "utf8",
     maxBuffer: 32 * 1024 * 1024,
@@ -129,7 +182,7 @@ function runRenderer(source: string): RenderResult {
 
 /** The diagram and its source. The SVG is rendered at build time; the page never loads Mermaid. */
 export default function mermaid({ props }: ComponentProps<MermaidProps>) {
-  const source = text(props.source);
+  const source = normalizeSource(text(props.source));
   if (source === "") return null;
 
   const alt = text(props.alt) || altFromSource(source);
@@ -353,7 +406,20 @@ export function installMeasurement(prototype: MeasureTarget): void {
   };
 }
 
-async function renderInProcess(source: string): Promise<string> {
+/** The render options the parent put in this child's environment; the defaults if they are missing or unreadable. */
+function childOptions(): RenderOptions {
+  try {
+    const parsed = JSON.parse(process.env[CHILD_OPTIONS] ?? "") as Partial<RenderOptions>;
+    return {
+      theme: typeof parsed.theme === "string" ? parsed.theme : RENDER_OPTIONS.theme,
+      htmlLabels: typeof parsed.htmlLabels === "boolean" ? parsed.htmlLabels : RENDER_OPTIONS.htmlLabels,
+    };
+  } catch {
+    return RENDER_OPTIONS;
+  }
+}
+
+async function renderInProcess(source: string, options: RenderOptions): Promise<string> {
   const { JSDOM } = await import("jsdom");
   const dom = new JSDOM("<!DOCTYPE html><html><body></body></html>", { pretendToBeVisual: true });
   const global = globalThis as unknown as Record<string, unknown>;
@@ -371,14 +437,13 @@ async function renderInProcess(source: string): Promise<string> {
   mermaid.initialize({
     startOnLoad: false,
     securityLevel: "strict",
-    theme: "base",
+    theme: options.theme,
     fontFamily: "inherit",
-    // SVG text labels, not foreignObject HTML: they measure in jsdom, style from tokens, and read
-    // as text when JavaScript is off.
-    htmlLabels: false,
+    htmlLabels: options.htmlLabels,
   });
-  // A stable id per source keeps marker and accessibility ids unique when a page has several diagrams.
-  const id = `mermaid-${createHash("sha1").update(source).digest("hex").slice(0, 12)}`;
+  // A stable id per source and options keeps marker and accessibility ids unique when a page has several
+  // diagrams, and the same diagram gets the same ids across pages.
+  const id = `mermaid-${diagramKey(source, options).slice(0, 12)}`;
   const { svg } = await mermaid.render(id, source);
   return svg;
 }
@@ -388,7 +453,7 @@ async function runChild(): Promise<number> {
   console.log = (...args: unknown[]) => console.error(...args);
   const source = await readStdin();
   try {
-    const svg = await renderInProcess(source);
+    const svg = await renderInProcess(source, childOptions());
     process.stdout.write(JSON.stringify({ ok: true, svg }));
     return 0;
   } catch (error) {
