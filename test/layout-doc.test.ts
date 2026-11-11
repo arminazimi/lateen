@@ -144,22 +144,22 @@ test("the breadcrumb leads the article and repeats the trail, end at the current
     { title: "Install", url: "/guide/install/" },
   ];
   const page = out(pageWith(), [], trail);
-  assert.match(page, /<article class="doc"[^>]*><nav class="breadcrumb" aria-label="Breadcrumb"><a href="\/guide\/">Guides<\/a>/);
+  assert.match(page, /<article class="doc"[^>]*><nav class="breadcrumb" aria-label="Breadcrumbs"><a href="\/guide\/">Guides<\/a>/);
   assert.match(page, /<span aria-current="page">Install<\/span><\/nav><h1>Install<\/h1>/);
 });
 
-test("the sidebar renders in the site-navigation aside and the toc in the on-this-page aside", () => {
+test("the sidebar renders in the site-navigation column and the toc in its own navigation landmark", () => {
   const nav = [{ title: "Guides", children: [{ title: "Install", url: "/guide/install/" }] }];
   const page = out(pageWith({ headings: [heading(2, "Pick a mode"), heading(3, "Gem")] }), nav);
-  assert.match(page, /<aside class="sidebar" id="site-navigation" aria-label="Site navigation"><nav class="sidebar-nav"/);
-  assert.match(page, /<aside class="aside" aria-label="On this page"><aside class="toc" aria-label="On this page">/);
+  assert.match(page, /<div class="sidebar" id="site-navigation"><nav class="sidebar-nav"/);
+  assert.match(page, /<div class="aside"><nav class="toc" aria-labelledby="toc-title">/);
   assert.match(page, /<details class="toc-fold"><summary>On this page<\/summary>/);
 });
 
 test("the header and the drawer share the header slot", () => {
   const nav = [{ title: "Guides", children: [{ title: "Install", url: "/guide/install/" }] }];
   const page = out(pageWith(), nav);
-  assert.match(page, /<header><header class="header">/);
+  assert.match(page, /<header class="header">/);
   const drawer = /<dialog class="drawer" data-drawer aria-label="Menu">([\s\S]*?)<\/dialog>/.exec(page);
   assert.ok(drawer, "drawer dialog present");
   assert.match(drawer?.[1] ?? "", /data-drawer-close/);
@@ -168,9 +168,9 @@ test("the header and the drawer share the header slot", () => {
 
 test("empty navigation leaves the sidebar and drawer out without breaking the page", () => {
   const page = out(pageWith());
-  assert.doesNotMatch(page, /aside class="sidebar"/);
+  assert.doesNotMatch(page, /class="sidebar"/);
   assert.doesNotMatch(page, /dialog class="drawer"/);
-  assert.doesNotMatch(page, /aside class="toc"/);
+  assert.doesNotMatch(page, /class="toc"/);
   assert.match(page, /^<html lang="en" dir="ltr"/);
   assert.match(page, /<a class="skip-link" href="#main">Skip to content<\/a>/);
 });
