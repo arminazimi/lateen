@@ -77,17 +77,50 @@ test("an unknown key falls back to itself and reports it once", () => {
   assert.match(warnings[0] ?? "", /unknown message key "test_only\.unknown_key"/);
 });
 
-test("a placeholder with no value is dropped, not rendered, and reported", () => {
+test("a placeholder with no value stays intact, not dropped, and is reported once", () => {
   let text = "";
   const warnings = withNodeEnv("development", () =>
     warningsFrom(() => {
       text = t("en", "search_count");
+      text = t("en", "search_count");
     }),
   );
-  assert.doesNotMatch(text, /\{\w+\}/);
-  assert.equal(text.trim(), "results");
+  assert.equal(text, "{n} results");
   assert.equal(warnings.length, 1);
   assert.match(warnings[0] ?? "", /"search_count" has no value for \{n\}/);
+});
+
+test("partial values fill what they can and keep the missing ones visible", () => {
+  const warnings = withNodeEnv("development", () =>
+    warningsFrom(() => {
+      assert.equal(t("en", "series_part", { n: 2 }), "Part 2 of {total}");
+      assert.equal(t("en", "series_part", { total: 5 }), "Part {n} of 5");
+      assert.equal(t("en", "trust_reviewed_by", {}), "Reviewed by {reviewer}");
+      assert.equal(t("fa", "trust_reviewed_by", {}), stringsOf("fa").trust_reviewed_by);
+    }),
+  );
+  assert.equal(warnings.length, 3, "one diagnostic per distinct missing value");
+  assert.ok(warnings.some((warning) => /"series_part" has no value for \{total\}/.test(warning)));
+  assert.ok(warnings.some((warning) => /"series_part" has no value for \{n\}/.test(warning)));
+  assert.ok(warnings.some((warning) => /"trust_reviewed_by" has no value for \{reviewer\}/.test(warning)));
+});
+
+test("every occurrence of a repeated placeholder is filled once", () => {
+  // An unknown key resolves to its own text, which here is a two-placeholder template.
+  const text = withNodeEnv("production", () => t("en", "{n} of {n}", { n: 3 }));
+  assert.equal(text, "3 of 3");
+});
+
+test("a missing value in a fallback catalog stays visible with a bounded diagnostic", () => {
+  const warnings = withNodeEnv("development", () =>
+    warningsFrom(() => {
+      assert.equal(t("nl", "search_results_empty"), "No results for “{query}”.");
+      assert.equal(t("nl", "search_results_empty"), "No results for “{query}”.");
+    }),
+  );
+  const missing = warnings.filter((warning) => warning.includes("search_results_empty"));
+  assert.equal(missing.length, 1);
+  assert.match(missing[0] ?? "", /has no value for \{query\}/);
 });
 
 test("production builds stay quiet about missing messages", () => {
@@ -95,6 +128,7 @@ test("production builds stay quiet about missing messages", () => {
     warningsFrom(() => {
       assert.equal(t("en", "test_only.production_key"), "test_only.production_key");
       assert.equal(t("xx", "search"), english.search);
+      assert.equal(t("en", "search_count"), "{n} results");
     }),
   );
   assert.deepEqual(warnings, []);

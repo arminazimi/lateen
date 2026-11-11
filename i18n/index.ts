@@ -91,7 +91,7 @@ function isolate(value: string, direction: "ltr" | "rtl" | undefined): string {
 /**
  * The raw text for `key` with its `{name}` placeholders intact. Client code that fills the
  * placeholders later (a page script, a `data-*` template) uses this instead of {@link t}, which
- * fills every placeholder it can and drops the ones it cannot.
+ * fills the placeholders it has values for and leaves the rest intact.
  */
 export function patternOf(lang: string, key: string): string {
   return resolve(lang, key).text;
@@ -102,16 +102,18 @@ export function patternOf(lang: string, key: string): string {
  * language, its primary subtag (`fa-IR` reads `fa`), English, then the key itself; a missing
  * catalog, message, or value emits one development diagnostic per problem. `{name}` placeholders
  * are filled from `values` as text (never HTML), with direction isolation when needed. A
- * placeholder with no value is dropped rather than rendered.
+ * placeholder with no value stays intact (`{name}`), so a broken message still shows the missing
+ * value instead of reading as a complete sentence that lost it.
  */
 export function t(lang: string, key: string, values: Readonly<Record<string, string | number>> = {}): string {
   const { text } = resolve(lang, key);
   const direction = directionOf(text);
-  return text.replace(/\{(\w+)\}/g, (_placeholder, name: string) => {
-    if (!(name in values)) {
+  return text.replace(/\{(\w+)\}/g, (placeholder, name: string) => {
+    const value = values[name];
+    if (value === undefined) {
       report(`${JSON.stringify(key)} has no value for {${name}}`);
-      return "";
+      return placeholder;
     }
-    return isolate(String(values[name]), direction);
+    return isolate(String(value), direction);
   });
 }
