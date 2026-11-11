@@ -60,10 +60,47 @@ export function replacementOf(value: unknown): string | undefined {
   return SAFE_URL.test(url) ? url : undefined;
 }
 
+/** The states replacement evidence can be in, as `data-page-status-replacement`. */
+export const REPLACEMENT_STATES = ["valid", "invalid", "not-applicable", "absent"] as const;
+
+export type ReplacementState = (typeof REPLACEMENT_STATES)[number];
+
+/** Replacement evidence: a safe link only when the state is `valid`. */
+export type ReplacementEvidence = {
+  state: ReplacementState;
+  href?: string;
+};
+
+/** True when the prop was written with a non-blank string. */
+function authored(value: unknown): boolean {
+  return typeof value === "string" && value.trim() !== "";
+}
+
+/**
+ * The replacement evidence for a page. `valid` carries a safe link on a deprecated page. An authored
+ * value that is not a safe URL is `invalid`, and any replacement authored on another status is
+ * `not-applicable`: neither becomes a link or guidance. No authored value means `absent`, which is
+ * different from authored but unusable evidence.
+ */
+export function replacementEvidenceOf(status: BannerStatus, value: unknown): ReplacementEvidence {
+  if (status !== "deprecated") return { state: authored(value) ? "not-applicable" : "absent" };
+  const href = replacementOf(value);
+  if (href !== undefined) return { state: "valid", href };
+  return { state: authored(value) ? "invalid" : "absent" };
+}
+
 /**
  * A banner above the title for an experimental, beta, or deprecated page. It names the status and, when
  * the status was set in a version, that version. A deprecated page with a `replaced_by` also links to its
  * replacement. Renders nothing for any other status. Every label is read in the page language.
+ *
+ * The message element carries the page's lifecycle evidence: `data-page-status` is the normalized status,
+ * `data-page-status-since` the trimmed version when one was authored, and `data-page-status-replacement`
+ * the replacement state (`valid`, `invalid`, `not-applicable`, or `absent`). Lifecycle says nothing about
+ * trust, review, or freshness, so the banner adds no such claim.
+ *
+ * shortcut: the evidence sits on the message rather than the banner root because the layout's markup test
+ * asserts the root's exact opening tag; move it to the root once that shared assertion allows attributes.
  */
 const pageStatus: Component<PageStatusProps> = ({ props, page }) => {
   const status = statusOf(props.status);
@@ -71,17 +108,26 @@ const pageStatus: Component<PageStatusProps> = ({ props, page }) => {
 
   const lang = page.lang;
   const since = sinceOf(props.since);
-  const replacement = status === "deprecated" ? replacementOf(props.replaced_by) : undefined;
+  const replacement = replacementEvidenceOf(status, props.replaced_by);
 
   return h(
     "div",
     { class: classNameOf(status), role: "note" },
     h("strong", { class: "page-status-label" }, t(lang, LABEL_KEYS[status])),
-    h("span", { class: "page-status-message" }, t(lang, MESSAGE_KEYS[status])),
+    h(
+      "span",
+      {
+        class: "page-status-message",
+        "data-page-status": status,
+        ...(since === undefined ? {} : { "data-page-status-since": since }),
+        "data-page-status-replacement": replacement.state,
+      },
+      t(lang, MESSAGE_KEYS[status]),
+    ),
     since === undefined ? null : h("span", { class: "page-status-since" }, `${t(lang, "status_since")} ${since}`),
-    replacement === undefined
+    replacement.state !== "valid"
       ? null
-      : h("a", { class: "page-status-replacement", href: replacement }, t(lang, "status_replacement_label")),
+      : h("a", { class: "page-status-replacement", href: replacement.href }, t(lang, "status_replacement_label")),
   );
 };
 

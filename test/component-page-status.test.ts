@@ -2,9 +2,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import type { ComponentProps } from "@velella/mizzen/contracts";
+import { renderToString } from "preact-render-to-string";
 import pageStatus, {
+  REPLACEMENT_STATES,
   STATUSES,
   classNameOf,
+  replacementEvidenceOf,
   replacementOf,
   sinceOf,
   statusOf,
@@ -13,7 +16,7 @@ import pageStatus, {
 
 type Node = {
   type: string;
-  props: { class?: string; href?: string; role?: string; children?: unknown };
+  props: { class?: string; href?: string; role?: string; children?: unknown; [attribute: string]: unknown };
 };
 
 /** Render the banner the way the render host calls it: props from front matter or the directive. */
@@ -42,6 +45,13 @@ function textOf(value: unknown): string {
     return textOf((value as Node).props.children);
   }
   return "";
+}
+
+/** The banner's structured evidence, read from the message element that carries it. */
+function evidenceOf(node: Node): Record<string, unknown> {
+  const [message] = withClass(node, "page-status-message");
+  assert.ok(message, "the banner has a message element");
+  return message.props;
 }
 
 const names = JSON.parse(readFileSync(new URL("../tokens/names.json", import.meta.url), "utf8")) as Record<
@@ -162,6 +172,96 @@ test("no replacement link for a status other than deprecated", () => {
   for (const status of ["experimental", "beta"] as const) {
     const node = render({ status, replaced_by: "/new/" }) as Node;
     assert.deepEqual(withClass(node, "page-status-replacement"), []);
+  }
+});
+
+test("the banner exposes the normalized lifecycle status as evidence", () => {
+  for (const status of STATUSES) {
+    assert.equal(evidenceOf(render({ status }) as Node)["data-page-status"], status);
+  }
+  assert.equal(evidenceOf(render({ status: " Deprecated " }) as Node)["data-page-status"], "deprecated");
+  assert.deepEqual(
+    Object.keys(evidenceOf(render({ status: "beta", since: "0.3.0", replaced_by: "/new/" }) as Node))
+      .filter((key) => key.startsWith("data-"))
+      .sort(),
+    ["data-page-status", "data-page-status-replacement", "data-page-status-since"],
+  );
+});
+
+test("the banner exposes the since version as evidence, and omits it when none was authored", () => {
+  assert.equal(evidenceOf(render({ status: "beta", since: " 0.3.0 " }) as Node)["data-page-status-since"], "0.3.0");
+  for (const since of [undefined, "", "   ", 42]) {
+    const evidence = evidenceOf(render({ status: "beta", since } as unknown as PageStatusProps) as Node);
+    assert.equal(evidence["data-page-status-since"], undefined, `since ${JSON.stringify(since)}`);
+  }
+});
+
+test("replacement evidence distinguishes absent, valid, invalid, and not-applicable", () => {
+  const stateOf = (props: PageStatusProps) => evidenceOf(render(props) as Node)["data-page-status-replacement"];
+
+  assert.deepEqual([...REPLACEMENT_STATES].sort(), ["absent", "invalid", "not-applicable", "valid"]);
+  assert.equal(stateOf({ status: "deprecated" }), "absent");
+  assert.equal(stateOf({ status: "deprecated", replaced_by: "   " }), "absent");
+  assert.equal(stateOf({ status: "deprecated", replaced_by: "/guide/new/" }), "valid");
+  assert.equal(stateOf({ status: "deprecated", replaced_by: "https://example.com/new" }), "valid");
+  for (const unsafe of [
+    "javascript:alert(1)",
+    "//evil.example/path",
+    "/\\evil.example",
+    "http://example.com/",
+    "new-page",
+    '/a"><script>',
+  ]) {
+    assert.equal(stateOf({ status: "deprecated", replaced_by: unsafe }), "invalid", unsafe);
+  }
+  assert.equal(replacementEvidenceOf("deprecated", "javascript:alert(1)").href, undefined);
+  assert.equal(replacementEvidenceOf("deprecated", "/new/").href, "/new/");
+  for (const status of ["experimental", "beta"] as const) {
+    assert.equal(stateOf({ status, replaced_by: "/new/" }), "not-applicable");
+  }
+  assert.equal(stateOf({ status: "beta" }), "absent");
+});
+
+test("invalid replacement evidence never becomes a link or echoes the unsafe value", () => {
+  const node = render({ status: "deprecated", replaced_by: "javascript:alert(1)" }) as Node;
+  assert.deepEqual(withClass(node, "page-status-replacement"), []);
+  const out = renderToString(node as never);
+  assert.doesNotMatch(out, /javascript:/);
+  assert.match(out, /data-page-status-replacement="invalid"/);
+});
+
+test("the structured evidence is identical in every language", () => {
+  const props: PageStatusProps = { status: "beta", since: "0.3.0", replaced_by: "/new/" };
+  for (const lang of ["en", "fa", "ar"]) {
+    const evidence = evidenceOf(render(props, lang) as Node);
+    assert.equal(evidence["data-page-status"], "beta");
+    assert.equal(evidence["data-page-status-since"], "0.3.0");
+    assert.equal(evidence["data-page-status-replacement"], "not-applicable");
+  }
+});
+
+test("the structured evidence is in the static, no-JS output", () => {
+  const out = renderToString(
+    render({ status: "deprecated", since: "0.2.0", replaced_by: "/components/callout/" }) as never,
+  );
+  assert.match(out, /data-page-status="deprecated"/);
+  assert.match(out, /data-page-status-since="0.2.0"/);
+  assert.match(out, /data-page-status-replacement="valid"/);
+  assert.match(out, /href="\/components\/callout\/"/);
+  assert.doesNotMatch(out, /<script/);
+  for (const status of STATUSES) {
+    assert.match(renderToString(render({ status }) as never), new RegExp(`data-page-status="${status}"`));
+  }
+});
+
+test("lifecycle evidence makes no trust, review, or freshness claim", () => {
+  for (const status of STATUSES) {
+    const keys = Object.keys(evidenceOf(render({ status, since: "1.0.0", replaced_by: "/new/" }) as Node));
+    assert.deepEqual(
+      keys.filter((key) => /trust|review|fresh|verif|audit/i.test(key)),
+      [],
+      `${status} adds no trust claim`,
+    );
   }
 });
 
