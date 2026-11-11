@@ -7,8 +7,13 @@ permalink: /components/version-diff/
 
 A version diff shows what changed between two versions of a page, section by section. Every change
 is `added`, `removed`, `changed`, or `moved`, and carries a visible text label beside its own icon
-shape, so colour is never the only signal. A moved change also shows its old and new position. The
-viewer renders nothing when there are no changes or the two versions are equal.
+shape, so colour is never the only signal. A moved change also shows its old and new position.
+
+An explicit comparison is never silently hidden. Its state is exposed as `data-diff-state`:
+`changes` when it found usable changes, `unchanged` when two versions were compared and the change
+list was explicitly empty, and `unavailable` when a version is missing or equal or the change
+evidence could not be read. An `unchanged` comparison still names both versions and shows a
+zero-change count. Only a page with no comparison written at all renders nothing.
 
 ## Syntax
 
@@ -20,6 +25,14 @@ Pass the diff as JSON in the directive's `changes` attribute, with the two versi
 
 The same data also works in a page's `versionDiff` front matter, or as the engine's
 `diff/<version>/<page>.json` shape, where the four kinds are four lists.
+
+An explicit empty change list compares the two versions and reports that they are unchanged:
+
+:::version-diff{from="0.3" to="0.4" changes='[]'}
+:::
+
+If the comparison was requested but its evidence is malformed, the viewer says it is unavailable
+instead of looking like a verified empty diff.
 
 ## Options
 

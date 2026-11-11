@@ -2,10 +2,20 @@
 
 A section-by-section comparison of two versions of a page. Each change is `added`, `removed`,
 `changed`, or `moved`; the kind shows as a visible label beside its own icon shape, never as color
-alone. A moved change also shows its old and new position. The viewer renders nothing when there are
-no changes or the two versions are equal. The header names both versions in text, `Base version` and
-`Target version`, and the changed text carries a visible `+` or `−` beside its Before or After label,
-so a copied or printed diff keeps the added and removed markers.
+alone. A moved change also shows its old and new position. The header names both versions in text,
+`Base version` and `Target version`, and the changed text carries a visible `+` or `−` beside its
+Before or After label, so a copied or printed diff keeps the added and removed markers.
+
+An explicit comparison has one of three states, exposed as `data-diff-state`:
+
+- `changes`: at least one usable section change; the ordered list and its navigation render.
+- `unchanged`: two usable versions and an explicit empty change list; the header and both versions
+  render with the zero-change count, so a verified empty comparison is visible rather than hidden.
+- `unavailable`: a version is missing or equal, change evidence is absent, or a change list has no
+  usable entry; the viewer keeps the state visible instead of pretending the diff was empty.
+
+When no comparison was written at all (no `data`, no `from`/`to`/`changes`, and no `versionDiff`
+front matter) the viewer renders nothing.
 
 - `index.ts` is the Preact component, written with `h()`. Its `directive` export is `version-diff`.
   It accepts the diff from the directive's `data` or `from`/`to`/`changes` attributes, then from the

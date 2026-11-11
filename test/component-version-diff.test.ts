@@ -10,6 +10,7 @@ import versionDiff, {
   KINDS,
   LABEL_KEYS,
   SR_CLASS,
+  STATES,
   changeOf,
   diffOf,
   directive,
@@ -244,13 +245,92 @@ test("the i18n keys exist with matching placeholders in every language", () => {
   }
 });
 
-test("no changes, two equal versions, or no versions render nothing", () => {
-  assert.equal(render({ data: dataOf([]) }), null);
-  assert.equal(render({ data: dataOf(changes, "v1", "v1") }), null);
-  assert.equal(render({ from: "v1", to: "v1", changes: JSON.stringify(changes) }), null);
-  assert.equal(render({ from: "v1", changes: JSON.stringify(changes) }), null);
-  assert.equal(render({}), null);
-  assert.equal(render({ data: "not json" }), null);
+test("an explicit empty diff is unchanged, with both versions and a zero-change state", () => {
+  const grouped = JSON.stringify({ from: "v1", to: "v2", added: [], removed: [], changed: [], moved: [] });
+  const zero = stringsOf("en").version_diff_count!.replace("{current}", "0").replace("{total}", "0");
+
+  for (const data of [dataOf([]), grouped]) {
+    const out = render({ data });
+    assert.ok(out, data);
+    assert.match(out, /data-diff-state="unchanged"/);
+    assert.match(out, /data-version-from="v1"/);
+    assert.match(out, /data-version-to="v2"/);
+    assert.ok(visible(out).includes("Changes from v1 to v2"), data);
+    assert.ok(out.includes(zero), `${data} shows the zero-change count`);
+    assert.doesNotMatch(out, /version-diff-controls/);
+    assert.doesNotMatch(out, /version-diff-item/);
+  }
+
+  const separate = render({ from: "v1", to: "v2", changes: "[]" });
+  assert.ok(separate);
+  assert.match(separate, /data-diff-state="unchanged"/);
+  assert.ok(separate.includes(zero));
+});
+
+test("a malformed explicit comparison is unavailable, not unchanged and not hidden", () => {
+  const malformed: readonly VersionDiffProps[] = [
+    { data: "not json" },
+    { data: "[]" },
+    { data: '{"from":"v1"}' },
+    { data: '{"from":"v1","to":"v2","changes":"nope"}' },
+    { data: '{"from":"v1","to":"v2","changes":[{"kind":"bogus","title":"Nope"}]}' },
+    { from: "v1", to: "v2", changes: "{" },
+    { from: "v1", to: "v1", changes: "[]" },
+    { from: "v1", to: "v2" },
+    { from: "", to: "v2", changes: "[]" },
+  ];
+
+  for (const props of malformed) {
+    const out = render(props);
+    assert.ok(out, JSON.stringify(props));
+    assert.match(out, /data-diff-state="unavailable"/);
+    assert.doesNotMatch(out, /data-diff-state="unchanged"/);
+    assert.doesNotMatch(out, /version-diff-controls/);
+    assert.doesNotMatch(out, /version-diff-item/);
+  }
+
+  const absent = render({});
+  assert.equal(absent, null, "an absent comparison is still hidden");
+  assert.equal(render({}, "en", { title: "No diff here" }), null);
+  const matter = render({}, "en", { versionDiff: { from: "v1" } });
+  assert.ok(matter);
+  assert.match(matter, /data-diff-state="unavailable"/);
+});
+
+test("unavailable keeps usable versions and its translated state visible", () => {
+  const out = render({ from: "v1", to: "v2", changes: "{" });
+  assert.ok(out);
+  assert.match(out, /data-version-from="v1"/);
+  assert.match(out, /data-version-to="v2"/);
+  assert.ok(visible(out).includes("Changes from v1 to v2"));
+  assert.ok(out.includes(stringsOf("en").drift_state_unavailable!));
+
+  const unnamed = render({ data: "{broken" });
+  assert.ok(unnamed);
+  assert.ok(visible(unnamed).includes(stringsOf("en").diff!));
+  assert.ok(unnamed.includes(stringsOf("en").drift_state_unavailable!));
+  assert.doesNotMatch(unnamed, /data-version-from/);
+
+  for (const lang of languages) {
+    const empty = render({ data: dataOf([]) }, lang);
+    assert.ok(empty);
+    assert.ok(
+      empty.includes(stringsOf(lang).version_diff_count!.replace("{current}", "0").replace("{total}", "0")),
+      `${lang} zero-change count`,
+    );
+    const bad = render({ data: "{" }, lang);
+    assert.ok(bad);
+    assert.ok(bad.includes(stringsOf(lang).drift_state_unavailable!), `${lang} unavailable`);
+  }
+});
+
+test("a non-empty diff reports the changes state", () => {
+  assert.deepEqual([...STATES], ["changes", "unchanged", "unavailable"]);
+  const out = render({ data: dataOf() });
+  assert.ok(out);
+  assert.match(out, /data-diff-state="changes"/);
+  assert.match(out, /version-diff-controls/);
+  assert.match(out, /version-diff-list/);
 });
 
 test("a change with an unknown kind or no section title is dropped", () => {
@@ -266,10 +346,23 @@ test("a change with an unknown kind or no section title is dropped", () => {
     ],
   };
   const diff = diffOf(raw);
-  assert.deepEqual(diff, { from: "v1", to: "v2", changes: [{ kind: "added", title: "Kept" }] });
+  assert.deepEqual(diff, {
+    state: "changes",
+    from: "v1",
+    to: "v2",
+    changes: [{ kind: "added", title: "Kept" }],
+  });
   assert.equal(kindOf(" Moved "), "moved");
   assert.equal(kindOf("deleted"), undefined);
   assert.equal(changeOf({ kind: "added", title: "X", before: " ", after: "Y" })?.before, undefined);
+  assert.deepEqual(diffOf({ from: "v1", to: "v2", changes: [] }), {
+    state: "unchanged",
+    from: "v1",
+    to: "v2",
+    changes: [],
+  });
+  assert.deepEqual(diffOf({ from: "v1", to: "v2" }), { state: "unavailable", from: "v1", to: "v2", changes: [] });
+  assert.equal(diffOf("not a diff").state, "unavailable");
 });
 
 test("the page's versionDiff front matter is the fallback, and the attributes win over it", () => {
