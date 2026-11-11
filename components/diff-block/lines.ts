@@ -1,26 +1,76 @@
 /**
  * Diff block lines: the pure part of the `diff-block` component. A line's first character says what it
  * is — `+` for an added line, `-` for a removed one, a space for context — and is taken off the text
- * here, at build time, so the copy control receives clean code and the visible line keeps only the
- * code. A line with no marker is context, and a file or hunk header keeps its text but stays out of
- * the copy, since a header is not part of the new file.
+ * here, at build time, so the copy controls receive clean code and the visible line keeps only the
+ * code. File and hunk headers keep their authored text and carry whatever metadata the author wrote;
+ * a header this parser cannot read stays text and is marked unknown, never given invented positions.
  */
 
-/** What a line does to the file: adds text, removes it, or keeps it. */
-export type DiffLineKind = "added" | "removed" | "context";
+/** What a line does: add text, remove it, keep it, or head a file, hunk, or the diff itself. */
+export type DiffLineKind = "added" | "removed" | "context" | "file" | "hunk" | "meta";
+
+/** The numbered range of one side of a hunk. A count the author left out stays undefined. */
+export interface DiffHunkRange {
+  /** The first line on this side, as authored. */
+  readonly start: number;
+  /** The number of lines on this side, only when the author wrote one. */
+  readonly count?: number;
+}
+
+/** The authored metadata of a hunk header: its two ranges and any section text after them. */
+export interface DiffHunk {
+  readonly old: DiffHunkRange;
+  readonly new: DiffHunkRange;
+  /** The text after the closing `@@`, which names the enclosing function or section. */
+  readonly section?: string;
+}
+
+/** The paths a file header names. A side that is `/dev/null` or absent stays undefined. */
+export interface DiffFile {
+  readonly oldPath?: string;
+  readonly newPath?: string;
+}
 
 /** One line of a diff, after its marker has been read. */
 export interface DiffLine {
-  /** Whether the line is added, removed, or context. */
+  /** Whether the line is added, removed, context, or a file, hunk, or meta header. */
   readonly kind: DiffLineKind;
-  /** The line's text without its `+`, `-`, or leading space. */
+  /** The display text: the code without its marker, or the whole header as authored. */
   readonly text: string;
-  /** Present on a file or hunk header: shown with the diff, never part of what a copy takes. */
-  readonly header?: true;
+  /** The authored line, marker and all, so the patch export can reproduce it exactly. */
+  readonly raw: string;
+  /** Present on a file header the parser could read. */
+  readonly file?: DiffFile;
+  /** Present on a hunk header whose ranges could be read. */
+  readonly hunk?: DiffHunk;
+  /** Present on a header-shaped line whose metadata could not be read; its text is preserved. */
+  readonly unknown?: true;
 }
 
-/** A file or hunk header, which is never a marker line. Mirrors `components/code/diff.ts`. */
-const HEADER = /^(diff |index |--- |\+\+\+ |@@ )/;
+/** A file header, which is never a marker line. Mirrors `components/code/diff.ts`. */
+const FILE_HEADER =
+  /^(diff --git |index |--- |\+\+\+ |new file mode |deleted file mode |old mode |new mode |similarity index |dissimilarity index |rename from |rename to |copy from |copy to |Binary files |GIT binary patch)/;
+
+/** A hunk header: two ranges and an optional section. The counts are optional, as in a real patch. */
+const HUNK = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(?: (.*))?$/;
+
+/** The authored path on one side of a file header; `/dev/null` names no file. */
+function pathOf(value: string): string | undefined {
+  return value === "/dev/null" ? undefined : value;
+}
+
+/** A file header's paths, read from whichever of `diff --git`, `---`, or `+++` is present. */
+function fileOf(raw: string): DiffFile {
+  const git = /^diff --git a\/(.+?) b\/(.+)$/.exec(raw);
+  const old = /^--- ([^\t]*)/.exec(raw)?.[1];
+  const next = /^\+\+\+ ([^\t]*)/.exec(raw)?.[1];
+  const oldPath = git?.[1] ?? (old === undefined ? undefined : pathOf(old));
+  const newPath = git?.[2] ?? (next === undefined ? undefined : pathOf(next));
+  return {
+    ...(oldPath === undefined ? {} : { oldPath }),
+    ...(newPath === undefined ? {} : { newPath }),
+  };
+}
 
 const NAMED: Readonly<Record<string, string>> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
 
@@ -61,27 +111,88 @@ export function bodyText(html: string): string {
     .replace(/\n+$/, "");
 }
 
+/** A hunk header as authored, with only the counts the author wrote. */
+function hunkOf(raw: string): DiffHunk | undefined {
+  const match = HUNK.exec(raw);
+  if (match === null) return undefined;
+  const [, oldStart, oldCount, newStart, newCount, section] = match;
+  return {
+    old: { start: Number(oldStart), ...(oldCount === undefined ? {} : { count: Number(oldCount) }) },
+    new: { start: Number(newStart), ...(newCount === undefined ? {} : { count: Number(newCount) }) },
+    ...(section === undefined ? {} : { section }),
+  };
+}
+
 /**
- * Splits diff text into lines and reads each line's marker. `+` is added, `-` removed, a leading space
- * context, and a file or hunk header context that the copy leaves out. Every marker is taken off the
- * text, so it exists only in the component's markup, never in what a visitor copies.
+ * Splits diff text into lines and reads each line's marker and metadata. `+` is added, `-` removed, a
+ * leading space context, and a file or hunk header keeps its authored text and any positions it
+ * declares. A header whose metadata is malformed stays text with `unknown`, so no invented line
+ * number reaches the page. Every content marker is taken off the display text, so it exists only in
+ * the component's markup and in the patch export, never in the resulting source.
  */
 export function parseDiff(text: string): DiffLine[] {
   if (text === "") return [];
   return text.split("\n").map((line): DiffLine => {
-    if (HEADER.test(line)) return { kind: "context", text: line, header: true };
+    if (line.startsWith("@@")) {
+      const hunk = hunkOf(line);
+      return hunk === undefined
+        ? { kind: "hunk", text: line, raw: line, unknown: true }
+        : { kind: "hunk", text: line, raw: line, hunk };
+    }
+    if (FILE_HEADER.test(line)) {
+      const file = fileOf(line);
+      return Object.keys(file).length === 0
+        ? { kind: "file", text: line, raw: line }
+        : { kind: "file", text: line, raw: line, file };
+    }
+    if (line.startsWith("\\ ")) return { kind: "meta", text: line, raw: line };
     const marker = line.charAt(0);
-    if (marker === "+") return { kind: "added", text: line.slice(1) };
-    if (marker === "-") return { kind: "removed", text: line.slice(1) };
-    if (marker === " ") return { kind: "context", text: line.slice(1) };
-    return { kind: "context", text: line };
+    if (marker === "+") return { kind: "added", text: line.slice(1), raw: line };
+    if (marker === "-") return { kind: "removed", text: line.slice(1), raw: line };
+    if (marker === " ") return { kind: "context", text: line.slice(1), raw: line };
+    return { kind: "context", text: line, raw: line };
   });
 }
 
-/** The new version of the file: added and context lines, without markers or headers, one per line. */
+/** The new version of one file: added and context lines, without markers or headers, one per line. */
 export function copyText(lines: readonly DiffLine[]): string {
   return lines
-    .filter((line) => line.kind !== "removed" && line.header !== true)
+    .filter((line) => line.kind === "added" || line.kind === "context")
     .map((line) => line.text)
     .join("\n");
+}
+
+/** One file's resulting source: the path a file header names, when it names one, and its source text. */
+export interface DiffSource {
+  readonly path?: string;
+  readonly text: string;
+}
+
+/**
+ * Splits a diff into files and returns each file's resulting source. A `diff --git` header starts a
+ * file; in a diff without one, a `---` header after a `+++` starts the next file. Text before any file
+ * header stays one unnamed source, so a plain source-only diff still copies as a single file.
+ */
+export function sourceFilesOf(lines: readonly DiffLine[]): DiffSource[] {
+  const sections: DiffLine[][] = [];
+  let current: DiffLine[] | undefined;
+  for (const line of lines) {
+    const startsGit = line.raw.startsWith("diff --git ");
+    const startsUnified = line.raw.startsWith("--- ") && current?.some((item) => item.raw.startsWith("+++ ")) === true;
+    if (current === undefined || startsGit || startsUnified) {
+      current = [];
+      sections.push(current);
+    }
+    current.push(line);
+  }
+  return sections.map((section) => {
+    const file = section.findLast((line) => line.file !== undefined)?.file;
+    const path = file?.newPath ?? file?.oldPath;
+    return { ...(path === undefined ? {} : { path }), text: copyText(section) };
+  });
+}
+
+/** The authored unified diff exactly as written: every marker, header, and context line, in order. */
+export function patchText(lines: readonly DiffLine[]): string {
+  return lines.map((line) => line.raw).join("\n");
 }
