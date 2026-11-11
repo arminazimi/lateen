@@ -201,6 +201,38 @@ test("activate adds one control above each code block, with the copy icon showin
   assert.equal(copyIcon!.attrs["aria-hidden"], "true");
 });
 
+test("the copy control keeps the block's language, source, and stable id", () => {
+  const block = new FakeBlock(
+    { "data-lang": "ts", "data-src": "docs/a.md:3:1-9:2", id: "code-docs-a-md-3-1-9-2" },
+    "const a = 1;",
+  );
+  activate(new FakeDoc([block]), { clipboard: clipboard(), schedule: timers().schedule });
+
+  const button = block.inserted[0]!.children[0] as FakeNode;
+  assert.equal(button.attrs["data-lang"], "ts");
+  assert.equal(button.attrs["data-src"], "docs/a.md:3:1-9:2");
+  assert.equal(button.attrs["data-block-id"], "code-docs-a-md-3-1-9-2");
+});
+
+test("a block with no id still carries its source span as the control's identity", () => {
+  const block = new FakeBlock({ "data-lang": "ts", "data-src": "docs/a.md:3:1-9:2" }, "x");
+  activate(new FakeDoc([block]), { clipboard: clipboard(), schedule: timers().schedule });
+
+  const button = block.inserted[0]!.children[0] as FakeNode;
+  assert.equal(button.attrs["data-block-id"], "docs/a.md:3:1-9:2");
+});
+
+test("a copy keeps intentional indentation, tabs, and trailing spaces exactly", async () => {
+  const clip = clipboard();
+  const text = "function f() {\n\t  return 1;  \n}";
+  const { button } = page(text, "ts", clip);
+
+  button.click();
+  await flush();
+
+  assert.deepEqual(clip.written, [text]);
+});
+
 test("the live message is a status region that starts empty", () => {
   const { status } = page("x", undefined, clipboard());
   assert.equal(status.attrs.class, STATUS_CLASS);

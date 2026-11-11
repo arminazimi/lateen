@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { renderToString } from "preact-render-to-string";
 import type { ComponentProps } from "@velella/mizzen/contracts";
-import code, { DEFAULT_LANGUAGES, buildTheme, highlightFences, loadGrammars, loadedLanguages, sourceText } from "../components/code/index.ts";
+import code, { blockId, DEFAULT_LANGUAGES, buildTheme, highlightFences, loadGrammars, loadedLanguages, sourceText } from "../components/code/index.ts";
 
 function render(props: Record<string, string>, html: string): string {
   const input = { props, html, page: {}, site: {} } as unknown as ComponentProps<never>;
@@ -53,9 +53,9 @@ test("sourceText drops tags until none is left, and its text is escaped again wh
   assert.doesNotMatch(out, /<script/);
 });
 
-test("highlightFences highlights a plain fence, keeps data-src, and leaves mermaid alone", () => {
+test("highlightFences highlights a plain fence, keeps data-src, and gives it a stable id", () => {
   const out = highlightFences('<p>a</p><pre data-src="a.md:3:1-5:3"><code class="language-sh">npm test\n</code></pre>');
-  assert.match(out, /^<p>a<\/p><pre class="code" tabindex="0" data-lang="sh" data-src="a\.md:3:1-5:3"><code>/);
+  assert.match(out, /^<p>a<\/p><pre class="code" tabindex="0" id="code-a-md-3-1-5-3" data-lang="sh" data-src="a\.md:3:1-5:3"><code>/);
   assert.match(out, /--shiki-dark:#/);
   const plain = highlightFences("<pre><code>a &lt; b\n</code></pre>");
   assert.match(plain, /<pre class="code" tabindex="0" data-lang="text"><code>/);
@@ -64,13 +64,41 @@ test("highlightFences highlights a plain fence, keeps data-src, and leaves merma
   assert.equal(highlightFences(diagram), diagram);
 });
 
+test("highlightFences gives an already-highlighted block its stable id once", () => {
+  const block = '<pre class="code" tabindex="0" data-lang="ts" data-src="a.md:3:1-5:3"><code>x</code></pre>';
+  const out = highlightFences(block);
+  assert.match(out, /^<pre class="code" id="code-a-md-3-1-5-3" tabindex="0" data-lang="ts" data-src="a\.md:3:1-5:3"><code>x<\/code><\/pre>$/);
+  assert.equal(highlightFences(out), out);
+});
+
 test("highlights at build time with light and dark variables, keeps data-src", async () => {
   await loadGrammars(["json"]);
   const out = render({ lang: "json", src: "docs/a.md:3" }, "{&quot;a&quot;: 1}");
+  assert.match(out, /<pre class="code"[^>]*id="code-docs-a-md-3"/);
   assert.match(out, /<pre class="code"[^>]*data-src="docs\/a\.md:3"/);
   assert.match(out, /--shiki-light:#/);
   assert.match(out, /--shiki-dark:#/);
   assert.doesNotMatch(out, /<script/);
+});
+
+test("a block without its own src leaves the span to the engine, not the page start", () => {
+  const input = {
+    props: { lang: "ts" },
+    html: "const a = 1;",
+    page: { source: { file: "docs/a.md", line: 10, column: 1, endLine: 12, endColumn: 4 } },
+    site: {},
+  } as unknown as ComponentProps<never>;
+  const out = renderToString(code(input) as never);
+  assert.doesNotMatch(out, /data-src=/);
+  assert.doesNotMatch(out, /id=/);
+});
+
+test("blockId turns a span into an id-safe, stable fragment and stays unique per span", () => {
+  assert.equal(blockId("docs/a.md:3:1-9:12"), "code-docs-a-md-3-1-9-12");
+  assert.equal(blockId("C:\\notes\\a.md:2:3"), "code-C-notes-a-md-2-3");
+  assert.equal(blockId("docs/a.md:3:1-9:12"), blockId("docs/a.md:3:1-9:12"));
+  assert.notEqual(blockId("docs/a.md:3:1-9:12"), blockId("docs/a.md:4:1-9:12"));
+  assert.equal(blockId(":::"), "code-block");
 });
 
 test("an unloaded language renders as plain escaped text", () => {
