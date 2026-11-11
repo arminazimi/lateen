@@ -7,13 +7,16 @@ export const FIGURE_CLASS = "figure";
 /** Class added to a figure that has a dark image, so its styles can swap the pair. */
 export const PAIRED_CLASS = "figure-paired";
 
+/** The class of the paired figure's dark image; `style.css` keeps it out of view in every theme. */
+export const DARK_IMAGE_CLASS = "figure-img figure-img-dark";
+
 /** Props from the directive: `:::figure{src=… alt=… caption=…}` or `::figure{src=…}`. Every value is a string. */
 export type FigureProps = {
   /** The image. Without it the figure renders nothing. */
   src?: string;
   /** The image shown in dark mode. Without it, or when equal to `src`, one image is shown in both modes. */
   src_dark?: string;
-  /** Text alternative for the image. Empty when missing, which marks the image as decorative. */
+  /** Text alternative for the image. Empty when missing, which marks the image as decorative. In a paired figure it is exposed once, on the light image; the dark image stays presentational. */
   alt?: string;
   /** Caption text. When missing, the body of the directive is the caption. */
   caption?: string;
@@ -86,7 +89,11 @@ function captionOf(props: FigureProps, html: string) {
 /**
  * An image with an optional caption and credit. It reserves its space with `width` and `height`, loads
  * lazily unless told otherwise, and with `src_dark` swaps to a second image in dark mode (`style.css`).
- * The body arrives already rendered to HTML.
+ * A pair keeps one accessible identity: the light image carries the alternative, the dark image is
+ * presentational (`alt=""`, `aria-hidden`), so assistive technology meets the figure exactly once in
+ * either theme, with custom CSS, in forced colors, and before the styles load. The caption and credit
+ * sit outside the images, so they stay readable and a credit link stays operable. The body arrives
+ * already rendered to HTML.
  */
 export default function figure({ props, html }: ComponentProps<FigureProps>) {
   const src = text(props.src);
@@ -96,7 +103,6 @@ export default function figure({ props, html }: ComponentProps<FigureProps>) {
   const darkSrc = text(props.src_dark);
   const paired = darkSrc !== "" && darkSrc !== src;
   const shared = {
-    alt,
     width: dimension(props.width),
     height: dimension(props.height),
     loading: oneOf(props.loading, LOADING, "lazy"),
@@ -106,11 +112,14 @@ export default function figure({ props, html }: ComponentProps<FigureProps>) {
   const light = h("img", {
     class: paired ? "figure-img figure-img-light" : "figure-img",
     src,
+    alt,
     srcset: typeof props.srcset === "string" && props.srcset !== "" ? props.srcset : undefined,
     sizes: typeof props.sizes === "string" && props.sizes !== "" ? props.sizes : undefined,
     ...shared,
   });
-  const dark = paired ? h("img", { class: "figure-img figure-img-dark", src: darkSrc, ...shared }) : null;
+  const dark = paired
+    ? h("img", { class: DARK_IMAGE_CLASS, src: darkSrc, alt: "", "aria-hidden": "true", ...shared })
+    : null;
 
   return h(
     "figure",
