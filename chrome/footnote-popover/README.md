@@ -1,9 +1,9 @@
 # Footnote popover
 
 A GFM footnote reference (`<sup><a … data-footnote-ref>1</a></sup>`) shows its note in a small
-tooltip on hover or focus. The reference stays a plain link, so a visitor without JavaScript still
-navigates to the footnote at the end of the page, and the note's back-link still returns them to the
-reference.
+tooltip when a pointer (mouse, pen, or touch) enters it or it takes keyboard focus. The reference
+stays a plain link, so a visitor without JavaScript still navigates to the footnote at the end of
+the page, and the note's back-link still returns them to the reference.
 
 ## Files
 
@@ -16,10 +16,15 @@ reference.
   `client.ts` marks the reference's `<sup>` with `data-footnote-anchor`, which makes that element
   the containing block.
 - `client.ts`: the island. It finds every `[data-footnote-ref]`, resolves the definition by the
-  link's `#id`, copies the note's text without its back-links, and shows it in the mount point on
-  `mouseenter` and `focus`. `mouseleave` and `blur` hide it, and Escape hides it from anywhere in
-  the document. It never calls `preventDefault`, adds no click handler, and takes no focus, so the
-  plain link still navigates and focus order is unchanged. With no references it does nothing.
+  link's `#id`, copies the note's text without its back-links, and shows it in the mount point when
+  any pointer (mouse, pen, or touch) enters the reference or the reference takes focus.
+  `pointerleave`, `pointercancel`, and `blur` hide it, and Escape hides it from anywhere in the
+  document without moving focus. When focus and the pointer sit on different references, the one
+  engaged last stays shown and the previous reference gets its own `aria-describedby` back, so a
+  rapid move never leaves stale text or a stale description behind. A missing or external target
+  shows nothing. `activate()` returns a cleanup that removes every listener and restores the page.
+  It never calls `preventDefault`, adds no click handler, and takes no focus, so the plain link
+  still navigates and focus order is unchanged. With no references it wires nothing.
 - `../../test/chrome-footnote-popover.test.ts`: the unit's tests.
 
 ## Placement
