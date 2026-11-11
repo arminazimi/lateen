@@ -7,10 +7,15 @@ import endpoint, {
   idOf,
   methodClassOf,
   methodOf,
+  operationJson,
+  operationOf,
   parameterId,
+  parameterList,
   parameterNames,
+  parseParameters,
   pathSegments,
   requestLineOf,
+  type EndpointOperation,
   type EndpointProps,
 } from "../components/endpoint/index.ts";
 
@@ -51,6 +56,36 @@ function textOf(value: unknown): string {
     return textOf((value as Node).props.children);
   }
   return "";
+}
+
+/** The operation descriptor from the inert JSON script the component publishes. */
+function operationOfNode(node: Node): EndpointOperation {
+  const [script] = elements(node).filter(
+    (element) => element.type === "script" && element.props["data-endpoint-operation"] !== undefined,
+  );
+  assert.ok(script, "operation script rendered");
+  return JSON.parse(script.props.dangerouslySetInnerHTML?.__html ?? "") as EndpointOperation;
+}
+
+/** One parameter's list item by name. */
+function parameterItem(node: Node, name: string): Node {
+  const [item] = withClass(node, "endpoint-params").flatMap((list) =>
+    elements(list).filter((element) => element.type === "li" && element.props["data-param"] === name),
+  );
+  assert.ok(item, `no parameter item named ${name}`);
+  return item;
+}
+
+/** The detail rows of a parameter item: label to value, in order. */
+function metaOf(item: Node): [string, string][] {
+  const [meta] = withClass(item, "endpoint-param-meta");
+  if (meta === undefined) return [];
+  const rows = elements(meta).filter((element) => element.type === "dt" || element.type === "dd");
+  return rows.reduce<[string, string][]>((pairs, element, index) => {
+    if (element.type === "dt") pairs.push([textOf(element), ""]);
+    else if (pairs.length > 0) pairs[pairs.length - 1]![1] = textOf(element);
+    return pairs;
+  }, []);
 }
 
 const names = JSON.parse(readFileSync(new URL("../tokens/names.json", import.meta.url), "utf8")) as Record<
@@ -189,6 +224,205 @@ test("each parameter gets an id and its own value", () => {
       ["endpoint-get-a-userid-b-slug-param-slug", "slug", "slug"],
     ],
   );
+});
+
+test("merges authored metadata with both path syntaxes, in path order", () => {
+  const parameters = JSON.stringify([
+    { name: "postId", type: "integer", required: true, description: "The post id." },
+    { name: "id", type: "uuid", description: "The user id." },
+    { name: "extra", type: "boolean", required: false, description: "Not in the path." },
+  ]);
+  const node = render({ method: "get", path: "/users/{id}/posts/:postId", parameters });
+
+  assert.deepEqual(
+    operationOfNode(node).parameters.map((parameter) => parameter.name),
+    ["id", "postId"],
+  );
+  assert.deepEqual(metaOf(parameterItem(node, "id")), [
+    ["Type", "uuid"],
+    ["Required", "Yes"],
+    ["In", "path"],
+    ["Description", "The user id."],
+  ]);
+  assert.deepEqual(metaOf(parameterItem(node, "postId")), [
+    ["Type", "integer"],
+    ["Required", "Yes"],
+    ["In", "path"],
+    ["Description", "The post id."],
+  ]);
+});
+
+test("unauthored parameters get typed defaults and unknown metadata is ignored", () => {
+  const node = render({
+    method: "GET",
+    path: "/a/{id}/:slug",
+    parameters: '[{"name":"id","type":"  ","required":false},{"name":"missing","description":"Ignored."}]',
+  });
+
+  assert.deepEqual(operationOfNode(node).parameters, [
+    { name: "id", type: "string", required: false, description: "" },
+    { name: "slug", type: "string", required: true, description: "" },
+  ]);
+  assert.deepEqual(metaOf(parameterItem(node, "id")), [
+    ["Type", "string"],
+    ["Required", "No"],
+    ["In", "path"],
+  ]);
+  assert.deepEqual(metaOf(parameterItem(node, "slug")), []);
+});
+
+test("metadata treats the first duplicate name as the one entry", () => {
+  const parameters = JSON.stringify([
+    { name: "id", type: "uuid", required: true, description: "First." },
+    { name: "id", type: "integer", required: false, description: "Second." },
+  ]);
+  const parsed = parseParameters(parameters);
+  assert.deepEqual([...parsed.values()], [{ name: "id", type: "uuid", required: true, description: "First." }]);
+  assert.deepEqual(
+    parameterList("/a/{id}", parameters).map((parameter) => parameter.description),
+    ["First."],
+  );
+});
+
+test("unreadable or malformed metadata gives no entries and never throws", () => {
+  for (const raw of [
+    "",
+    "   ",
+    "{not json",
+    "{}",
+    '"id"',
+    "null",
+    JSON.stringify([null, 7, "id", [], {}, { name: "" }, { name: "  " }]),
+    JSON.stringify([{ name: "ok", type: 7, required: "yes", description: null, extra: "ignored" }]),
+  ]) {
+    assert.doesNotThrow(() => parseParameters(raw));
+  }
+
+  assert.deepEqual([...parseParameters("{not json").values()], []);
+  assert.deepEqual([...parseParameters("null").values()], []);
+  assert.deepEqual([...parseParameters([{ name: "id" }]).values()], [
+    { name: "id", type: "string", required: true, description: "" },
+  ]);
+  assert.deepEqual([...parseParameters([{ name: "ok", type: 7, required: "yes", description: null }]).values()], [
+    { name: "ok", type: "string", required: true, description: "" },
+  ]);
+});
+
+test("invalid JSON preserves the existing list, copy value, and body", () => {
+  const node = render(
+    { method: "GET", path: "/users/{id}", parameters: "{broken" },
+    "<p>Returns a user.</p>",
+  );
+  const [list] = withClass(node, "endpoint-params");
+  assert.deepEqual(
+    elements(list).filter((element) => element.type === "li").map(textOf),
+    ["id"],
+  );
+  assert.deepEqual(withClass(node, "endpoint-param-meta"), []);
+  assert.equal(node.props["data-copy-value"], "GET /users/{id}");
+  assert.deepEqual(withClass(node, "endpoint-body")[0]?.props.dangerouslySetInnerHTML, {
+    __html: "<p>Returns a user.</p>",
+  });
+  assert.deepEqual(operationOfNode(node).parameters, [
+    { name: "id", type: "string", required: true, description: "" },
+  ]);
+});
+
+test("the operation descriptor exposes the stable id, method, path, and typed parameters", () => {
+  const node = render({
+    method: "get",
+    path: "/users/{id}",
+    parameters: '[{"name":"id","type":"uuid","required":true,"description":"The user id."}]',
+  });
+  assert.deepEqual(operationOfNode(node), {
+    id: "endpoint-get-users-id",
+    method: "GET",
+    path: "/users/{id}",
+    parameters: [{ name: "id", type: "uuid", required: true, description: "The user id." }],
+  });
+  assert.deepEqual(operationOf({ path: "/health" }), {
+    id: "endpoint-health",
+    method: null,
+    path: "/health",
+    parameters: [],
+  });
+});
+
+test("readers get parameter metadata and path associations in both directions", () => {
+  const node = render({
+    method: "GET",
+    path: "/users/{id}/posts/:postId",
+    parameters: JSON.stringify([
+      { name: "id", type: "uuid", required: true, description: "The user id." },
+      { name: "postId", type: "integer", required: false, description: "The post id." },
+    ]),
+  });
+
+  const tokens = withClass(node, "endpoint-param").filter((element) => element.type === "span");
+  assert.deepEqual(
+    tokens.map((token) => token.props["data-param"]),
+    ["id", "postId"],
+  );
+  const [pathCode] = withClass(node, "endpoint-path");
+  assert.equal(pathCode?.props.dir, "ltr", "the path stays left to right under RTL");
+
+  const item = parameterItem(node, "id");
+  assert.equal(item.props.id, parameterId(node.props.id as string, "id"));
+  const [nameCode] = withClass(item, "endpoint-param");
+  assert.equal(textOf(nameCode), "id");
+  const [typeCode] = withClass(item, "endpoint-param-type");
+  assert.equal(textOf(typeCode), "uuid");
+  for (const code of [...withClass(item, "endpoint-param"), ...withClass(item, "endpoint-param-type")]) {
+    assert.equal(code.props.dir, "ltr");
+  }
+
+  const [description] = withClass(parameterItem(node, "postId"), "endpoint-param-description");
+  assert.equal(textOf(description), "The post id.");
+  assert.equal(description?.props.dir, undefined, "the description follows the page direction");
+
+  const [required] = withClass(parameterItem(node, "postId"), "endpoint-param-required");
+  assert.equal(textOf(required), "No");
+  const [path] = withClass(parameterItem(node, "postId"), "endpoint-param-in");
+  assert.equal(textOf(path), "path");
+});
+
+test("unsafe metadata stays text and the descriptor cannot close its script", () => {
+  const hostile = "</script><img src=x onerror=alert(1)>";
+  const parameters = JSON.stringify([
+    { name: "id", type: "<b>uuid</b>", description: hostile },
+    { name: "<img src=x>", type: "string", description: "Not in the path." },
+  ]);
+  const node = render({ method: "GET", path: "/users/{id}", parameters });
+
+  const [description] = withClass(parameterItem(node, "id"), "endpoint-param-description");
+  assert.equal(textOf(description), hostile);
+  assert.equal(description?.props.dangerouslySetInnerHTML, undefined);
+  const [type] = withClass(parameterItem(node, "id"), "endpoint-param-type");
+  assert.equal(textOf(type), "<b>uuid</b>");
+  assert.equal(type?.props.dangerouslySetInnerHTML, undefined);
+
+  const operation = operationOfNode(node);
+  assert.deepEqual(operation.parameters, [{ name: "id", type: "<b>uuid</b>", required: true, description: hostile }]);
+  const json = operationJson(operation);
+  assert.ok(!json.includes("<"), "every < is escaped inside the script");
+  assert.ok(!json.includes("</script>"));
+});
+
+test("an endpoint without metadata keeps its original list and body", () => {
+  const node = render({ method: "GET", path: "/a/{id}/b/:slug" }, "<p>Body.</p>");
+  assert.equal(node.props["data-method"], "GET");
+  assert.equal(node.props["data-path"], "/a/{id}/b/:slug");
+  assert.equal(node.props["data-copy-value"], "GET /a/{id}/b/:slug");
+  assert.deepEqual(withClass(node, "endpoint-param-meta"), []);
+  const [list] = withClass(node, "endpoint-params");
+  assert.deepEqual(
+    elements(list).filter((element) => element.type === "li").map((item) => [item.props["data-param"], textOf(item)]),
+    [
+      ["id", "id"],
+      ["slug", "slug"],
+    ],
+  );
+  assert.deepEqual(withClass(node, "endpoint-body")[0]?.props.dangerouslySetInnerHTML, { __html: "<p>Body.</p>" });
 });
 
 test("each method color reads from a token that exists in names.json", () => {

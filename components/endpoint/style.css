@@ -81,6 +81,30 @@
   margin-block: var(--space-1);
 }
 
+.endpoint-param-meta {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-1) var(--space-3);
+  margin-block: var(--space-1) 0;
+  margin-inline: 0;
+  font-size: var(--type-size-sm);
+}
+
+.endpoint-param-meta dt {
+  color: var(--color-muted);
+  font-weight: var(--type-weight-bold);
+}
+
+.endpoint-param-meta dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.endpoint-param-type {
+  font-family: var(--type-font-mono);
+  font-size: var(--type-size-sm);
+}
+
 .endpoint-params .endpoint-param {
   background-color: transparent;
   font-family: var(--type-font-mono);
