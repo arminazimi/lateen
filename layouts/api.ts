@@ -103,7 +103,7 @@ function examplesPanel(props: LayoutProps, examples: readonly Example[]): Compon
   if (examples.length === 0) return null;
   return h(
     "aside",
-    { class: "api-examples", "aria-labelledby": "api-examples-title" },
+    { class: "api-examples", "aria-labelledby": "api-examples-title", tabindex: 0 },
     h("h2", { class: "api-examples-title", id: "api-examples-title" }, t(props.page.lang, "api_examples")),
     h("ul", { class: "api-examples-list" }, examples.map(exampleItem)),
   );
