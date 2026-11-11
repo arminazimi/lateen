@@ -1,5 +1,5 @@
 import { h } from "preact";
-import type { Chrome, Direction, LanguageConfig, Page, Site, SiteConfig } from "@velella/mizzen/contracts";
+import type { Chrome, Direction, LanguageConfig, LinkTag, Page, Site, SiteConfig } from "@velella/mizzen/contracts";
 import { t } from "../../i18n/index.ts";
 
 /** A language as the switcher reads it: a normalised root-relative prefix (`""` or `/fa`). */
@@ -280,6 +280,64 @@ function languageEntry(
 /** The text a screen reader hears for a language whose page is not in that language. */
 function unavailableLabel(site: Site): string {
   return t(site.config.lang, "translation_missing");
+}
+
+/**
+ * A site URL made absolute: an `http`/`https` URL is kept, and a root-relative path gets the site's
+ * `url` in front. Without a `url` there is no absolute form, so metadata is left out rather than
+ * written as a relative `hreflang` a crawler cannot use.
+ */
+function absoluteUrl(config: SiteConfig, value: string): string | undefined {
+  if (/^https?:\/\//i.test(value)) return value;
+  const origin = (config.url ?? "").replace(/\/+$/, "");
+  if (origin === "" || !value.startsWith("/")) return undefined;
+  return `${origin}${value}`;
+}
+
+/**
+ * The page's canonical link: its own absolute URL under the configured site `url`, or `undefined`
+ * when the site has no `url`. A front-matter `canonical_url` is the engine's, so the layout only uses
+ * this when the head has no canonical link of its own.
+ */
+export function canonicalLink(site: Site, page: Pick<Page, "url">): LinkTag | undefined {
+  const href = absoluteUrl(site.config, page.url);
+  return href === undefined ? undefined : { rel: "canonical", href };
+}
+
+/**
+ * The page's `<link rel="alternate" hreflang>` tags: one per configured language that has a real page
+ * for this content, in config order, plus `x-default`. A missing page and a page served by a fallback
+ * are not translations, so neither is advertised. `x-default` is the default language's page when it
+ * exists, else it is omitted. URLs stay absolute through the same model the switcher links to, so
+ * `base`, version segments, `translation_key` routes, and explicit alternates are kept. A site with
+ * no `url`, or one language, emits none: there is nothing absolute or nothing to alternate.
+ */
+export function alternateLinks(site: Site, page: Page): LinkTag[] {
+  const languages = resolvedLanguages(site.config);
+  if (languages.length < 2) return [];
+
+  const { current, rest } = pagePaths(site.config, page);
+  const identity = identityOf(page, rest);
+  const translations = translationsOf(site, identity);
+  const alternates = alternatesOf(site.data);
+  const chain = fallbackChain(site.config, site.data);
+
+  const links: LinkTag[] = [];
+  const seen = new Set<string>();
+  let xDefault: string | undefined;
+  for (const language of languages) {
+    const entry = languageEntry(site, page, language, current, identity, alternates, translations, chain);
+    if (entry.state !== "current" && entry.state !== "translated") continue;
+    if (entry.href === undefined) continue;
+    const href = absoluteUrl(site.config, entry.href);
+    if (href === undefined || seen.has(href)) continue;
+    seen.add(href);
+    links.push({ rel: "alternate", href, attrs: { hreflang: language.code } });
+    if (tagKey(language.code) === tagKey(site.config.lang)) xDefault = href;
+  }
+
+  if (xDefault !== undefined) links.push({ rel: "alternate", href: xDefault, attrs: { hreflang: "x-default" } });
+  return links;
 }
 
 /**

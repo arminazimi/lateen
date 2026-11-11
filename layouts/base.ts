@@ -1,8 +1,9 @@
 import { h } from "preact";
 import type { ComponentChildren } from "preact";
-import type { Head, LayoutProps, LinkTag, MetaTag, SiteConfig } from "@velella/mizzen/contracts";
+import type { Head, LayoutProps, LinkTag, MetaTag, Page, Site, SiteConfig } from "@velella/mizzen/contracts";
 import announcement from "../chrome/announcement/index.ts";
 import footnotePopover from "../chrome/footnote-popover/index.ts";
+import { alternateLinks, canonicalLink } from "../chrome/language-switcher/index.ts";
 import siteFooter from "../chrome/site-footer/index.ts";
 import shortcuts from "../chrome/shortcuts/index.ts";
 import skipLinks, { MAIN_ID, NAVIGATION_ID } from "../chrome/skip-links/index.ts";
@@ -72,16 +73,27 @@ function jsonLd(data: Readonly<Record<string, unknown>>) {
   });
 }
 
-/** Everything inside `<head>`, in a fixed order, with the theme script first so nothing paints before it. */
-function headNodes(head: Head, config: SiteConfig) {
+/**
+ * Everything inside `<head>`, in a fixed order, with the theme script first so nothing paints before it.
+ * The page's canonical and translation alternates come from the language-switcher model. The engine
+ * already writes a canonical when the front matter or site `url` gives one, so the layout only adds it
+ * when the head has none, and never writes a second one.
+ */
+function headNodes(head: Head, site: Site, page: Page) {
+  const links = [...head.links];
+  if (!links.some((tag) => tag.rel === "canonical")) {
+    const canonical = canonicalLink(site, page);
+    if (canonical !== undefined) links.push(canonical);
+  }
+  links.push(...alternateLinks(site, page));
   return [
     h("meta", { charset: "utf-8" }),
     h("meta", { name: "viewport", content: "width=device-width, initial-scale=1" }),
     h("script", { dangerouslySetInnerHTML: { __html: THEME_SCRIPT } }),
     h("title", null, head.title),
     ...head.meta.map(metaTag),
-    ...head.links.map(linkTag),
-    ...iconLinks(config).map(linkTag),
+    ...links.map(linkTag),
+    ...iconLinks(site.config).map(linkTag),
     ...head.jsonLd.map(jsonLd),
   ];
 }
@@ -100,7 +112,7 @@ export default function base(props: BaseProps) {
   return h(
     "html",
     { lang: page.lang, dir: page.dir, "data-theme": "dark" },
-    h("head", null, ...headNodes(head, props.site.config)),
+    h("head", null, ...headNodes(head, props.site, page)),
     h(
       "body",
       null,

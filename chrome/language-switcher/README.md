@@ -59,6 +59,17 @@ missing language in an entry, also falls back to the computed URL, so the map on
 The map lives under `languages` in `_data/languages.yml`; that file also carries the translation
 fallback chain the engine reads, which this unit leaves untouched.
 
+## Document metadata
+
+The base layout reuses the same model to write the page's canonical and `hreflang` links. Only
+languages this unit marks `current` or `translated` are advertised; a `missing` page or a `fallback`
+is left out. `hreflang` is the configured code as written, and every URL is absolute under the site
+`url`. `x-default` is the default language's real page when it exists, otherwise it is omitted.
+
+Without a site `url` there is no absolute form, so no alternate links are written. The canonical is
+the page's own URL; the layout adds it only when the head does not already carry one. See
+[Translations in document metadata](../../docs/internationalization.md).
+
 ## Marking and accessibility
 
 The current language's link carries `aria-current="true"` and the visible word from the theme's i18n
