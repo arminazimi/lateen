@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Fragment, h } from "preact";
-import type { LayoutProps, Page, Site, SiteConfig, SourcePos } from "@velella/mizzen/contracts";
+import { renderToString } from "preact-render-to-string";
+import type { LanguageConfig, LayoutProps, Page, Site, SiteConfig, SourcePos } from "@velella/mizzen/contracts";
 import base, { MAIN_ID, THEME_KEY, THEME_SCRIPT } from "../layouts/base.ts";
 
 const pos: SourcePos = { file: "docs/index.md", line: 1, column: 1, endLine: 1, endColumn: 1 };
@@ -218,4 +219,107 @@ test("the favicon option adds icon links under the site base, and nothing when u
   assert.match(out, /"type":"image\/svg\+xml"/);
   assert.match(out, /"rel":"apple-touch-icon","href":"\/docs\/brand\/apple-touch-icon\.png"/);
   assert.doesNotMatch(JSON.stringify(base(props)), /"rel":"icon"/);
+});
+
+const EN: LanguageConfig = { code: "en", name: "English", prefix: "" };
+const FA: LanguageConfig = { code: "fa", name: "فارسی", prefix: "/fa" };
+
+/** A two-language site under `base`, with the current page given, and no canonical link in the head. */
+function multilingual(current: Page, overrides: Partial<SiteConfig> = {}): LayoutProps {
+  const props = layoutProps();
+  const en: Page = { ...props.page, url: "/docs/guide/", lang: "en", dir: "ltr" };
+  const fa: Page = { ...props.page, url: "/docs/fa/guide/", lang: "fa", dir: "rtl" };
+  return {
+    ...props,
+    page: current,
+    head: { ...props.head, links: [] },
+    site: {
+      config: { ...config, base: "/docs", url: "https://example.com", languages: [EN, FA], ...overrides },
+      pages: [en, fa],
+      nav: {},
+      data: {},
+    },
+  };
+}
+
+test("writes one canonical: the head's own, or one from the site url when the head has none", () => {
+  const given = out(layoutProps());
+  assert.equal(given.match(/rel="canonical"/g)?.length, 1);
+  assert.match(given, /<link rel="canonical" href="https:\/\/example\.com\/">/);
+
+  const added = out(multilingual({ ...layoutProps().page, url: "/docs/guide/", lang: "en" }));
+  assert.equal(added.match(/rel="canonical"/g)?.length, 1);
+  assert.match(added, /<link rel="canonical" href="https:\/\/example\.com\/docs\/guide\/">/);
+
+  const props = multilingual({ ...layoutProps().page, url: "/docs/guide/", lang: "en" }, { url: "" });
+  assert.doesNotMatch(out(props), /rel="canonical"/);
+});
+
+test("adds absolute hreflang alternates and x-default from the translation model", () => {
+  const html = out(multilingual({ ...layoutProps().page, url: "/docs/fa/guide/", lang: "fa", dir: "rtl" }));
+
+  assert.match(html, /<link hreflang="en" rel="alternate" href="https:\/\/example\.com\/docs\/guide\/">/);
+  assert.match(html, /<link hreflang="fa" rel="alternate" href="https:\/\/example\.com\/docs\/fa\/guide\/">/);
+  assert.match(html, /<link hreflang="x-default" rel="alternate" href="https:\/\/example\.com\/docs\/guide\/">/);
+  assert.equal(html.match(/rel="alternate"/g)?.length, 3);
+});
+
+test("keeps the engine's hreflang alternates and adds no duplicate", () => {
+  const props = multilingual({ ...layoutProps().page, url: "/docs/fa/guide/", lang: "fa", dir: "rtl" });
+  const engineLinks = [
+    { rel: "alternate", href: "https://example.com/docs/guide/", attrs: { hreflang: "en" } },
+    { rel: "alternate", href: "https://example.com/docs/fa/guide/", attrs: { hreflang: "fa" } },
+    { rel: "alternate", href: "https://example.com/docs/guide/", attrs: { hreflang: "x-default" } },
+  ];
+  const html = out({ ...props, head: { ...props.head, links: engineLinks } });
+
+  for (const hreflang of ["en", "fa", "x-default"]) {
+    assert.equal(html.match(new RegExp(`<link hreflang="${hreflang}" rel="alternate"`, "g"))?.length, 1, `one ${hreflang} link`);
+  }
+  assert.equal(html.match(/rel="alternate"/g)?.length, 3);
+});
+
+test("writes no canonical or alternate without a site url, even for an absolute mapped alternate", () => {
+  const props = multilingual({ ...layoutProps().page, url: "/docs/fa/guide/", lang: "fa", dir: "rtl" }, { url: "" });
+  const html = out({
+    ...props,
+    site: {
+      ...props.site,
+      data: {
+        languages: {
+          alternates: {
+            "/guide/": {
+              en: "https://example.com/docs/guide/",
+              fa: "https://example.com/docs/fa/guide/",
+            },
+          },
+        },
+      },
+    },
+  });
+
+  assert.doesNotMatch(html, /rel="canonical"/);
+  assert.doesNotMatch(html, /hreflang=/);
+  assert.doesNotMatch(html, /rel="alternate"/);
+});
+
+test("omits x-default and every alternate when the default language has no page or the site has no url", () => {
+  const onlyFa = multilingual({ ...layoutProps().page, url: "/docs/fa/guide/", lang: "fa", dir: "rtl" });
+  const single = { ...onlyFa, site: { ...onlyFa.site, pages: [onlyFa.page] } };
+  const html = out(single);
+  assert.match(html, /<link hreflang="fa" rel="alternate"/);
+  assert.doesNotMatch(html, /x-default/);
+  assert.doesNotMatch(html, /hreflang="en"/);
+
+  const noUrl = multilingual({ ...layoutProps().page, url: "/docs/fa/guide/", lang: "fa", dir: "rtl" }, { url: "" });
+  assert.doesNotMatch(out(noUrl), /hreflang=/);
+});
+
+test("escapes canonical and alternate URLs, so metadata cannot break out of its attribute", () => {
+  const hostile = 'https://example.com/"><script>alert(1)</script>';
+  const html = renderToString(base(multilingual({ ...layoutProps().page, url: "/docs/guide/", lang: "en" }, { url: hostile })) as never);
+
+  assert.match(html, /&quot;>&lt;script>alert\(1\)&lt;\/script>/);
+  assert.doesNotMatch(html, /<script>alert\(1\)<\/script>/);
+  assert.doesNotMatch(html, /rel="canonical" href="https:\/\/example\.com\/">/);
 });

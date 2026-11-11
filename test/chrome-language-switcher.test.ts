@@ -1,9 +1,16 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { test } from "node:test";
+import { h } from "preact";
 import { renderToString } from "preact-render-to-string";
-import type { ChromeProps, LanguageConfig, Page, Pager, Site, SiteConfig, SourcePos, Trail } from "@velella/mizzen/contracts";
-import languageSwitcher, { hrefFor, pagePaths, resolvedLanguages } from "../chrome/language-switcher/index.ts";
+import type { ChromeProps, LanguageConfig, LinkTag, Page, Pager, Site, SiteConfig, SourcePos, Trail } from "@velella/mizzen/contracts";
+import languageSwitcher, {
+  alternateLinks,
+  canonicalLink,
+  hrefFor,
+  pagePaths,
+  resolvedLanguages,
+} from "../chrome/language-switcher/index.ts";
 import header from "../chrome/header/index.ts";
 
 const pos: SourcePos = { file: "guide/install.md", line: 1, column: 1, endLine: 1, endColumn: 1 };
@@ -351,4 +358,131 @@ test("style.css uses logical properties only", () => {
   assert.doesNotMatch(css, /(?<![\w-])(min-|max-)?(width|height)\s*:/);
   assert.match(css, /padding-inline:/);
   assert.match(css, /margin-inline-start|padding-inline/);
+});
+
+/** The alternate links the layout would add to this page's head. */
+function alternates(
+  config: SiteConfig,
+  page: Page = pageWith(),
+  data: Site["data"] = {},
+  pages?: readonly Page[],
+): readonly LinkTag[] {
+  return alternateLinks(props(config, page, data, pages).site, page);
+}
+
+/** Each link as `hreflang:absolute URL`, in document order. */
+function hreflangs(links: readonly LinkTag[]): string[] {
+  return links.map((link) => `${link.attrs?.["hreflang"] ?? ""}:${link.href}`);
+}
+
+test("canonicalLink makes the page URL absolute under the site url, and is absent without one", () => {
+  assert.deepEqual(canonicalLink(props(configWith({ url: "https://example.com" })).site, pageWith()), {
+    rel: "canonical",
+    href: "https://example.com/docs/fa/guide/install/",
+  });
+  assert.deepEqual(canonicalLink(props(configWith({ url: "https://example.com/" })).site, pageWith()), {
+    rel: "canonical",
+    href: "https://example.com/docs/fa/guide/install/",
+  });
+  assert.equal(canonicalLink(props(configWith()).site, pageWith()), undefined);
+});
+
+test("emits reciprocal absolute alternates with full regional tags and x-default for the default language", () => {
+  const jaJp: LanguageConfig = { code: "ja-JP", name: "日本語", prefix: "/ja-jp" };
+  const config = configWith({ url: "https://example.com", languages: [EN, JA, jaJp] });
+  const page = pageWith({ url: "/docs/ja-jp/guide/install/", lang: "ja-JP", dir: "ltr" });
+  const pages = pagesForSite(config, page);
+  const expected = [
+    "en:https://example.com/docs/guide/install/",
+    "ja:https://example.com/docs/ja/guide/install/",
+    "ja-JP:https://example.com/docs/ja-jp/guide/install/",
+    "x-default:https://example.com/docs/guide/install/",
+  ];
+
+  assert.deepEqual(hreflangs(alternates(config, page, {}, pages)), expected);
+  for (const other of pages) {
+    assert.deepEqual(hreflangs(alternates(config, other, {}, pages)), expected, `reciprocal from ${other.lang}`);
+  }
+});
+
+test("keeps translation_key alternates, including absolute ones, and their base", () => {
+  const data: Site["data"] = {
+    languages: {
+      alternates: {
+        install: { en: "https://en.example/install/", fa: "/fa/راهنما/نصب/", ja: "https://ja.example/install/" },
+      },
+    },
+  };
+  const fa = pageAt("/docs/fa/install/", "fa", { frontMatter: { translation_key: "install" } });
+  const en = pageAt("/docs/install/", "en", { frontMatter: { translation_key: "install" } });
+
+  assert.deepEqual(hreflangs(alternates(configWith({ url: "https://example.com" }), fa, data, [fa, en])), [
+    "en:https://en.example/install/",
+    "fa:https://example.com/docs/fa/راهنما/نصب/",
+    "ja:https://ja.example/install/",
+    "x-default:https://en.example/install/",
+  ]);
+});
+
+test("keeps a nested base in every absolute URL", () => {
+  const config = configWith({ url: "https://example.com", base: "/a/b" });
+  const page = pageWith({ url: "/a/b/fa/guide/install/" });
+
+  assert.deepEqual(hreflangs(alternates(config, page)), [
+    "en:https://example.com/a/b/guide/install/",
+    "fa:https://example.com/a/b/fa/guide/install/",
+    "ja:https://example.com/a/b/ja/guide/install/",
+    "x-default:https://example.com/a/b/guide/install/",
+  ]);
+});
+
+test("keeps a version segment, so an alternate never crosses to another version", () => {
+  const config = configWith({ url: "https://example.com" });
+  const fa = pageAt("/docs/fa/v2/guide/install/", "fa");
+  const enV2 = pageAt("/docs/v2/guide/install/", "en");
+  const enV1 = pageAt("/docs/v1/guide/install/", "en");
+
+  assert.deepEqual(hreflangs(alternates(config, fa, {}, [fa, enV1, enV2])), [
+    "en:https://example.com/docs/v2/guide/install/",
+    "fa:https://example.com/docs/fa/v2/guide/install/",
+    "x-default:https://example.com/docs/v2/guide/install/",
+  ]);
+});
+
+test("never advertises a missing page or a fallback as a translation", () => {
+  const de: LanguageConfig = { code: "de", name: "Deutsch", prefix: "/de" };
+  const config = configWith({ url: "https://example.com", languages: [EN, FA, de] });
+  const en = pageAt("/docs/guide/install/", "en");
+  const fa = pageAt("/docs/fa/guide/install/", "fa");
+
+  // de has no page and the fallback chain points it at fa: only the real pages are alternates.
+  assert.deepEqual(hreflangs(alternates(config, en, { languages: { fallback: ["fa"] } }, [en, fa])), [
+    "en:https://example.com/docs/guide/install/",
+    "fa:https://example.com/docs/fa/guide/install/",
+    "x-default:https://example.com/docs/guide/install/",
+  ]);
+
+  // With no page in the default language there is no x-default, only the page that exists.
+  assert.deepEqual(hreflangs(alternates(configWith({ url: "https://example.com" }), fa, {}, [fa])), [
+    "fa:https://example.com/docs/fa/guide/install/",
+  ]);
+});
+
+test("writes no alternates without a site url, or with a single language", () => {
+  assert.deepEqual(alternates(configWith()), []);
+  assert.deepEqual(alternates(configWith({ url: "https://example.com", languages: [EN] }), pageWith({ url: "/docs/guide/", lang: "en" })), []);
+});
+
+test("escapes metadata attributes, so a hostile tag cannot break out", () => {
+  const hostile: LanguageConfig = { code: 'x" onload="alert(1)', name: "X", prefix: "/xx" };
+  const config = configWith({ url: "https://example.com", languages: [EN, hostile] });
+  const en = pageAt("/docs/guide/", "en");
+  const xx = pageAt("/docs/xx/guide/", 'x" onload="alert(1)');
+  const links = alternates(config, en, {}, [en, xx]);
+  const out = renderToString(
+    h("head", null, ...links.map((link) => h("link", { ...link.attrs, rel: link.rel, href: link.href }))) as never,
+  );
+
+  assert.match(out, /hreflang="x&quot; onload=&quot;alert\(1\)"/);
+  assert.doesNotMatch(out, /onload="alert/);
 });
