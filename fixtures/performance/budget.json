@@ -1,0 +1,86 @@
+{
+  "note": "Measured baseline for fixtures/performance, not a product target. Update with `node scripts/performance-budget.ts --update` and explain in the pull request what grew and why. gzip is level 9 per asset; count is the stylesheets, modules, or inline scripts the page loads.",
+  "routes": {
+    "/": {
+      "css/base": {
+        "raw": 49622,
+        "gzip": 8484,
+        "count": 1
+      },
+      "css/page": {
+        "raw": 3122,
+        "gzip": 920,
+        "count": 1
+      },
+      "js/chrome": {
+        "raw": 33675,
+        "gzip": 12643,
+        "count": 14
+      },
+      "js/components": {
+        "raw": 0,
+        "gzip": 0,
+        "count": 0
+      },
+      "js/inline": {
+        "raw": 293,
+        "gzip": 212,
+        "count": 1
+      }
+    },
+    "/guide/": {
+      "css/base": {
+        "raw": 49622,
+        "gzip": 8484,
+        "count": 1
+      },
+      "css/page": {
+        "raw": 4612,
+        "gzip": 1222,
+        "count": 1
+      },
+      "js/chrome": {
+        "raw": 33675,
+        "gzip": 12643,
+        "count": 14
+      },
+      "js/components": {
+        "raw": 0,
+        "gzip": 0,
+        "count": 0
+      },
+      "js/inline": {
+        "raw": 293,
+        "gzip": 212,
+        "count": 1
+      }
+    },
+    "/reference/": {
+      "css/base": {
+        "raw": 49622,
+        "gzip": 8484,
+        "count": 1
+      },
+      "css/page": {
+        "raw": 9918,
+        "gzip": 1682,
+        "count": 1
+      },
+      "js/chrome": {
+        "raw": 33675,
+        "gzip": 12643,
+        "count": 14
+      },
+      "js/components": {
+        "raw": 10788,
+        "gzip": 4427,
+        "count": 5
+      },
+      "js/inline": {
+        "raw": 293,
+        "gzip": 212,
+        "count": 1
+      }
+    }
+  }
+}
