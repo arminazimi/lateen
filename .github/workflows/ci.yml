@@ -54,7 +54,7 @@ jobs:
         run: npm ci --no-audit --no-fund
         working-directory: lateen
       - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
         working-directory: lateen
       - name: Accessibility gate
         run: npm run test:a11y
