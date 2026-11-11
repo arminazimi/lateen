@@ -178,7 +178,7 @@ test("empty navigation leaves the sidebar and drawer out without breaking the pa
 test("the drift banner from site.data sits above the status banner and the title", () => {
   const data = { drift: { "/guide/install/": [{}, {}] } };
   const page = html(doc(layoutProps(pageWith({ frontMatter: { status: "beta" } }), [], [], data)));
-  assert.match(page, /<aside class="drift-banner" role="note"><span class="drift-banner-message">2 drift findings<\/span><\/aside>/);
+  assert.match(page, /<aside class="drift-banner drift-banner-stale" role="note"[^>]*><svg[\s\S]*?2 drift findings<\/span>/);
   assert.ok(
     page.indexOf('class="drift-banner"') < page.indexOf('class="page-status'),
     "the drift banner comes before the status banner",

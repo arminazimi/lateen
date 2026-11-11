@@ -12,6 +12,7 @@ theme:
       id: v0-4
       text: Mizzen 0.4 is out.
       href: /changelog/
+      tone: warning
 ```
 
 - `id` names the announcement in storage. Use a new id for a new announcement so an old dismissal does not hide it.
@@ -19,6 +20,10 @@ theme:
 - `text` is the message. The bar renders nothing when it is missing or empty, and text is always escaped.
 - `href` is optional. The text becomes a link; `http`, `https`, `mailto`, and root-relative paths are used, and a
   root-relative path gets the site's `base`. Other schemes are dropped, so a config value cannot inject a script.
+- `tone` is optional: `info` (the default accent bar), `warning`, or `danger`. Any other value is `info`. A
+  non-default tone adds a visible label and icon and names the region with the tone, so a warning or an outage
+  notice does not read like a release note and does not rely on colour alone. The label comes from
+  `announcement_tone_warning` or `announcement_tone_danger` in the site's language.
 
 ## Behaviour
 

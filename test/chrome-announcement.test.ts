@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { h } from "preact";
 import { renderToString } from "preact-render-to-string";
 import type { ChromeProps, Head, LayoutProps, Page, Pager, Site, SiteConfig, SourcePos, Trail } from "@velella/mizzen/contracts";
-import announcement, { DEFAULT_ID } from "../chrome/announcement/index.ts";
+import announcement, { DEFAULT_ID, TONE_KEYS, TONES, toneOf } from "../chrome/announcement/index.ts";
 import {
   activate,
   DISMISS_SELECTOR,
@@ -142,13 +142,50 @@ test("renders nothing when the config sets no announcement, or sets no usable te
 test("renders a labelled region with the text and a dismiss button hidden until the island runs", () => {
   const out = render({ announcement: { id: "v0-4", text: "Mizzen 0.4 is out." } });
 
-  assert.match(out, /^<div class="announcement" role="region" aria-label="Announcement"/);
+  assert.match(out, /^<div class="announcement announcement-info" role="region" aria-label="Announcement"/);
   assert.match(out, /data-announcement="true"/);
   assert.match(out, /data-announcement-id="v0-4"/);
+  assert.match(out, /data-announcement-tone="info"/);
   assert.match(out, /<p class="announcement-text">Mizzen 0\.4 is out\.<\/p>/);
   assert.match(out, /<button type="button" class="announcement-dismiss" aria-label="Dismiss announcement" hidden data-announcement-dismiss="true">/);
   assert.match(out, /<span aria-hidden="true">×<\/span>/);
   assert.doesNotMatch(out, /announcement-link/);
+  assert.doesNotMatch(out, /<strong class="announcement-tone"|<svg/, "the default tone adds no label or icon");
+});
+
+test("an unknown or missing tone is the default info bar", () => {
+  assert.equal(toneOf(undefined), "info");
+  assert.equal(toneOf(""), "info");
+  assert.equal(toneOf(7), "info");
+  assert.equal(toneOf("critical"), "info");
+  assert.equal(toneOf(" Warning "), "warning");
+  assert.equal(toneOf("DANGER"), "danger");
+  assert.deepEqual([...TONES], ["info", "warning", "danger"]);
+  const out = render({ announcement: { text: "Message", tone: "critical" } });
+  assert.match(out, /class="announcement announcement-info"/);
+});
+
+test("a warning or danger tone adds a visible label and icon, and names the region with its severity", () => {
+  for (const tone of ["warning", "danger"] as const) {
+    const out = render({ announcement: { id: "v0-4", text: "Evidence is unavailable.", tone } });
+    const label = stringsOf("en")[TONE_KEYS[tone]]!;
+
+    assert.match(out, new RegExp(`class="announcement announcement-${tone}"`));
+    assert.match(out, new RegExp(`data-announcement-tone="${tone}"`));
+    assert.match(out, new RegExp(`aria-label="${label}: Announcement"`));
+    assert.match(out, new RegExp(`<strong class="announcement-tone">${label}</strong>`));
+    assert.match(out, /<svg class="announcement-icon"[^>]*aria-hidden="true"[^>]*focusable="false"/);
+    assert.match(out, /Evidence is unavailable\./);
+  }
+});
+
+test("the tone's label and region name follow the page language", () => {
+  for (const lang of ["en", "fa", "ar"] as const) {
+    const out = render({ announcement: { text: "Message", tone: "warning" } }, lang);
+    const label = stringsOf(lang)[TONE_KEYS.warning]!;
+    assert.ok(out.includes(`>${label}</strong>`), `${lang} says "${label}"`);
+    assert.ok(out.includes(`aria-label="${label}: ${stringsOf(lang).announcement}"`), `${lang} names the region`);
+  }
 });
 
 test("names the region and the dismiss button in the page's language", () => {
@@ -262,7 +299,7 @@ test("the base layout places the bar above the header", () => {
     }) as never,
   );
 
-  const bar = out.indexOf('class="announcement"');
+  const bar = out.indexOf('class="announcement announcement-info"');
   const header = out.indexOf('<header class="header"');
   assert.ok(bar > out.indexOf("</a>"), "the bar comes after the skip link");
   assert.ok(header > bar, "the header comes after the bar");
@@ -275,6 +312,13 @@ test("style.css uses only token names from tokens/names.json for var(--*) refere
   for (const name of used) {
     assert.ok(tokenNames.has(name), `unknown token --${name}`);
   }
+});
+
+test("style.css gives the warning and danger tones their own token colours", () => {
+  const css = readFileSync(new URL("../chrome/announcement/style.css", import.meta.url), "utf8");
+  assert.match(css, /\.announcement-warning \{[^}]*background: color-mix\(in srgb, var\(--color-warning\)/);
+  assert.match(css, /\.announcement-danger \{[^}]*background: color-mix\(in srgb, var\(--color-danger\)/);
+  assert.match(css, /\.announcement-icon \{[^}]*inline-size: var\(--space-4\)/);
 });
 
 test("style.css uses logical properties and keeps the hidden bar and button hidden", () => {

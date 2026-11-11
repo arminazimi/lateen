@@ -1,5 +1,6 @@
-/* Drift banner: a warning above a page whose documentation has drifted from the code. The accent sits
-   on the inline start edge, so it moves under RTL. Colors come from tokens, so dark mode follows. */
+/* Drift banner: a banner above a page whose drift evidence is not clean. The accent sits on the
+   inline start edge, so it moves under RTL, and the severity picks its colour: error, warning, info,
+   or the muted, dashed edge of an unavailable check. Colors come from tokens, so dark mode follows. */
 
 .drift-banner {
   display: flex;
@@ -10,12 +11,61 @@
   padding-block: var(--space-3);
   padding-inline: var(--space-4);
   border: 1px solid var(--color-border);
-  border-inline-start: 4px solid var(--color-warning);
+  border-inline-start: 4px solid var(--color-border-strong);
   border-radius: var(--radius-md);
   background-color: var(--color-surface);
   color: var(--color-text);
   font-size: var(--type-size-sm);
   line-height: var(--type-leading-body);
+}
+
+.drift-banner[data-drift-severity="error"] {
+  border-inline-start-color: var(--color-danger);
+  background-color: color-mix(in srgb, var(--color-danger) 8%, var(--color-canvas));
+}
+
+.drift-banner[data-drift-severity="error"] .drift-banner-icon {
+  color: var(--color-danger);
+}
+
+.drift-banner[data-drift-severity="warning"] {
+  border-inline-start-color: var(--color-warning);
+  background-color: color-mix(in srgb, var(--color-warning) 8%, var(--color-canvas));
+}
+
+.drift-banner[data-drift-severity="warning"] .drift-banner-icon {
+  color: var(--color-warning);
+}
+
+.drift-banner[data-drift-severity="info"] {
+  border-inline-start-color: var(--color-info);
+  background-color: color-mix(in srgb, var(--color-info) 8%, var(--color-canvas));
+}
+
+.drift-banner[data-drift-severity="info"] .drift-banner-icon {
+  color: var(--color-info);
+}
+
+/* An unavailable check is not healthy: the dashed edge and muted icon keep it apart from a finding. */
+.drift-banner[data-drift-severity="unknown"] {
+  border-inline-start-style: dashed;
+  border-inline-start-color: var(--color-border-strong);
+}
+
+.drift-banner[data-drift-severity="unknown"] .drift-banner-icon {
+  color: var(--color-muted);
+}
+
+.drift-banner-icon {
+  flex: none;
+  inline-size: var(--space-4);
+  block-size: var(--space-4);
+  margin-block-start: 0.1em;
+}
+
+.drift-banner-label {
+  color: var(--color-heading);
+  font-weight: var(--type-weight-bold);
 }
 
 .drift-banner-message {

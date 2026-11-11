@@ -5,8 +5,10 @@ import type { ComponentProps } from "@velella/mizzen/contracts";
 import { renderToString } from "preact-render-to-string";
 import { stringsOf } from "../i18n/index.ts";
 import statusBanner, {
+  HINT_KEYS,
   ICONS,
   LABEL_KEYS,
+  SEVERITIES,
   STATUSES,
   classNameOf,
   directive,
@@ -39,7 +41,7 @@ test("default export is the component, with the three statuses", () => {
   assert.deepEqual([...STATUSES], ["deprecated", "experimental", "old-version"]);
 });
 
-test("each status renders a page-level banner with its class, id, and role", () => {
+test("each status renders a page-level banner with its class, id, role, and severity", () => {
   for (const status of STATUSES) {
     const out = render({ status });
     assert.ok(out, `${status} renders a banner`);
@@ -47,7 +49,19 @@ test("each status renders a page-level banner with its class, id, and role", () 
     assert.match(out, new RegExp(`id="status-banner-${status}"`));
     assert.match(out, /role="note"/);
     assert.match(out, new RegExp(`aria-labelledby="status-banner-${status}-label"`));
+    assert.match(out, new RegExp(`data-severity="${SEVERITIES[status]}"`));
     assert.equal(classNameOf(status), `status-banner status-banner-${status}`);
+  }
+  assert.deepEqual(SEVERITIES, { deprecated: "critical", experimental: "info", "old-version": "warning" });
+});
+
+test("each status says what it means and what the reader should do next", () => {
+  for (const status of STATUSES) {
+    const out = render({ status });
+    assert.ok(out, `${status} renders`);
+    const hint = stringsOf("en")[HINT_KEYS[status]];
+    assert.equal(typeof hint, "string", `en.${HINT_KEYS[status]}`);
+    assert.ok(out.includes(`<span class="status-banner-hint">${hint!}</span>`), `${status} says "${hint}"`);
   }
 });
 
@@ -76,7 +90,23 @@ test("the labels follow the page language", () => {
       const label = stringsOf(lang)[LABEL_KEYS[status]];
       assert.equal(typeof label, "string", `${lang}.${LABEL_KEYS[status]}`);
       assert.ok(out.includes(`>${label!}</strong>`), `${lang} ${status} says "${label}"`);
+      assert.ok(out.includes(`>${stringsOf(lang)[HINT_KEYS[status]]!}</span>`), `${lang} ${status} says its guidance`);
     }
+  }
+});
+
+test("several statuses on one page keep distinct names and add no heading or alert semantics", () => {
+  const ids = new Set<string>();
+  const labels = new Set<string>();
+  for (const status of STATUSES) {
+    const out = render({ status })!;
+    const id = /aria-labelledby="([^"]+)"/.exec(out)![1]!;
+    assert.ok(!ids.has(id), `${status} has its own label id`);
+    ids.add(id);
+    const label = /<strong class="status-banner-label"[^>]*>([^<]+)<\/strong>/.exec(out)![1]!;
+    assert.ok(!labels.has(label), `${status} has its own visible label`);
+    labels.add(label);
+    assert.doesNotMatch(out, /role="alert"|role="heading"|<h[1-6]/);
   }
 });
 

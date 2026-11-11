@@ -56,6 +56,10 @@
   font-weight: var(--type-weight-bold);
 }
 
+.status-banner-hint {
+  color: var(--color-muted);
+}
+
 .status-banner-version,
 .status-banner-replacement {
   display: inline-flex;
