@@ -30,6 +30,8 @@ export type SchemaTableProps = {
   data?: string;
   /** Accessible name of the table. */
   label?: string;
+  /** Id of the table's region. Give one when two tables read the same schema. */
+  id?: string;
 };
 
 /** A JSON value read from `_data`. Checked at runtime, so it is `unknown` rather than a fixed type. */
@@ -183,6 +185,45 @@ export function lookup(data: Readonly<Record<string, unknown>>, path: string): u
   return node;
 }
 
+/** A value reduced to letters, digits, `-` and `_`, so it can go in an id. */
+function slugOf(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}_-]+/gu, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/** The id prefix of the table: the `id` prop, or the schema's `_data` path. */
+export function idBase(raw: unknown, path: string): string {
+  const given = slugOf(typeof raw === "string" ? raw : "");
+  if (given !== "") return given;
+  const data = slugOf(path);
+  return data === "" ? "schema-table" : `schema-${data}`;
+}
+
+/** The id of one field row. The dotted path keeps every property in the table unique. */
+export function fieldId(base: string, path: string): string {
+  return `${base}-field-${slugOf(path) || "field"}`;
+}
+
+/** The id of a column's header cell. */
+export function columnId(base: string, column: string): string {
+  return `${base}-col-${column}`;
+}
+
+/** The paths of a field's ancestors, outermost first: `a.b.c` gives `a` and `a.b`. */
+export function ancestorPaths(path: string): string[] {
+  const parts = path.split(".");
+  return parts.slice(0, -1).map((_part, index) => parts.slice(0, index + 1).join("."));
+}
+
+/** What a copy action takes for a field: its dotted path and its type, without the table's decoration. */
+export function copyValueOf(row: SchemaRow): string {
+  return `${row.path}: ${row.type}`;
+}
+
 /** A value as the table shows it: JSON, so strings keep their quotes and `null` and numbers read as written. */
 function show(value: unknown): string {
   return JSON.stringify(value) ?? String(value);
@@ -192,18 +233,35 @@ function flatten(rows: readonly SchemaRow[]): SchemaRow[] {
   return rows.flatMap((row) => [row, ...flatten(row.children)]);
 }
 
-function rowNode(row: SchemaRow) {
+function rowNode(row: SchemaRow, base: string) {
   const indent = row.depth === 0 ? "schema-row" : `schema-row schema-depth-${Math.min(row.depth, MAX_INDENT)}`;
+  const ownHeader = `${fieldId(base, row.path)}-name`;
+  const ancestors = ancestorPaths(row.path).map((path) => `${fieldId(base, path)}-name`);
+  // A nested row belongs to its parent's header and to its column's header, so `headers` names both.
+  // A top-level row keeps the table's implicit association with the column headers.
+  const headersOf = (column: string) =>
+    ancestors.length === 0 ? {} : { headers: [...ancestors, ownHeader, columnId(base, column)].join(" ") };
+  const headerHeaders = ancestors.length === 0 ? {} : { headers: [...ancestors, columnId(base, "name")].join(" ") };
   return h(
     "tr",
-    { key: row.path, class: indent },
-    h("th", { scope: "row", class: "schema-name" }, h("code", { dir: "ltr" }, row.name)),
-    h("td", null, h("code", { class: "schema-type", dir: "ltr" }, row.type)),
-    h("td", { class: "schema-required" }, row.required ? "required" : null),
-    h("td", { class: "schema-default" }, row.hasDefault ? h("code", { dir: "ltr" }, show(row.defaultValue)) : null),
+    {
+      key: row.path,
+      class: indent,
+      id: fieldId(base, row.path),
+      "data-field": row.path,
+      "data-copy-value": copyValueOf(row),
+    },
+    h("th", { scope: "row", class: "schema-name", id: ownHeader, ...headerHeaders }, h("code", { dir: "ltr" }, row.name)),
+    h("td", { ...headersOf("type") }, h("code", { class: "schema-type", dir: "ltr" }, row.type)),
+    h("td", { class: "schema-required", ...headersOf("required") }, row.required ? "required" : null),
     h(
       "td",
-      { class: "schema-description" },
+      { class: "schema-default", ...headersOf("default") },
+      row.hasDefault ? h("code", { dir: "ltr" }, show(row.defaultValue)) : null,
+    ),
+    h(
+      "td",
+      { class: "schema-description", ...headersOf("description") },
       row.description === "" ? null : h("span", null, row.description),
       row.values.length === 0
         ? null
@@ -239,9 +297,11 @@ export default function schemaTable({ props, site }: ComponentProps<SchemaTableP
     return h("p", { class: MISSING_CLASS, role: "note" }, `The schema at "${path}" has no properties.`);
   }
 
+  const base = idBase(props.id, path);
+
   return h(
     "div",
-    { class: WRAPPER_CLASS, tabIndex: 0, role: "region", "aria-label": label },
+    { class: WRAPPER_CLASS, id: base, tabIndex: 0, role: "region", "aria-label": label, "data-schema": path },
     h(
       "table",
       { class: TABLE_CLASS },
@@ -251,14 +311,14 @@ export default function schemaTable({ props, site }: ComponentProps<SchemaTableP
         h(
           "tr",
           null,
-          h("th", { scope: "col" }, "Name"),
-          h("th", { scope: "col" }, "Type"),
-          h("th", { scope: "col" }, "Required"),
-          h("th", { scope: "col" }, "Default"),
-          h("th", { scope: "col" }, "Description"),
+          h("th", { scope: "col", id: columnId(base, "name") }, "Name"),
+          h("th", { scope: "col", id: columnId(base, "type") }, "Type"),
+          h("th", { scope: "col", id: columnId(base, "required") }, "Required"),
+          h("th", { scope: "col", id: columnId(base, "default") }, "Default"),
+          h("th", { scope: "col", id: columnId(base, "description") }, "Description"),
         ),
       ),
-      h("tbody", null, rows.map(rowNode)),
+      h("tbody", null, rows.map((row) => rowNode(row, base))),
     ),
   );
 }

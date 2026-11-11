@@ -4,6 +4,8 @@ import { test } from "node:test";
 import type { ComponentProps } from "@velella/mizzen/contracts";
 import { renderToString } from "preact-render-to-string";
 import symbolPopover, {
+  chipIdOf,
+  copyValueOf,
   directive,
   LINK_CLASS,
   referenceHref,
@@ -74,8 +76,9 @@ test("default export is the component and the directive is symbol-popover", () =
 test("renders an inline focusable chip with the name and a tooltip", () => {
   const out = render({ name: "runExample", signature: "runExample(input: Input): Promise<Result>" });
   assert.ok(out);
-  assert.match(out, /<span class="symbol-popover" tabindex="0" data-symbol="runExample">runExample/);
-  assert.match(out, new RegExp(`<span class="${TOOLTIP_CLASS}" role="tooltip">`));
+  assert.match(out, /<span class="symbol-popover" id="symbol-runexample" tabindex="0" data-symbol="runExample"/);
+  assert.match(out, /aria-describedby="symbol-runexample-tooltip">runExample/);
+  assert.match(out, new RegExp(`<span class="${TOOLTIP_CLASS}" role="tooltip" id="symbol-runexample-tooltip">`));
 });
 
 test("shows the signature as code text and links to the reference", () => {
@@ -99,6 +102,31 @@ test("renders no tooltip when there is neither a signature nor a link", () => {
   const out = render({ name: "runExample" });
   assert.ok(out);
   assert.doesNotMatch(out, /role="tooltip"/);
+});
+
+test("the chip and its tooltip have deterministic ids that describe the relationship", () => {
+  assert.equal(chipIdOf(undefined, "runExample"), "symbol-runexample");
+  assert.equal(chipIdOf("Result", "runExample"), "result");
+  const out = render({ name: "runExample", signature: "runExample(): void" });
+  assert.ok(out);
+  assert.match(out, /<span class="symbol-popover" id="symbol-runexample"[^>]*aria-describedby="symbol-runexample-tooltip">/);
+  assert.match(out, /<span class="symbol-popover-tooltip" role="tooltip" id="symbol-runexample-tooltip">/);
+});
+
+test("a chip without a tooltip has no aria-describedby", () => {
+  const out = render({ name: "runExample" });
+  assert.ok(out);
+  assert.doesNotMatch(out, /aria-describedby/);
+  assert.match(out, /id="symbol-runexample"/);
+});
+
+test("the copy value is the signature, or the name when there is no signature", () => {
+  assert.equal(copyValueOf("run", "run(input: Input): Result"), "run(input: Input): Result");
+  assert.equal(copyValueOf("run", ""), "run");
+  const out = render({ name: "runExample", signature: "runExample(): void", href: "/reference/" });
+  assert.ok(out);
+  assert.match(out, /data-copy-value="runExample\(\): void"/);
+  assert.doesNotMatch(out, /data-copy-value="[^"]*Reference/);
 });
 
 test("a missing or blank name renders nothing", () => {

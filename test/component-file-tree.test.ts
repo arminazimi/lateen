@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { Fragment } from "preact";
-import fileTree, { directive, parseEntries } from "../components/file-tree/index.ts";
+import fileTree, { directive, entryPath, idBase, nodeId, parseEntries, plainText } from "../components/file-tree/index.ts";
 import type { ComponentProps, Page, Site, SourcePos, SiteConfig } from "@velella/mizzen/contracts";
 
 const pos: SourcePos = { file: "docs/guide/install.md", line: 3, column: 1, endLine: 9, endColumn: 1 };
@@ -145,18 +145,18 @@ test("parseEntries drops the paragraphs of a loose list and keeps inline markup"
 
 test("renders a tree role with a label and a treeitem level for every row", () => {
   const out = render(NESTED);
-  assert.match(out, /<ul class="file-tree" role="tree" aria-label="File tree">/);
-  assert.match(out, /role="treeitem" aria-level="1" aria-setsize="3" aria-posinset="1"/);
-  assert.match(out, /role="treeitem" aria-level="2" aria-setsize="2" aria-posinset="1"/);
-  assert.match(out, /role="treeitem" aria-level="3" aria-setsize="1" aria-posinset="1"/);
+  assert.match(out, /<ul class="file-tree" role="tree" id="file-tree" aria-label="File tree">/);
+  assert.match(out, /role="treeitem"[^>]*aria-level="1"[^>]*aria-setsize="3"[^>]*aria-posinset="1"/);
+  assert.match(out, /role="treeitem"[^>]*aria-level="2"[^>]*aria-setsize="2"[^>]*aria-posinset="1"/);
+  assert.match(out, /role="treeitem"[^>]*aria-level="3"[^>]*aria-setsize="1"[^>]*aria-posinset="1"/);
   assert.match(out, /<ul class="file-tree-group" role="group">/);
   assert.equal(out.match(/role="group"/g)?.length, 3);
 });
 
 test("a folder row is marked expanded; a file row is not", () => {
   const out = render(NESTED);
-  assert.match(out, /class="file-tree-item is-folder" role="treeitem" aria-level="1"[^>]*aria-expanded="true"/);
-  assert.match(out, /class="file-tree-item is-file" role="treeitem" aria-level="2"/);
+  assert.match(out, /class="file-tree-item is-folder"[^>]*role="treeitem"[^>]*aria-level="1"[^>]*aria-expanded="true"/);
+  assert.match(out, /class="file-tree-item is-file"[^>]*role="treeitem"[^>]*aria-level="2"/);
   assert.doesNotMatch(out, /is-file"[^>]*aria-expanded/);
 });
 
@@ -169,26 +169,62 @@ test("folders get the folder icon and files the file icon", () => {
 
 test("the comment after # renders in a muted note, not in the name", () => {
   const out = render("<ul><li>config.md # <em>important</em> step</li></ul>");
-  assert.match(out, /<span class="file-tree-name">config\.md<\/span>/);
-  assert.match(out, /<span class="file-tree-note"><em>important<\/em> step<\/span>/);
+  assert.match(out, /<span class="file-tree-name"[^>]*>config\.md<\/span>/);
+  assert.match(out, /<span class="file-tree-note"[^>]*><em>important<\/em> step<\/span>/);
 });
 
 test("a hash inside a name is not a comment", () => {
   const out = render("<ul><li>notes#2.md</li></ul>");
-  assert.match(out, /<span class="file-tree-name">notes#2\.md<\/span>/);
-  assert.doesNotMatch(out, /file-tree-note/);
+  assert.match(out, /<span class="file-tree-name"[^>]*>notes#2\.md<\/span>/);
+  assert.doesNotMatch(out, /class="file-tree-note"/);
 });
 
 test("a bold entry is highlighted", () => {
   const out = render("<ul><li><strong>beacon.yml</strong> # the only file</li><li>cache/</li></ul>");
   assert.equal(out.match(/is-highlighted/g)?.length, 1);
   assert.match(out, /class="file-tree-item is-file is-highlighted"/);
-  assert.match(out, /class="file-tree-item is-folder" role="treeitem"/);
+  assert.match(out, /class="file-tree-item is-folder"[^>]*role="treeitem"/);
 });
 
 test("the label prop replaces the default accessible name", () => {
   const out = render(NESTED, { label: "Project layout" });
   assert.match(out, /aria-label="Project layout"/);
+});
+
+test("the tree and every node get deterministic ids from their paths", () => {
+  assert.equal(idBase(undefined), "file-tree");
+  assert.equal(idBase("Project layout"), "project-layout");
+  assert.equal(nodeId("file-tree", "dist/assets/app.js"), "file-tree-dist-assets-app-js");
+
+  const out = render(NESTED, { id: "layout" });
+  assert.match(out, /<ul class="file-tree" role="tree" id="layout"/);
+  assert.match(out, /id="layout-beacon-yml"[^>]*data-path="beacon\.yml" data-copy-value="beacon\.yml"/);
+  assert.match(out, /id="layout-dist"[^>]*data-path="dist" data-copy-value="dist"/);
+  assert.match(out, /id="layout-dist-index-html"[^>]*data-path="dist\/index\.html" data-copy-value="dist\/index\.html"/);
+});
+
+test("a treeitem is named by its visible name and described by its note", () => {
+  const out = render("<ul><li>config.md # the main file</li><li>cache/</li></ul>");
+  assert.match(
+    out,
+    /id="file-tree-config-md" role="treeitem" tabindex="0"[^>]*aria-labelledby="file-tree-config-md-name" aria-describedby="file-tree-config-md-note"/,
+  );
+  assert.match(out, /<span class="file-tree-name" id="file-tree-config-md-name">config\.md<\/span>/);
+  assert.match(out, /<span class="file-tree-note" id="file-tree-config-md-note">the main file<\/span>/);
+  assert.doesNotMatch(out, /id="file-tree-cache"[^>]*aria-describedby/);
+});
+
+test("plainText drops markup and decodes entities so a copied path is technical content", () => {
+  assert.equal(plainText("<code>dist/</code>"), "dist/");
+  assert.equal(plainText("a &amp; b"), "a & b");
+  assert.equal(plainText("<em>src</em> &#47; <strong>app</strong>"), "src / app");
+  assert.equal(entryPath("", "dist/"), "dist");
+  assert.equal(entryPath("dist", "<code>index.html</code>"), "dist/index.html");
+  assert.equal(entryPath("a", ""), "a");
+
+  const out = render("<ul><li><code>src/</code><ul><li><code>index.ts</code> # entry</li></ul></li></ul>");
+  assert.match(out, /data-copy-value="src\/index\.ts"/);
+  assert.doesNotMatch(out, /data-copy-value="[^"]*&lt;/);
 });
 
 test("a body without a list is passed through so the page still reads", () => {
@@ -208,6 +244,11 @@ test("style.css uses logical properties only", () => {
   const css = readFileSync(stylePath, "utf8");
   assert.doesNotMatch(css, /\b(margin|padding|border)-(left|right)\b/);
   assert.doesNotMatch(css, /\b(left|right):/);
+});
+
+test("style.css gives a focused treeitem a visible focus ring", () => {
+  const css = readFileSync(stylePath, "utf8");
+  assert.match(css, /\.file-tree-item:focus-visible > \.file-tree-row\s*\{[^}]*outline:\s*2px solid var\(--state-focus-ring\)/s);
 });
 
 test("a folder whose slash sits inside a closing tag is still a folder", () => {
