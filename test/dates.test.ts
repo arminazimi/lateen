@@ -28,6 +28,28 @@ test("a date-time keeps only its ISO date", () => {
   assert.deepEqual(calendarDate("2026-11-09T23:30:00Z", "en"), { datetime: "2026-11-09", text: "November 9, 2026" });
 });
 
+test("the calendar day is the one the author wrote, not one shifted by a time-zone offset", () => {
+  // No local time zone is read: the written date is the day, and the machine value repeats it.
+  for (const value of ["2026-11-09T23:30:00-05:00", "2026-11-09T00:30:00+14:00", "2026-11-09T12:00:00"]) {
+    assert.deepEqual(calendarDate(value, "en"), { datetime: "2026-11-09", text: "November 9, 2026" }, value);
+  }
+});
+
+test("each language writes its own digit shapes, and the machine value stays ASCII ISO", () => {
+  const text = (lang: string): string => calendarDate("2026-11-09", lang)?.text ?? "";
+
+  assert.match(text("fa"), /[۰-۹]/, "Persian digits");
+  assert.doesNotMatch(text("fa"), /[0-9]/, "Persian text has Latin digits");
+  assert.match(text("ar"), /[٠-٩]/, "Arabic-Indic digits");
+  assert.doesNotMatch(text("ar"), /[0-9]/, "Arabic text has Latin digits");
+  assert.match(text("en"), /[0-9]/, "Latin digits");
+
+  // The `datetime` attribute is machine-readable: ASCII digits and ISO order, whatever the display.
+  for (const lang of ["en", "fa", "ar", "fa-IR", "ar-EG", "de"]) {
+    assert.equal(calendarDate("2026-11-09", lang)?.datetime, "2026-11-09", lang);
+  }
+});
+
 test("dates at the edges of a year keep their day", () => {
   // Formatting is pinned to UTC, so a build in a time zone west of UTC does not shift the day back.
   assert.equal(calendarDate("2026-01-01", "en")?.text, "January 1, 2026");

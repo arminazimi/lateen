@@ -6,6 +6,7 @@ import type { ChromeProps, NavTree, Page, Site, SiteConfig, SourcePos } from "@v
 import drawer from "../chrome/drawer/index.ts";
 import {
   activate,
+  DESKTOP_QUERY,
   trap,
   type DrawerControl,
   type DrawerDialog,
@@ -253,6 +254,82 @@ test("Escape closes the dialog and keeps the browser from doing it another way",
   assert.equal(button.attrs["aria-expanded"], "false");
 });
 
+/** The browser's media query list: `change` listeners hear every crossing of the breakpoint. */
+function fakeViewport(matches: boolean) {
+  const listeners: Array<() => void> = [];
+  const viewport = {
+    matches,
+    addEventListener(type: string, listener: () => void) {
+      assert.equal(type, "change");
+      listeners.push(listener);
+    },
+    resize(next: boolean) {
+      viewport.matches = next;
+      for (const listener of listeners) listener();
+    },
+  };
+  return viewport;
+}
+
+test("a press on the modal backdrop closes the drawer and returns focus to the menu button", () => {
+  const button = control("menu");
+  const dialog = fakeDialog();
+  activate({ dialog, button: button as unknown as DrawerControl });
+  button.clicks[0]!();
+
+  dialog.fire("click", { target: dialog, preventDefault() {} });
+
+  assert.equal(dialog.open, false);
+  assert.equal(button.attrs["aria-expanded"], "false");
+  assert.equal(button.focused, 1);
+});
+
+test("a press inside the drawer is left to the control under it", () => {
+  const { first, items } = panel();
+  const button = control("menu");
+  const dialog = fakeDialog(items);
+  activate({ dialog, button: button as unknown as DrawerControl });
+  button.clicks[0]!();
+
+  dialog.fire("click", { target: first, preventDefault() {} });
+
+  assert.equal(dialog.open, true);
+});
+
+test("crossing to the desktop layout closes the drawer without focusing the menu button it hides", () => {
+  const button = control("menu");
+  const dialog = fakeDialog();
+  const viewport = fakeViewport(false);
+  activate({ dialog, button: button as unknown as DrawerControl }, { viewport });
+  button.clicks[0]!();
+
+  viewport.resize(true);
+
+  assert.equal(dialog.open, false);
+  assert.equal(button.attrs["aria-expanded"], "false");
+  assert.equal(button.focused, 0, "the header hides the menu button at desktop width");
+
+  // The next ordinary close still returns focus to the menu button.
+  button.clicks[0]!();
+  dialog.fire("keydown", key("Escape", undefined));
+  assert.equal(button.focused, 1);
+});
+
+test("a viewport change that stays narrow, or arrives while the drawer is closed, is ignored", () => {
+  const button = control("menu");
+  const dialog = fakeDialog();
+  const viewport = fakeViewport(false);
+  activate({ dialog, button: button as unknown as DrawerControl }, { viewport });
+
+  viewport.resize(true);
+  assert.equal(dialog.closes, 0, "a closed drawer is left closed");
+
+  button.clicks[0]!();
+  viewport.resize(false);
+  assert.equal(dialog.open, true);
+  assert.equal(dialog.closes, 0);
+});
+
 test("Tab past the last control wraps to the first; Shift+Tab before the first wraps to the last", () => {
   const { close, last, items } = panel();
   const dialog = fakeDialog(items);
@@ -305,6 +382,17 @@ test("keys other than Tab and Escape are not touched", () => {
   const event = key("a", items[0]);
   trap(dialog, event);
   assert.equal(event.prevented, false);
+});
+
+test("the header shows the menu button at the same breakpoint the drawer replaces the sidebar", () => {
+  const header = readFileSync(new URL("../chrome/header/style.css", import.meta.url), "utf8");
+  const drawer = readFileSync(new URL("../chrome/drawer/style.css", import.meta.url), "utf8");
+
+  const block = /@media \(max-width: 767\.98px\) \{([\s\S]*?)\n\}/.exec(header);
+  assert.ok(block, "the header has a block at the drawer's breakpoint");
+  assert.match(block[1]!, /\.header-menu/, "the menu button appears whenever the sidebar leaves");
+  assert.match(drawer, /@media \(max-width: 767\.98px\)/);
+  assert.equal(DESKTOP_QUERY, "(min-width: 768px)", "the viewport check matches the CSS breakpoint");
 });
 
 test("style.css uses only token names from tokens/names.json for var(--*) references", () => {

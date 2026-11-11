@@ -4,14 +4,26 @@ import { test } from "node:test";
 import type { ComponentProps } from "@velella/mizzen/contracts";
 import endpoint, {
   METHODS,
+  idOf,
   methodClassOf,
   methodOf,
+  parameterId,
   parameterNames,
   pathSegments,
+  requestLineOf,
   type EndpointProps,
 } from "../components/endpoint/index.ts";
 
-type Node = { type: string; props: { class?: string; dir?: string; children?: unknown; dangerouslySetInnerHTML?: { __html: string } } };
+type Node = {
+  type: string;
+  props: {
+    class?: string;
+    dir?: string;
+    children?: unknown;
+    dangerouslySetInnerHTML?: { __html: string };
+    [key: string]: unknown;
+  };
+};
 
 /** Render the endpoint the way the render host calls it: props from the directive plus the body HTML. */
 function render(props: EndpointProps, html = ""): Node {
@@ -137,6 +149,46 @@ test("a missing path renders an empty path without failing", () => {
   const node = render({ method: "GET" });
   assert.equal(textOf(withClass(node, "endpoint-path")[0]), "");
   assert.deepEqual(withClass(node, "endpoint-params"), []);
+});
+
+test("the endpoint gets a deterministic id from its method and path", () => {
+  assert.equal(idOf({ method: "get", path: "/users/{id}" }), "endpoint-get-users-id");
+  assert.equal(idOf({ method: "POST", path: "/users" }), "endpoint-post-users");
+  assert.equal(idOf({ path: "/health" }), "endpoint-health");
+  assert.equal(idOf({}), "endpoint");
+  assert.equal(idOf({ method: "get", path: "/users/{id}" }), idOf({ method: "GET", path: "/users/{id}" }));
+
+  const node = render({ method: "GET", path: "/users/{id}" });
+  assert.equal(node.props.id, "endpoint-get-users-id");
+});
+
+test("an explicit id wins and is reduced to a safe value", () => {
+  assert.equal(idOf({ id: "Get user by id", method: "GET", path: "/users/{id}" }), "get-user-by-id");
+  assert.equal(render({ id: "custom", method: "GET", path: "/a" }).props.id, "custom");
+});
+
+test("the block exposes the method, path, and canonical request line for agents", () => {
+  const node = render({ method: "get", path: "/users/{id}" });
+  assert.equal(node.props["data-method"], "GET");
+  assert.equal(node.props["data-path"], "/users/{id}");
+  assert.equal(node.props["data-copy-value"], "GET /users/{id}");
+  assert.equal(requestLineOf("DELETE", "/users/{id}"), "DELETE /users/{id}");
+  assert.equal(requestLineOf(undefined, "/health"), "/health");
+  assert.equal(requestLineOf("GET", ""), "GET");
+});
+
+test("each parameter gets an id and its own value", () => {
+  assert.equal(parameterId("endpoint-get-a", "userId"), "endpoint-get-a-param-userid");
+  assert.equal(parameterId("base", ""), "base-param-parameter");
+  const [list] = withClass(render({ method: "GET", path: "/a/{userId}/b/:slug" }), "endpoint-params");
+  const items = elements(list).filter((element) => element.type === "li");
+  assert.deepEqual(
+    items.map((item) => [item.props.id, item.props["data-param"], textOf(item)]),
+    [
+      ["endpoint-get-a-userid-b-slug-param-userid", "userId", "userId"],
+      ["endpoint-get-a-userid-b-slug-param-slug", "slug", "slug"],
+    ],
+  );
 });
 
 test("each method color reads from a token that exists in names.json", () => {

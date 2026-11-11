@@ -151,18 +151,18 @@ test("examples that do not match the shape are dropped without throwing", () => 
   assert.doesNotMatch(notAList, /api-examples/);
 });
 
-test("the sidebar, breadcrumb trail, and on-this-page aside keep their landmarks", () => {
+test("the sidebar column, breadcrumb trail, and on-this-page navigation keep their landmarks", () => {
   const nav = [{ title: "Reference", children: [{ title: "Charges", url: "/reference/charges/" }] }];
   const trail = [
     { title: "Reference", url: "/reference/" },
     { title: "Charges", url: "/reference/charges/" },
   ];
   const page = out(pageWith({ headings: [heading(2, "Create"), heading(2, "List")] }), nav, trail);
-  assert.match(page, /<aside class="sidebar" id="site-navigation" aria-label="Site navigation"><nav class="sidebar-nav"/);
-  assert.match(page, /<nav class="breadcrumb" aria-label="Breadcrumb"><a href="\/reference\/">Reference<\/a>/);
+  assert.match(page, /<div class="sidebar" id="site-navigation"><nav class="sidebar-nav"/);
+  assert.match(page, /<nav class="breadcrumb" aria-label="Breadcrumbs"><a href="\/reference\/">Reference<\/a>/);
   assert.match(page, /<span aria-current="page">Charges<\/span><\/nav><h1>Charges<\/h1>/);
-  assert.match(page, /<aside class="aside" aria-label="On this page"><aside class="toc" aria-label="On this page">/);
-  assert.match(page, /<header><header class="header">/);
+  assert.match(page, /<div class="aside"><nav class="toc" aria-labelledby="toc-title">/);
+  assert.match(page, /<header class="header">/);
 });
 
 test("titles, example titles, and code are escaped into the markup", () => {

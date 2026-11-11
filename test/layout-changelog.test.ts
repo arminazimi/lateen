@@ -172,7 +172,7 @@ test("a release renders its date, categories, and body through the changelog ent
   });
 
   assert.match(page, /<section class="changelog-entry" id="v2-0-0"/);
-  assert.match(page, /<h2 class="changelog-entry-version"[^>]*><span[^>]*>2\.0\.0<\/span>/);
+  assert.match(page, /<h2 class="changelog-entry-version"[^>]*><span[^>]*>(?:<span[^>]*>Version <\/span>)?2\.0\.0<\/span>/);
   assert.match(page, /<time class="changelog-entry-date" datetime="2026-02-01">February 1, 2026<\/time>/);
   assert.match(page, />Added<\/span>/);
   assert.match(page, />Fixed<\/span>/);
@@ -284,8 +284,8 @@ test("the changelog composes the base shell with the header, drawer, and sidebar
     [{ title: "Guides", children: [{ title: "Changelog", url: "/changelog/" }] }],
   );
   assert.match(page, /^<html lang="en" dir="ltr"/);
-  assert.match(page, /<header><header class="header">/);
-  assert.match(page, /<aside class="sidebar" id="site-navigation" aria-label="Site navigation">/);
+  assert.match(page, /<header class="header">/);
+  assert.match(page, /<div class="sidebar" id="site-navigation">/);
   const drawer = /<dialog class="drawer" data-drawer aria-label="Menu">([\s\S]*?)<\/dialog>/.exec(page);
   assert.ok(drawer, "the mobile drawer is present");
   assert.doesNotMatch(page, /class="breadcrumb"/);

@@ -578,6 +578,31 @@ test("Escape closes the dialog and returns focus to the search button", async ()
   assert.equal(button.focused, 1);
 });
 
+test("a press on the modal backdrop closes the dialog and returns focus to the search button", async () => {
+  const { dialog, button, parts } = partsOf();
+  activate(parts, envWith(apiOf([])));
+  button.click();
+  await tick();
+
+  dialog.fire("click", { target: dialog, preventDefault() {} });
+
+  assert.equal(dialog.open, false);
+  assert.equal(button.focused, 1);
+});
+
+test("a press on the panel or a row is left to the control under it", async () => {
+  const first = fakeLink("first");
+  const { dialog, button, input, parts } = partsOf({ links: [first] });
+  activate(parts, envWith(apiOf(records)));
+  button.click();
+  await tick();
+
+  dialog.fire("click", { target: input, preventDefault() {} });
+  dialog.fire("click", { target: first, preventDefault() {} });
+
+  assert.equal(dialog.open, true);
+});
+
 test("arrow keys move between result links and wrap at both ends", async () => {
   const first = fakeLink("first");
   const second = fakeLink("second");

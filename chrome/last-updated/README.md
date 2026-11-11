@@ -6,8 +6,8 @@ tests it. The doc layout places it under the `h1`.
 
 ## Data
 
-A page's date comes from front matter: `last_modified_at`, else `updated`. Without either, it comes from
-the page's entry in `site.data.reviewers`, keyed by page URL:
+A page's own date comes from front matter: `last_modified_at`, else `updated`. Its review date comes
+from the page's entry in `site.data.reviewers`, keyed by page URL:
 
 ```yaml
 # _data/reviewers.yml
@@ -17,9 +17,13 @@ the page's entry in `site.data.reviewers`, keyed by page URL:
   contributors: [Grace Hopper, Ada Lovelace]
 ```
 
+The line labels each date by what it records: a front matter date reads "Updated", and a review date
+reads "Reviewed" (`reviewed` in `i18n/*.json`). When both dates exist on different days, both show, so
+source recency and review recency stay distinct. A review on the same day as the source change is left
+out as a duplicate. `data-date-source` on each date says `source` or `review` for scripts and tests.
+
 Contributors come from `author` and the optional `contributors` array. Names are trimmed, deduplicated,
-sorted by code point, and the line shows at most three. The entry's `date` may be a date or a date and a
-time; an impossible date is left out rather than rolled over.
+sorted by code point, and the line shows at most three.
 
 ## Relative and absolute dates
 
@@ -29,12 +33,15 @@ time; an impossible date is left out rather than rolled over.
 - `site.data.reviewers.asOf` on `_data/reviewers.yml`.
 
 Without one, the line shows the absolute date ("Updated March 4, 2026") and the build still gives the
-same bytes on every machine. The absolute date always fills the `<time>` element's `title` and
-`aria-label`, and is written in the page's calendar through `calendarDate` (Gregorian for English,
-Jalali for Persian, Hijri for Arabic).
+same bytes on every machine. The absolute date always fills the `<time>` element's `datetime`, `title`,
+and `aria-label`, and is written in the page's calendar through `calendarDate` (Gregorian for English,
+Jalali for Persian, Hijri for Arabic), so the accessible value is exact even when the visible text is
+relative.
 
-The line renders nothing when the page has neither a date nor contributors, so a site without review
-data carries no empty element.
+A date after the build's as-of date is not a recency the build can vouch for, so it stays absolute
+rather than reading as "in 2 days". A date that is not a real calendar date (`2026-02-30`) is left out
+entirely; it never becomes "today" or any other relative claim. A page with no usable date and no
+contributors renders nothing, so a site without review data carries no empty element.
 
 ## Follow-up
 

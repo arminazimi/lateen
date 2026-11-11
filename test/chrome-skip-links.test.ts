@@ -129,12 +129,13 @@ test("the labels follow the page language", () => {
   assert.match(ar, />انتقال إلى التنقل</);
 });
 
-test("the base shell places both links and gives the sidebar the navigation id", () => {
-  const out = html(base({ ...props(tree), sidebar: h("nav", null, "S") }));
+test("the base shell places both links and gives the sidebar column the navigation id", () => {
+  const out = html(base({ ...props(tree), sidebar: h("nav", { "aria-label": "Site navigation" }, "S") }));
   assert.match(out, new RegExp(`<body><a class="skip-link" href="#${MAIN_ID}">Skip to content</a>`));
   assert.match(out, new RegExp(`<a class="skip-link" href="#${NAVIGATION_ID}">Skip to navigation</a>`));
-  assert.match(out, new RegExp(`<aside class="sidebar" id="${NAVIGATION_ID}" aria-label="Site navigation">`));
+  assert.match(out, new RegExp(`<div class="sidebar" id="${NAVIGATION_ID}"><nav aria-label="Site navigation">S</nav></div>`));
   assert.match(out, new RegExp(`<main id="${MAIN_ID}"`));
+  assert.equal(out.match(/aria-label="Site navigation"/g)?.length, 1, "one navigation landmark, named once");
   assertTargets(out);
 });
 

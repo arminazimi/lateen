@@ -126,12 +126,16 @@ function storedHref(value: unknown): string | undefined {
 /**
  * A page's edit URL from engine-written site data, keyed by page URL. The engine's `editLinksOf` returns a
  * list of `{ url, source, editUrl }`, so an array is accepted, as is a record of page URL to either the URL
- * itself or an object with `editUrl` (or `edit_url`). Anything else, or an unsafe scheme, is absent.
+ * itself or an object with `editUrl` (or `edit_url`). An array entry that names a different source file is
+ * skipped when `file` is given, so the destination always keeps the page's canonical source. Anything else,
+ * or an unsafe scheme, is absent.
  */
-export function editLinkFromData(data: unknown, url: string): string | undefined {
+export function editLinkFromData(data: unknown, url: string, file?: string): string | undefined {
   if (Array.isArray(data)) {
     for (const entry of data) {
       if (!isRecord(entry) || entry.url !== url) continue;
+      const source = text(entry.source);
+      if (file !== undefined && source !== undefined && sourcePath(source) !== sourcePath(file)) continue;
       const href = entryHref(entry);
       if (href === undefined) continue;
       const stored = storedHref(href);
@@ -149,7 +153,7 @@ export function editLinkFromData(data: unknown, url: string): string | undefined
 /** The page's edit link: `site.data` first, then the repository, or `undefined` when neither gives one. */
 export function editHref(site: Site, page: Page): string | undefined {
   const data = site.data["edit-links"] ?? site.data.editLinks;
-  const fromData = editLinkFromData(data, page.url);
+  const fromData = editLinkFromData(data, page.url, page.source.file);
   if (fromData !== undefined) return fromData;
   const repository = site.config.repository;
   return repository === undefined ? undefined : editUrlOf(repository, page.source.file);

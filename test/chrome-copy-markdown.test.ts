@@ -130,7 +130,7 @@ test("twinUrl: pretty URLs get index.md, HTML files swap their extension, and ot
   assert.equal(twinUrl("/feed.xml"), undefined);
 });
 
-/** A button that records the click listeners wired to it. */
+/** A button that records the click listeners wired to it, and presses them like a real click. */
 function fakeButton(
   dataset: CopyButton["dataset"] = { markdown: "/example/guide/install/index.md", copied: "Copied", copyFailed: "Press Ctrl+C" },
 ): CopyButton & { clicks: Array<() => void> } {
@@ -142,8 +142,26 @@ function fakeButton(
       assert.equal(type, "click");
       fake.clicks.push(listener);
     },
+    click() {
+      for (const listener of fake.clicks) listener();
+    },
   };
   return fake;
+}
+
+/** A status region that records the attributes the island sets while a copy runs. */
+function fakeStatus(): CopyStatus & { attrs: Map<string, string> } {
+  const attrs = new Map<string, string>();
+  return {
+    textContent: "",
+    attrs,
+    setAttribute(name: string, value: string) {
+      attrs.set(name, value);
+    },
+    removeAttribute(name: string) {
+      attrs.delete(name);
+    },
+  };
 }
 
 interface PressOptions {
@@ -191,11 +209,16 @@ function keyHost(): FakeKeyHost {
 /** An environment whose fetch, clipboard, and key listener record their calls. */
 function env(
   options: { fetchText?: (url: string) => Promise<string>; clipboard?: Clipboard } = {},
-): ActivateEnv & { fetched: string[]; wrote: string[]; status: CopyStatus; keys: FakeKeyHost } {
+): ActivateEnv & {
+  fetched: string[];
+  wrote: string[];
+  status: CopyStatus & { attrs: Map<string, string> };
+  keys: FakeKeyHost;
+} {
   const fake = {
     fetched: [] as string[],
     wrote: [] as string[],
-    status: { textContent: "" },
+    status: fakeStatus(),
     keys: keyHost(),
     fetchText:
       options.fetchText ??
@@ -243,7 +266,7 @@ test("a click fetches the Markdown twin, writes it to the clipboard, and announc
   assert.equal(world.status.textContent, "Copied");
 });
 
-test("the m key copies the twin and prevents the key's own browser action", async () => {
+test("the m key copies the twin through the button's click path and prevents the key's own action", async () => {
   const button = fakeButton();
   const world = env();
   activate(button, world);
@@ -252,7 +275,49 @@ test("the m key copies the twin and prevents the key's own browser action", asyn
   await settle();
 
   assert.equal(result.prevented, true);
+  assert.equal(button.clicks.length, 1, "the key pressed the button rather than copying beside it");
   assert.deepEqual(world.fetched, ["/example/guide/install/index.md"]);
+  assert.deepEqual(world.wrote, ["# Install\n"]);
+  assert.equal(world.status.textContent, "Copied");
+});
+
+test("a copy in flight clears the old message, marks the status busy, and announces once it settles", async () => {
+  let settleFetch!: (markdown: string) => void;
+  const button = fakeButton();
+  const world = env({ fetchText: () => new Promise<string>((resolve) => (settleFetch = resolve)) });
+  activate(button, world);
+
+  world.status.textContent = "Press Ctrl+C";
+  button.clicks[0]!();
+
+  assert.equal(world.status.textContent, "", "the old answer is gone while the new request runs");
+  assert.equal(world.status.attrs.get("aria-busy"), "true");
+
+  settleFetch("# Install\n");
+  await settle();
+
+  assert.equal(world.status.attrs.has("aria-busy"), false);
+  assert.equal(world.status.textContent, "Copied");
+});
+
+test("a second press while a copy is in flight does not fetch or announce twice", async () => {
+  let settleFetch!: (markdown: string) => void;
+  let calls = 0;
+  const button = fakeButton();
+  const world = env({
+    fetchText: () => {
+      calls += 1;
+      return new Promise<string>((resolve) => (settleFetch = resolve));
+    },
+  });
+  activate(button, world);
+
+  button.clicks[0]!();
+  world.keys.press();
+  settleFetch("# Install\n");
+  await settle();
+
+  assert.equal(calls, 1);
   assert.deepEqual(world.wrote, ["# Install\n"]);
   assert.equal(world.status.textContent, "Copied");
 });

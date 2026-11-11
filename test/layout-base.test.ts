@@ -167,19 +167,32 @@ test("main always renders; page HTML is the default content", () => {
 test("slots land in their landmarks in document order", () => {
   const html = out({
     ...layoutProps(),
-    header: h("span", null, "H"),
-    sidebar: h("nav", null, "S"),
+    header: h("header", { class: "header" }, h("span", null, "H")),
+    sidebar: h("nav", { "aria-label": "Site navigation" }, "S"),
     main: h(Fragment, null, "M"),
-    aside: h("nav", null, "A"),
+    aside: h("nav", { "aria-label": "On this page" }, "A"),
     footer: h("span", null, "F"),
   });
-  assert.match(html, /<header><span>H<\/span><\/header>/);
-  assert.match(html, /<aside class="sidebar" id="site-navigation" aria-label="Site navigation"><nav>S<\/nav><\/aside>/);
+  assert.match(html, /<header class="header"><span>H<\/span><\/header>/);
+  assert.match(html, /<div class="sidebar" id="site-navigation"><nav aria-label="Site navigation">S<\/nav><\/div>/);
   assert.match(html, /<main[^>]*>M<\/main>/);
-  assert.match(html, /<aside class="aside" aria-label="On this page"><nav>A<\/nav><\/aside>/);
+  assert.match(html, /<div class="aside"><nav aria-label="On this page">A<\/nav><\/div>/);
   assert.match(html, /<footer><span>F<\/span><\/footer>/);
-  const order = ["<header>", 'class="sidebar"', "<main", 'class="aside"', "<footer>"].map((s) => html.indexOf(s));
+  const order = ['<header class="header"', 'class="sidebar"', "<main", 'class="aside"', "<footer>"].map((s) => html.indexOf(s));
   assert.deepEqual(order, [...order].sort((a, b) => a - b));
+});
+
+test("the shell leaves the banner and the side navigation to the slots, so each landmark appears once", () => {
+  const html = out({
+    ...layoutProps(),
+    header: h("header", { class: "header" }, "H"),
+    sidebar: h("nav", { "aria-label": "Site navigation" }, "S"),
+    aside: h("nav", { "aria-label": "On this page" }, "A"),
+  });
+  assert.equal(html.match(/<header/g)?.length, 1, "one banner landmark");
+  assert.equal(html.match(/<main/g)?.length, 1, "one main landmark");
+  assert.equal(html.match(/aria-label="Site navigation"/g)?.length, 1, "the navigation landmark is named once");
+  assert.doesNotMatch(html, /<aside/, "no extra complementary landmark around the slots");
 });
 
 test("islands load as modules at the end of body", () => {

@@ -4,6 +4,7 @@ import { test } from "node:test";
 import { Fragment } from "preact";
 import type { ChromeProps, Page, Pager, Site, SiteConfig, SourcePos, Trail } from "@velella/mizzen/contracts";
 import pageAgentMenu, { twinUrl } from "../chrome/page-agent-menu/index.ts";
+import copyMarkdown from "../chrome/copy-markdown/index.ts";
 import {
   activate,
   copy,
@@ -119,6 +120,25 @@ test("the copy label follows the page language, and the unit ships no untranslat
   assert.match(out, />کپی صفحه به صورت مارک‌داون</);
   assert.match(out, /data-copied="کپی شد"/);
   assert.match(out, /data-copy-failed="Ctrl\+C را بزنید"/);
+  assert.match(out, />مشاهده مارک‌داون</);
+});
+
+test("the menu and the copy-Markdown control name the same twin and announce the same result", () => {
+  const page = pageWith("/example/fa/install/", "doc", "fa", "rtl");
+  const menuOut = html(pageAgentMenu(props(page)));
+  const copyOut = html(copyMarkdown(props(page)));
+  const twin = "/example/fa/install/index.md";
+
+  for (const out of [menuOut, copyOut]) {
+    assert.match(out, new RegExp(`data-markdown="${twin}"`));
+    assert.match(out, /data-copied="کپی شد"/);
+    assert.match(out, /data-copy-failed="Ctrl\+C را بزنید"/);
+    assert.match(out, new RegExp(`href="${twin}"`));
+    assert.match(out, /role="status"/);
+  }
+
+  assert.doesNotMatch(menuOut, /aria-keyshortcuts/, "the page keeps one m shortcut, owned by the copy control");
+  assert.match(copyOut, /aria-keyshortcuts="m"/);
 });
 
 test("offers Claude, ChatGPT, and Cursor by default, in that order, with the absolute Markdown twin", () => {
@@ -242,18 +262,33 @@ function fakeButton(dataset: CopyButton["dataset"] = { markdown: "/example/guide
       assert.equal(type, "click");
       fake.clicks.push(listener);
     },
+    click() {
+      for (const listener of fake.clicks) listener();
+    },
   };
   return fake;
 }
 
-function status(): CopyStatus {
-  return { textContent: "" };
+/** A status region that records the attributes the island sets while a copy runs. */
+function status(): CopyStatus & { attrs: Map<string, string> } {
+  const attrs = new Map<string, string>();
+  return {
+    textContent: "",
+    attrs,
+    setAttribute(name: string, value: string) {
+      attrs.set(name, value);
+    },
+    removeAttribute(name: string) {
+      attrs.delete(name);
+    },
+  };
 }
 
 /** An environment whose fetch and clipboard record their calls and resolve or reject on demand. */
 function env(options: { fetchText?: (url: string) => Promise<string>; clipboard?: Clipboard } = {}): CopyEnv & {
   fetched: string[];
   wrote: string[];
+  status: CopyStatus & { attrs: Map<string, string> };
 } {
   const fake = {
     fetched: [] as string[],
@@ -298,6 +333,25 @@ test("a click fetches the Markdown twin, writes it to the clipboard, and announc
 
   assert.deepEqual(world.fetched, ["/example/guide/install/index.md"]);
   assert.deepEqual(world.wrote, ["# Install\n"]);
+  assert.equal(world.status.textContent, "Copied");
+});
+
+test("a copy from the menu clears the old message and marks its status busy until it settles", async () => {
+  let settleFetch!: (markdown: string) => void;
+  const button = fakeButton();
+  const world = env({ fetchText: () => new Promise<string>((resolve) => (settleFetch = resolve)) });
+  activate(button, world);
+
+  world.status.textContent = "Press Ctrl+C";
+  button.clicks[0]!();
+
+  assert.equal(world.status.textContent, "");
+  assert.equal(world.status.attrs.get("aria-busy"), "true");
+
+  settleFetch("# Install\n");
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(world.status.attrs.has("aria-busy"), false);
   assert.equal(world.status.textContent, "Copied");
 });
 

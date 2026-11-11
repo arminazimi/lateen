@@ -1,0 +1,20 @@
+main:
+  - title: Start
+    children:
+      - title: Home
+        url: /
+      - title: Document
+        url: /doc/
+      - title: Tutorial
+        url: /tutorial/
+  - title: Reference
+    tab: true
+    children:
+      - title: API
+        url: /api/
+      - title: Changelog
+        url: /changelog/
+      - title: Versions
+        url: /versions/
+      - title: Search results
+        url: /search/

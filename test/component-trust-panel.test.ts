@@ -10,6 +10,8 @@ import trustPanel, {
   BODY_CLASS,
   CHIP_CLASS,
   CLASS,
+  ICONS,
+  LEVELS,
   actionHrefOf,
   driftFor,
   driftText,
@@ -104,7 +106,7 @@ test("renders nothing when the site has no trust data for the page", () => {
   assert.equal(render({ trust: [] }), null);
   assert.equal(render({ trust: { "/other/": entry } }), null);
   assert.equal(render({ trust: { "/guide/install/": {} } }), null);
-  assert.equal(render({ trust: { "/guide/install/": { level: "unknown" } } }), null);
+  assert.equal(render({ trust: { "/guide/install/": { level: "maybe" } } }), null);
   assert.equal(render({ trust: { "/guide/install/": "verified" } }), null);
 });
 
@@ -118,24 +120,39 @@ test("the chip shows the level, its icon, and the native disclosure controls", (
   assert.match(out, /<\/summary><div class="trust-panel-body">/, "the panel follows the summary inside the details");
 });
 
-test("all three levels render their own label and shape", () => {
-  for (const [level, key] of [
+test("all four states render their own label and shape, so colour is never the only signal", () => {
+  assert.deepEqual([...LEVELS], ["verified", "partial", "unreviewed", "unknown"]);
+  for (const [state, key] of [
     ["verified", "trust_level_verified"],
-    ["review due", "trust_level_review_due"],
-    ["at risk", "trust_level_at_risk"],
+    ["partial", "trust_level_partial"],
+    ["unreviewed", "trust_level_unreviewed"],
+    ["unknown", "trust_level_unknown"],
   ] as const) {
-    const out = render({ trust: { "/guide/install/": { level } } });
-    assert.ok(out, level);
-    assert.ok(out.includes(`<span class="trust-panel-level">Trust: ${stringsOf("en")[key]}</span>`), level);
-    assert.match(out, new RegExp(`class="trust-panel trust-panel-${level.replace(/ /g, "-")}"`));
+    const out = render({ trust: { "/guide/install/": { level: state } } });
+    assert.ok(out, state);
+    assert.ok(out.includes(`<span class="trust-panel-level">Trust: ${stringsOf("en")[key]}</span>`), state);
+    assert.match(out, new RegExp(`class="trust-panel trust-panel-${state}"`));
+    assert.match(out, new RegExp(`data-trust-level="${state}"`));
   }
+  const shapes = LEVELS.map((state) => ICONS[state].join("|"));
+  assert.equal(new Set(shapes).size, LEVELS.length, "every state has its own icon shape");
 });
 
-test("level words are matched without case, spaces, or underscores", () => {
+test("an explicit unknown state renders and explains itself", () => {
+  const out = render({ trust: { "/guide/install/": { level: "unknown" } } });
+  assert.ok(out);
+  assert.match(out, /data-trust-level="unknown"/);
+  assert.ok(out.includes(stringsOf("en").trust_why_unknown!));
+});
+
+test("level words are matched without case, spaces, or underscores, and old names map to a state", () => {
   assert.equal(levelOf("Verified"), "verified");
-  assert.equal(levelOf(" review due "), "review-due");
-  assert.equal(levelOf("REVIEW_DUE"), "review-due");
-  assert.equal(levelOf("at_risk"), "at-risk");
+  assert.equal(levelOf(" partial "), "partial");
+  assert.equal(levelOf("UNREVIEWED"), "unreviewed");
+  assert.equal(levelOf("unknown"), "unknown");
+  assert.equal(levelOf(" review due "), "unreviewed");
+  assert.equal(levelOf("REVIEW_DUE"), "unreviewed");
+  assert.equal(levelOf("at_risk"), "partial");
   assert.equal(levelOf("maybe"), undefined);
   assert.equal(levelOf(3), undefined);
 });
@@ -179,10 +196,10 @@ test("the top-level and nested pages shapes are both accepted, and nested wins",
   assert.deepEqual(pagesOf({ "/guide/install/": entry }), { "/guide/install/": entry });
   assert.deepEqual(pagesOf({ pages: { "/guide/install/": entry } }), { "/guide/install/": entry });
 
-  const nested = render({ trust: { pages: { "/guide/install/": { level: "at risk" } } } });
-  assert.match(nested!, /data-trust-level="at-risk"/);
+  const nested = render({ trust: { pages: { "/guide/install/": { level: "partial" } } } });
+  assert.match(nested!, /data-trust-level="partial"/);
 
-  const both = { pages: { "/guide/install/": { level: "verified" } }, "/guide/install/": { level: "at-risk" } };
+  const both = { pages: { "/guide/install/": { level: "verified" } }, "/guide/install/": { level: "partial" } };
   assert.equal(entryFor(siteOf({ trust: both }), "/guide/install/")?.level, "verified");
 });
 
@@ -191,14 +208,25 @@ test("the directive's props make a manual panel, and they win over the data", ()
     { trust: { "/guide/install/": entry } },
     { props: { level: "at risk", reasons: "First|Second", lastReviewer: "Bo" } },
   );
-  assert.match(out!, /data-trust-level="at-risk"/);
+  assert.match(out!, /data-trust-level="partial"/);
   assert.match(out!, /<li>First<\/li><li>Second<\/li>/);
   assert.match(out!, /Reviewed by Bo/);
 });
 
-test("an empty reason list is left out", () => {
-  const out = render({ trust: { "/guide/install/": { level: "verified" } } });
-  assert.doesNotMatch(out!, /trust-panel-reasons/);
+test("a state without reasons explains itself, and the explanation is localised", () => {
+  for (const [state, key] of [
+    ["verified", "trust_why_verified"],
+    ["partial", "trust_why_partial"],
+    ["unreviewed", "trust_why_unreviewed"],
+    ["unknown", "trust_why_unknown"],
+  ] as const) {
+    for (const lang of ["en", "fa", "ar"] as const) {
+      const out = render({ trust: { "/guide/install/": { level: state } } }, { lang });
+      assert.ok(out, `${state}/${lang}`);
+      assert.match(out, /<p class="trust-panel-reasons-label">/);
+      assert.match(out, new RegExp(`<ul class="trust-panel-reasons"><li>${stringsOf(lang)[key]!.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}</li></ul>`));
+    }
+  }
 });
 
 test("the action links come from theme.options.trust, under the site base", () => {
@@ -364,6 +392,20 @@ test("Escape on a closed panel, and every other key, changes nothing", () => {
   assert.equal(open.panel.open, true);
   assert.equal(open.summary.focused, false);
   assert.equal(prevented, false);
+});
+
+test("long explanations wrap instead of running off the panel, and rows stack at narrow widths", () => {
+  assert.match(css, /\.trust-panel-body\s*\{[^}]*overflow-wrap:\s*anywhere/s);
+  assert.match(
+    css,
+    /\.trust-panel-body\s*\{[^}]*max-inline-size:\s*min\(var\(--type-measure-min\),\s*calc\(100vw - var\(--space-6\)\)\)/s,
+    "the panel never grows wider than the viewport",
+  );
+  assert.match(
+    css,
+    /@media \(max-width: 40rem\)[\s\S]*?\.trust-panel-rows\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/,
+    "the rows stack on a narrow screen",
+  );
 });
 
 test("style.css uses logical properties only", () => {

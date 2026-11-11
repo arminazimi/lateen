@@ -200,6 +200,12 @@ test("style.css uses logical properties only", () => {
   assert.doesNotMatch(css, /\b(left|right):\s/);
 });
 
+test("style.css keeps a figure inside a narrow column and the image at its intrinsic ratio", () => {
+  assert.match(css, /\.figure\s*\{[^}]*max-inline-size:\s*100%/);
+  assert.match(css, /\.figure-img\s*\{[^}]*max-inline-size:\s*100%/);
+  assert.match(css, /\.figure-img\s*\{[^}]*block-size:\s*auto/);
+});
+
 test("style.css swaps the paired images by data-theme and by the system setting", () => {
   assert.match(css, /:root\[data-theme="dark"\] \.figure-paired \.figure-img-light\s*\{\s*display:\s*none/);
   assert.match(css, /:root\[data-theme="dark"\] \.figure-paired \.figure-img-dark\s*\{\s*display:\s*block/);

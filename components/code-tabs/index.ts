@@ -54,11 +54,20 @@ export function idBase(raw: string | undefined): string {
 
 /**
  * A group of code blocks as tabs. Without JavaScript every block shows stacked under its title. The island
- * (`client.ts`) turns the titles into a WAI-ARIA tab list and shows one block at a time.
+ * (`client.ts`) turns the titles into a WAI-ARIA tab list and shows one block at a time. A body with no code
+ * block is kept whole, with no tabs, so nothing is dropped.
  */
 export default function codeTabs({ props, html }: ComponentProps<CodeTabsProps>) {
   const base = idBase(props.id);
   const bodies = blocks(html);
+  if (bodies.length === 0) {
+    return h(
+      "div",
+      { class: CODE_TABS_CLASS, "data-code-tabs": "" },
+      h("div", { class: BODY_CLASS, dangerouslySetInnerHTML: { __html: html } }),
+    );
+  }
+
   const labels = parseLabels(props.labels);
   const names = bodies.map((_, i) => labels[i]?.trim() || String(i + 1));
 

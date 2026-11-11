@@ -5,8 +5,9 @@
 // property slips in, or when the file grows past its budget. It lives beside the other unit tests
 // and adds no shared index file.
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { test } from "node:test";
+import { JSDOM } from "jsdom";
 import { loadTokens } from "../scripts/tokens.ts";
 
 const read = (path: string): string => readFileSync(new URL(path, import.meta.url), "utf8");
@@ -169,6 +170,21 @@ test("code is left to right and isolated inside RTL text", () => {
   assert.match(code.body, /font-family:\s*var\(--type-font-mono\)/);
 });
 
+test("code stays left to right on every right-to-left page, not only Persian and Arabic", () => {
+  const code = rule("pre");
+  assert.ok(code, "no rule for pre");
+  assert.match(code.selector, /\[dir="rtl"\]/, "the code rule does not follow the dir attribute");
+  assert.match(code.body, /text-align:\s*start/, "a left-to-right block should start at its left edge");
+});
+
+test("inline Latin runs in right-to-left prose are isolated", () => {
+  const isolation = blocks(css).find(
+    (block) => block.selector.includes('[dir="ltr"]') && /unicode-bidi:\s*isolate/.test(block.body),
+  );
+  assert.ok(isolation, "no rule isolates the pipeline's <span dir=\"ltr\"> runs");
+  assert.match(isolation.selector, /\[dir="rtl"\]/);
+});
+
 test("rtl.css uses no raw color or raw length outside a token", () => {
   assert.deepEqual(problems((declaration) => rawColor(declaration.value)), []);
   assert.deepEqual(problems((declaration) => rawLength(declaration.value)), []);
@@ -198,4 +214,142 @@ test("rtl.css stays under the 4 KB budget when minified", () => {
     .trim();
   const bytes = Buffer.byteLength(minified);
   assert.ok(bytes > 0 && bytes < 4 * 1024, `minified rtl.css is ${bytes} bytes; the budget is 4096`);
+});
+
+/** Every stylesheet the theme ships, with the path used in failure messages. */
+function themeCss(): { path: string; text: string }[] {
+  const found: { path: string; text: string }[] = [];
+  for (const folder of ["styles", "chrome", "components", "layouts"]) {
+    for (const entry of readdirSync(new URL(`../${folder}/`, import.meta.url), { recursive: true })) {
+      const name = String(entry);
+      if (name.endsWith(".css")) found.push({ path: `${folder}/${name}`, text: read(`../${folder}/${name}`) });
+    }
+  }
+  return found;
+}
+
+/** A declaration that points at a physical edge instead of the reading direction. */
+const PHYSICAL_DECLARATION =
+  /^(?:margin|padding|border|scroll-margin|scroll-padding)-(?:left|right|top|bottom)$|^border-(?:top|bottom)-(?:left|right)-radius$|^(?:left|right|top|bottom)$|^(?:min-|max-)?(?:width|height)$/;
+
+/** The affordances whose meaning is the way the reader moves; the only symbols that may mirror. */
+const MIRRORED = ["pager-arrow", "breadcrumb-sep", "home-arrow"];
+
+test("every stylesheet uses logical direction properties", () => {
+  const problems: string[] = [];
+  for (const file of themeCss()) {
+    for (const declaration of declarations(file.text)) {
+      const sideways = ["text-align", "float", "clear"].includes(declaration.property) && /^(left|right)$/.test(declaration.value);
+      if (PHYSICAL_DECLARATION.test(declaration.property) || sideways) {
+        problems.push(`${file.path}:${declaration.line}: ${declaration.property}: ${declaration.value}`);
+      }
+    }
+  }
+  assert.deepEqual(problems, []);
+});
+
+test("only navigation affordances mirror, never media or technical symbols", () => {
+  const mirrored = new Set<string>();
+  for (const file of themeCss()) {
+    for (const block of blocks(file.text)) {
+      if (!/transform:\s*scaleX\(\s*-1\s*\)/.test(block.body)) continue;
+      const classes = [...block.selector.matchAll(/\.([a-z0-9-]+)/g)].map((match) => match[1] ?? "");
+      assert.ok(classes.length > 0, `${file.path}: ${block.selector} mirrors without naming what it mirrors`);
+      for (const name of classes) {
+        assert.ok(MIRRORED.includes(name), `${file.path}: ${block.selector} mirrors .${name}, which is not a navigation affordance`);
+        mirrored.add(name);
+      }
+    }
+  }
+  for (const name of MIRRORED) assert.ok(mirrored.has(name), `no stylesheet mirrors .${name}`);
+});
+
+/** The theme's own direction and affordance styles, applied to a fixture the way a page loads them. */
+const FIXTURE_CSS = [
+  "../styles/rtl.css",
+  "../styles/base.css",
+  "../chrome/pager/style.css",
+  "../chrome/breadcrumb/style.css",
+  "../layouts/home.css",
+  "../components/diff-block/style.css",
+  "../components/version-diff/style.css",
+  "../components/figure/style.css",
+];
+
+/** A fixture parsed by a DOM with the theme styles; `getComputedStyle` then follows the cascade. */
+function rendered(name: string) {
+  const dom = new JSDOM(read(`../fixtures/rtl/${name}`));
+  for (const path of FIXTURE_CSS) {
+    const style = dom.window.document.createElement("style");
+    style.textContent = read(path);
+    dom.window.document.head.append(style);
+  }
+  return dom.window;
+}
+
+/** The computed direction of the first element matching `selector`. */
+function direction(window: ReturnType<typeof rendered>, selector: string): string {
+  const element = window.document.querySelector(selector);
+  assert.ok(element, `the fixture has no ${selector}`);
+  return window.getComputedStyle(element).direction;
+}
+
+test("the mixed inline fixture reads right to left and keeps its technical runs left to right", () => {
+  const window = rendered("mixed-inline.html");
+  const document = window.document;
+
+  assert.equal(document.documentElement.lang, "fa");
+  assert.equal(document.documentElement.dir, "rtl");
+  assert.equal(direction(window, "#install"), "rtl");
+  assert.equal(direction(window, "#quotation"), "rtl");
+  for (const id of ["inline-code", "path-code", "flag-code", "version", "quote"]) {
+    assert.equal(direction(window, `#${id}`), "ltr", `#${id} should read left to right`);
+  }
+
+  // The sentence keeps its words, and the technical values keep their exact text.
+  const sentence = document.querySelector("#install")?.textContent ?? "";
+  assert.ok(sentence.startsWith("برای نصب "), sentence);
+  assert.ok(sentence.includes("beacon init --force"), sentence);
+  assert.equal(document.querySelector("#path-code")?.textContent, "/etc/beacon/beacon.yml");
+  assert.equal(document.querySelector("#version")?.textContent, "1.2.3");
+});
+
+test("the mixed block fixture keeps its technical blocks left to right", () => {
+  const window = rendered("mixed-block.html");
+  const document = window.document;
+
+  assert.equal(document.documentElement.lang, "he");
+  assert.equal(document.documentElement.dir, "rtl");
+  assert.equal(direction(window, "#prose"), "rtl");
+  for (const selector of ["pre", "#block-code", "#diff", "#ltr-quote", "#ltr-block", "#ltr-code"]) {
+    assert.equal(direction(window, selector), "ltr", `${selector} should read left to right`);
+  }
+
+  // Source order is the reading order: title, prose, code block, quotation, pager.
+  const order = ["#title", "#prose", "#block-code", "#ltr-quote", ".pager-prev", ".pager-next"];
+  const nodes = order.map((selector) => document.querySelector(selector));
+  for (let index = 1; index < nodes.length; index += 1) {
+    const [previous, next] = [nodes[index - 1], nodes[index]];
+    assert.ok(previous && next, `the fixture has no ${order[index]}`);
+    assert.ok(
+      (previous.compareDocumentPosition(next) & window.Node.DOCUMENT_POSITION_FOLLOWING) !== 0,
+      `${order[index]} should come after ${order[index - 1]}`,
+    );
+  }
+});
+
+test("the mixed block fixture mirrors navigation arrows and leaves content symbols alone", () => {
+  const window = rendered("mixed-block.html");
+  for (const selector of [".pager-arrow", ".breadcrumb-sep", ".home-arrow"]) {
+    const nodes = [...window.document.querySelectorAll(selector)];
+    assert.ok(nodes.length > 0, `the fixture has no ${selector}`);
+    for (const node of nodes) {
+      assert.equal(window.getComputedStyle(node).transform, "scaleX(-1)", `${selector} should mirror`);
+    }
+  }
+  for (const selector of [".version-diff-icon", "#media"]) {
+    const node = window.document.querySelector(selector);
+    assert.ok(node, `the fixture has no ${selector}`);
+    assert.equal(window.getComputedStyle(node).transform, "none", `${selector} should not mirror`);
+  }
 });

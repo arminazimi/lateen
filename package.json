@@ -35,6 +35,7 @@
     "tokens": "node scripts/tokens.ts",
     "tokens:check": "node scripts/tokens.ts --check",
     "test": "node scripts/tokens.ts --check && node --test \"test/**/*.test.ts\"",
+    "test:a11y": "node scripts/test-a11y.ts",
     "test:coverage": "node scripts/tokens.ts --check && mkdir -p coverage && node --test --experimental-test-coverage --test-coverage-exclude=\"test/**\" --test-coverage-exclude=\"scripts/**\" --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage/lcov.info \"test/**/*.test.ts\"",
     "coverage:badge": "node scripts/coverage-badge.ts coverage/lcov.info coverage/coverage.json",
     "typecheck": "tsc --noEmit -p tsconfig.json"
@@ -49,8 +50,10 @@
     "preact": "^11.2.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
     "@types/jsdom": "^30.0.0",
     "@types/node": "^26.6.6",
+    "playwright": "1.65.0",
     "preact": "^11.2.0",
     "preact-render-to-string": "^6.8.2",
     "typescript": "^7.0.2"

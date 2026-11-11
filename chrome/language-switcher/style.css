@@ -1,5 +1,7 @@
-/* Language switcher: one link per configured language, in the header. Plain anchors, so it works
-   without JavaScript; the current language carries `aria-current` and a visible word, not colour alone. */
+/* Language switcher: one entry per configured language, in the header. Plain anchors, so it works
+   without JavaScript; the current language carries `aria-current` and a visible word, not colour
+   alone. A fallback link names the language it really shows, and an unavailable language is plain
+   text with its reason for screen readers. */
 
 .language-switcher-list {
   display: flex;
@@ -39,7 +41,36 @@
   font-weight: var(--type-weight-bold);
 }
 
+/* A language with no page: disabled, with a dash so the state is not colour alone. */
+.language-switcher-link--unavailable {
+  color: var(--color-muted);
+  text-decoration: line-through;
+}
+
+/* The actual language of a fallback, next to the one the reader asked for. */
+.language-switcher-state {
+  color: var(--color-muted);
+  font-weight: var(--type-weight-regular);
+}
+
 .language-switcher-current {
   color: var(--color-muted);
   font-weight: var(--type-weight-regular);
+}
+
+/* Names and states carry `dir="auto"`, which isolates them already. The current word is quoted in
+   the site's direction inside a link in the target language, so it is isolated explicitly. */
+.language-switcher-current {
+  unicode-bidi: isolate;
+}
+
+/* The explanation for screen readers, in the accessibility tree but out of sight. */
+.language-switcher-sr {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }

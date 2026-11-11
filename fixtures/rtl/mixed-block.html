@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<!-- Mixed block direction: a Hebrew page. The page and its prose are right to left; a code block,
+     a diff, and an English quotation are left to right blocks inside it. The navigation arrows
+     mirror with the page, while the change marker and the image do not. -->
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>התקנה</title>
+</head>
+<body>
+<header>
+<a class="home-btn home-btn-primary" href="/he/">התחל<svg class="home-arrow" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a>
+<nav class="breadcrumb" aria-label="Breadcrumb">
+<a href="/he/">בית</a>
+<svg class="breadcrumb-sep" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9 6 6 6-6 6"></path></svg>
+<span aria-current="page">התקנה</span>
+</nav>
+</header>
+<main>
+<h1 id="title">התקנה</h1>
+<p id="prose">הריצו את הפקודה הבאה והמתינו לסיום.</p>
+<pre class="code"><code id="block-code">beacon deploy --env=production --json</code></pre>
+<div class="diff-block" id="diff"><pre class="diff-block-lines"><code>--- a/beacon.yml
++++ b/beacon.yml</code></pre></div>
+<blockquote id="ltr-quote" dir="ltr" lang="en"><p>Deploy to production only after a staging run.</p></blockquote>
+<section dir="ltr" lang="en"><p id="ltr-block">A left-to-right excerpt with <code id="ltr-code">--dry-run</code>.</p></section>
+<figure class="figure" id="figure"><img id="media" src="diagram.png" alt=""></figure>
+<nav class="pager" aria-label="Previous and next pages">
+<a class="pager-link pager-prev" rel="prev" href="/he/install/"><span class="pager-label"><svg class="pager-arrow" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M11 6l-6 6 6 6M5 12h14"></path></svg>הקודם</span><span class="pager-title">התקנה</span></a>
+<a class="pager-link pager-next" rel="next" href="/he/config/"><span class="pager-label">הבא<svg class="pager-arrow" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M13 6l6 6-6 6M19 12H5"></path></svg></span><span class="pager-title">הגדרה</span></a>
+</nav>
+<div class="version-diff" id="version-diff"><svg class="version-diff-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3 5h10"></path><path d="m10 2 3 3-3 3"></path><path d="M13 11H3"></path><path d="m6-3-3 3 3 3"></path></svg><span>הועבר</span></div>
+</main>
+</body>
+</html>

@@ -73,8 +73,10 @@ export function select(tabs: readonly TabsElement[], panels: readonly TabsElemen
 }
 
 /**
- * Wires one group. A group whose tabs and panels do not pair up stays stacked: the island changes nothing.
- * `rtl` is the group's direction, which decides which arrow key moves forward.
+ * Wires one group. A group whose tabs and panels do not pair up stays stacked: the island changes
+ * nothing. `rtl` is the group's direction, which decides which arrow key moves forward. The group is
+ * enhanced only after every part is wired; a failure halfway through leaves its blocks stacked and
+ * readable rather than hidden behind a tab list that does not work.
  */
 export function activate(group: TabsGroup, rtl: boolean): void {
   const list = group.querySelector(TABLIST_SELECTOR);
@@ -82,34 +84,45 @@ export function activate(group: TabsGroup, rtl: boolean): void {
   const panels = [...group.querySelectorAll(PANEL_SELECTOR)];
   if (!list || tabs.length === 0 || tabs.length !== panels.length) return;
 
-  tabs.forEach((tab, i) => {
-    const panel = panels[i];
-    if (panel) {
-      panel.setAttribute("role", "tabpanel");
-      panel.setAttribute("aria-labelledby", tab.id);
-    }
-    tab.addEventListener("click", () => select(tabs, panels, i));
-  });
+  try {
+    tabs.forEach((tab, i) => {
+      const panel = panels[i];
+      if (panel) {
+        panel.setAttribute("role", "tabpanel");
+        panel.setAttribute("aria-labelledby", tab.id);
+      }
+      tab.addEventListener("click", () => select(tabs, panels, i));
+    });
 
-  list.addEventListener("keydown", (event) => {
-    const from = tabs.indexOf(event.target as TabsElement);
-    if (from === -1) return;
-    const to = step(event.key ?? "", from, tabs.length, rtl);
-    if (to === undefined) return;
-    event.preventDefault();
-    select(tabs, panels, to);
-    tabs[to]?.focus();
-  });
+    list.addEventListener("keydown", (event) => {
+      const from = tabs.indexOf(event.target as TabsElement);
+      if (from === -1) return;
+      const to = step(event.key ?? "", from, tabs.length, rtl);
+      if (to === undefined) return;
+      event.preventDefault();
+      select(tabs, panels, to);
+      tabs[to]?.focus();
+    });
+
+    select(tabs, panels, 0);
+    list.hidden = false;
+  } catch {
+    list.hidden = true;
+    for (const panel of panels) panel.hidden = false;
+    return;
+  }
 
   group.setAttribute("data-enhanced", "");
-  list.hidden = false;
-  select(tabs, panels, 0);
 }
 
 // The island runs when the browser loads it; nothing happens in a runtime without a document.
 if (typeof document !== "undefined") {
   for (const element of document.querySelectorAll(GROUP_SELECTOR)) {
     const group = element as TabsGroup;
-    activate(group, getComputedStyle(element).direction === "rtl");
+    try {
+      activate(group, getComputedStyle(element).direction === "rtl");
+    } catch {
+      // One group that cannot be read must not keep the rest of the page from enhancing.
+    }
   }
 }

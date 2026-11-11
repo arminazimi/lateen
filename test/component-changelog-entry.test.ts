@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import type { Page, Site, SiteConfig, SourcePos } from "@velella/mizzen/contracts";
+import { languages, stringsOf } from "../i18n/index.ts";
 import changelogEntry, {
   BODY_CLASS,
   CATEGORY_CLASS,
@@ -11,6 +12,7 @@ import changelogEntry, {
   HEADING_CLASS,
   META_CLASS,
   SECTION_CLASS,
+  SR_CLASS,
   VERSION_CLASS,
   categoriesOf,
   idOf,
@@ -98,13 +100,31 @@ test("default export is the changelog entry component", () => {
 
 test("renders a section with a deterministic id and an h2 whose version links to itself", () => {
   const out = entry({});
-  assert.match(out, new RegExp(`^<section class="${SECTION_CLASS}" id="v1-2-0" aria-labelledby="changelog-version-v1-2-0">`));
   assert.match(
     out,
     new RegExp(
-      `<h2 class="${HEADING_CLASS}" aria-labelledby="changelog-version-v1-2-0"><span id="changelog-version-v1-2-0" class="${VERSION_CLASS}">1\\.2\\.0</span><a class="changelog-entry-anchor" href="#v1-2-0" aria-label="Link to release 1\\.2\\.0">`,
+      `^<section class="${SECTION_CLASS}" id="v1-2-0" data-version="1\\.2\\.0" aria-labelledby="changelog-version-v1-2-0">`,
     ),
   );
+  assert.match(
+    out,
+    new RegExp(
+      `<h2 class="${HEADING_CLASS}" aria-labelledby="changelog-version-v1-2-0"><span id="changelog-version-v1-2-0" class="${VERSION_CLASS}"><span class="${SR_CLASS}">Version </span>1\\.2\\.0</span><a class="changelog-entry-anchor" href="#v1-2-0" aria-label="Link to release 1\\.2\\.0">`,
+    ),
+  );
+});
+
+test("the heading reads \"Version <version>\" to assistive tech in the page's language", () => {
+  for (const lang of languages) {
+    const out = render({ version: "1.2.0", date: "2026-11-09" }, "<p>Body.</p>", lang);
+    assert.ok(out.includes(`>${stringsOf(lang).changelog_version!} </span>`), `${lang} names the version`);
+  }
+});
+
+test("an unversioned entry has no version word and no data-version", () => {
+  const out = entry({ version: "   " });
+  assert.doesNotMatch(out, new RegExp(SR_CLASS));
+  assert.doesNotMatch(out, /data-version=/);
 });
 
 test("the date is machine readable and shows the page's calendar", () => {
@@ -171,7 +191,7 @@ test("escapes the version text and keeps the id to a safe slug", () => {
 test("an empty body keeps the heading and shows a clear no-details paragraph", () => {
   const out = render({ version: "1.2.0", date: "2026-11-09", categories: "fixed" }, "");
   assert.match(out, new RegExp(`<section class="${SECTION_CLASS}" id="v1-2-0"`));
-  assert.match(out, /<span[^>]*>1\.2\.0<\/span>/);
+  assert.match(out, />1\.2\.0<\/span>/);
   assert.match(out, new RegExp(`<p class="${EMPTY_CLASS}">No details for this release\\.</p>`));
 });
 

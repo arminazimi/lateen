@@ -5,11 +5,12 @@
  * downloads no search JavaScript data.
  *
  * The action list arrives as inert JSON from `chrome/command-palette/`; this module parses it,
- * filters it on the same query as the page results, and runs the chosen action. The module stays a
- * single file (no runtime imports of the theme's server modules), so it is safe to serve as an island.
+ * filters it on the same query as the page results, and runs the chosen action. The module and its
+ * client-only helper (`shortcut.ts`) import no server module, so they are safe to serve as an island.
  */
 
 import type { PaletteAction, PalettePayload, PaletteRun, ThemeChoice } from "../command-palette/actions.ts";
+import { activateShortcuts, type ShortcutEvent } from "./shortcut.ts";
 
 /** localStorage key for the visitor's theme choice; keep in step with `layouts/base.ts`. */
 export const THEME_KEY = "lateen-theme";
@@ -64,6 +65,7 @@ export interface SearchButton {
   hidden: boolean;
   setAttribute(name: string, value: string): void;
   addEventListener(type: "click", listener: () => void): void;
+  click(): void;
   focus(): void;
 }
 
@@ -503,6 +505,8 @@ export function activate(parts: SearchParts, env: SearchEnv): void {
   let api: PagefindApi | undefined;
   let loading = false;
   let sequence = 0;
+  // A section jump is a move inside the page: the close must not pull focus back to the search button.
+  let returnFocus = true;
 
   dialog.hidden = false;
   button.hidden = false;
@@ -528,8 +532,11 @@ export function activate(parts: SearchParts, env: SearchEnv): void {
       }
       return;
     }
-    handlers.section?.(command.id);
+    // The heading is where the reader is going, so it keeps focus: the close handler must not take it
+    // back to the search button, whether the browser fires `close` during `close()` or after it.
+    returnFocus = false;
     dialog.close();
+    handlers.section?.(command.id);
   };
 
   /** The key that identifies a focused row, so a redraw can put focus back on the same row. */
@@ -540,9 +547,9 @@ export function activate(parts: SearchParts, env: SearchEnv): void {
     return href === undefined || href === null || href === "" ? undefined : `href:${href}`;
   };
 
-  /** Keeps keyboard focus inside the list when a new result set replaces the focused row. */
-  const restoreFocus = (key: string | undefined): void => {
-    if (key === undefined) return;
+  /** Keeps keyboard focus inside the list when a new result set replaces the focused row; false when the list is empty. */
+  const restoreFocus = (key: string | undefined): boolean => {
+    if (key === undefined) return false;
     const items = [...results.querySelectorAll("a[href], [data-palette-action]")];
     const match = items.find((item) => {
       const action = item.getAttribute?.("data-palette-action");
@@ -551,7 +558,9 @@ export function activate(parts: SearchParts, env: SearchEnv): void {
       return href !== undefined && href !== null && href !== "" && `href:${href}` === key;
     });
     const target = match ?? items[0];
-    if (target !== undefined) target.focus();
+    if (target === undefined) return false;
+    target.focus();
+    return true;
   };
 
   /** Draws both groups for `query`: matched actions always, page results when they are known. */
@@ -561,16 +570,17 @@ export function activate(parts: SearchParts, env: SearchEnv): void {
     const inside = key !== undefined && results.contains?.(active as unknown as SearchNode) === true;
     if (actions.length === 0 && matched.length === 0 && records.length === 0) {
       results.replaceChildren();
-      return;
+    } else {
+      renderPalette(results, {
+        actions: matched,
+        label: palette.label,
+        records,
+        doc: env.document,
+        run: execute,
+      });
     }
-    renderPalette(results, {
-      actions: matched,
-      label: palette.label,
-      records,
-      doc: env.document,
-      run: execute,
-    });
-    if (inside) restoreFocus(key);
+    // Removing the row that had focus would drop focus on the page; the field is the next step.
+    if (inside && !restoreFocus(key)) input.focus();
   };
 
   /** Runs the field's current query: an empty field shows the actions and clears the status. */
@@ -606,6 +616,7 @@ export function activate(parts: SearchParts, env: SearchEnv): void {
 
   /** Opens the dialog and, on the first open, loads the index; later opens reuse it. */
   const show = (): void => {
+    returnFocus = true;
     if (!dialog.open) dialog.showModal();
     button.setAttribute("aria-expanded", "true");
     input.focus();
@@ -633,9 +644,14 @@ export function activate(parts: SearchParts, env: SearchEnv): void {
   button.addEventListener("click", show);
   close.addEventListener("click", () => dialog.close());
   input.addEventListener("input", run);
+  // A press on the modal backdrop lands on the dialog itself; a press on the panel or a row does not.
+  dialog.addEventListener("click", (event) => {
+    if (event.target === dialog) dialog.close();
+  });
   dialog.addEventListener("close", () => {
     button.setAttribute("aria-expanded", "false");
-    button.focus();
+    if (returnFocus) button.focus();
+    returnFocus = true;
   });
   dialog.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
@@ -738,7 +754,9 @@ declare const document: {
   querySelector(selector: string): unknown;
   createElement(tag: string): SearchElement;
   createTextNode(text: string): SearchNode;
+  addEventListener(type: "keydown", listener: (event: ShortcutEvent) => void): void;
 };
+declare const navigator: { readonly platform: string };
 
 /** Imports the Pagefind module from the built index. */
 function loadIndex(url: string): Promise<PagefindApi> {
@@ -766,6 +784,11 @@ if (typeof document !== "undefined") {
         ...(palette === null ? {} : { palette }),
       },
       { document, load: loadIndex, palette: parsePalette(palette?.textContent ?? null) },
+    );
+    // ⌘K/Ctrl+K and `/` press this button from anywhere, exactly as a pointer would.
+    activateShortcuts(
+      { button: button as unknown as SearchButton },
+      { platform: navigator.platform, addEventListener: (type, listener) => document.addEventListener(type, listener) },
     );
   }
 }

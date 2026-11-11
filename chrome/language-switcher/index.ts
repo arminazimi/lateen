@@ -1,5 +1,5 @@
 import { h } from "preact";
-import type { Chrome, LanguageConfig, Page, Site, SiteConfig } from "@velella/mizzen/contracts";
+import type { Chrome, Direction, LanguageConfig, Page, Site, SiteConfig } from "@velella/mizzen/contracts";
 import { t } from "../../i18n/index.ts";
 
 /** A language as the switcher reads it: a normalised root-relative prefix (`""` or `/fa`). */
@@ -23,6 +23,28 @@ interface PagePaths {
   readonly rest: string;
 }
 
+/** The language a fallback link really opens, named in its own language. */
+interface ActualLanguage {
+  /** BCP 47 tag of the page the link opens. */
+  readonly code: string;
+  /** Name shown for that page's language. */
+  readonly name: string;
+  /** That page's text direction. */
+  readonly dir: Direction;
+}
+
+/** What one configured language means for the page being rendered. */
+interface LanguageEntry {
+  /** The configured language this entry stands for. */
+  readonly language: SwitcherLanguage;
+  /** `current` is this page, `translated` has its own page, `fallback` opens another language, `missing` has none. */
+  readonly state: "current" | "translated" | "fallback" | "missing";
+  /** Where the entry goes; absent when no equivalent page exists. */
+  readonly href?: string;
+  /** The page's real language, set only for a fallback. */
+  readonly actual?: ActualLanguage;
+}
+
 /** Compares by code point, never by locale. */
 function byCodePoint(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
@@ -31,6 +53,14 @@ function byCodePoint(a: string, b: string): number {
 /** A language tag in the form matching compares: trimmed, lower case, `_` read as `-`. */
 function tagKey(tag: string): string {
   return tag.trim().toLowerCase().replace(/_/g, "-");
+}
+
+/** The tag and each shorter form: `pt-BR-x` → `["pt-br-x", "pt-br", "pt"]`. */
+function tagChain(tag: string): readonly string[] {
+  const parts = tagKey(tag).split("-").filter((part) => part !== "");
+  const chain: string[] = [];
+  for (let length = parts.length; length > 0; length--) chain.push(parts.slice(0, length).join("-"));
+  return chain;
 }
 
 /** A URL or prefix as its non-empty path segments: `/fa/guide/` → `["fa", "guide"]`. */
@@ -126,6 +156,26 @@ function alternatesOf(data: Readonly<Record<string, unknown>>): Alternates | und
 }
 
 /**
+ * The languages to try when a page has none in the wanted language: `_data/languages.yml`'s
+ * `fallback` list when it provides one, else the site language. An explicit empty list means no
+ * fallback, exactly as the engine reads it.
+ */
+function fallbackChain(config: SiteConfig, data: Readonly<Record<string, unknown>>): readonly string[] {
+  const languages = data["languages"];
+  if (isMapping(languages)) {
+    const fallback = languages["fallback"];
+    if (Array.isArray(fallback)) {
+      const chain = fallback
+        .filter((entry): entry is string => typeof entry === "string")
+        .map((entry) => entry.trim())
+        .filter((entry) => entry !== "");
+      if (fallback.length === 0 || chain.length > 0) return chain;
+    }
+  }
+  return [config.lang];
+}
+
+/**
  * The page's key in the alternate map: its non-empty `translation_key`, else the shared path.
  */
 function identityOf(page: Pick<Page, "frontMatter">, rest: string): string {
@@ -172,12 +222,76 @@ function mappedHref(
 }
 
 /**
- * The language switcher: one link per configured language, each to the same page under that
- * language's prefix. The current language is the one the page URL names, and is marked with
- * `aria-current` plus a visible word, never colour alone. `_data/languages.yml` may override any
- * link through its `alternates` map (see the README). Links are plain anchors, so the switcher works
- * without JavaScript; the reader's theme already carries across languages because every language
- * lives on the same origin and `THEME_KEY` is origin-wide.
+ * The pages that share `identity`, by lower-case language tag. Pages are read in URL order so a
+ * repeated language gives the same page every time. Assets are left out: a translation is a page to
+ * read, not a file to download.
+ */
+function translationsOf(site: Site, identity: string): ReadonlyMap<string, Page> {
+  const translations = new Map<string, Page>();
+  const pages = [...site.pages].sort((a, b) => byCodePoint(a.url, b.url));
+  for (const candidate of pages) {
+    if (candidate.kind === "asset") continue;
+    if (identityOf(candidate, pagePaths(site.config, candidate).rest) !== identity) continue;
+    const key = tagKey(candidate.lang);
+    if (!translations.has(key)) translations.set(key, candidate);
+  }
+  return translations;
+}
+
+/** The name and direction of a page's language, as the config or the page itself gives them. */
+function actualLanguageOf(site: Site, page: Page): ActualLanguage {
+  const configured = resolvedLanguages(site.config).find((language) => tagKey(language.code) === tagKey(page.lang));
+  return { code: page.lang, name: configured?.name ?? page.lang, dir: page.dir };
+}
+
+/**
+ * Where one configured language leads for this page. The current language opens the page itself; an
+ * explicit alternate or a page in that language is a translation; a page in a shorter tag or in the
+ * fallback chain is a fallback; anything else is missing, and is never given a guessed URL.
+ */
+function languageEntry(
+  site: Site,
+  page: Page,
+  language: SwitcherLanguage,
+  current: SwitcherLanguage | undefined,
+  identity: string,
+  alternates: Alternates | undefined,
+  translations: ReadonlyMap<string, Page>,
+  chain: readonly string[],
+): LanguageEntry {
+  const mapped = mappedHref(alternates, identity, language, site.config.base);
+  if (current !== undefined && tagKey(current.code) === tagKey(language.code)) {
+    return { language, state: "current", href: mapped ?? page.url };
+  }
+  if (mapped !== undefined) return { language, state: "translated", href: mapped };
+
+  for (const tag of [language.code, ...chain]) {
+    for (const form of tagChain(tag)) {
+      const found = translations.get(form);
+      if (found === undefined) continue;
+      if (form === tagKey(language.code)) return { language, state: "translated", href: found.url };
+      return { language, state: "fallback", href: found.url, actual: actualLanguageOf(site, found) };
+    }
+  }
+
+  return { language, state: "missing" };
+}
+
+/** The text a screen reader hears for a language whose page is not in that language. */
+function unavailableLabel(site: Site): string {
+  return t(site.config.lang, "translation_missing");
+}
+
+/**
+ * The language switcher: one entry per configured language, each to the page the site really builds
+ * in that language. The current language opens the page itself and is marked with `aria-current` plus
+ * a visible word, never colour alone. A translation that does not exist is not guessed from the URL:
+ * a language served by a fallback opens that page and names the language it really shows, and a
+ * language with no page at all is plain text with the reason a screen reader announces. Page URLs
+ * come from the model, so `base`, version segments, and `translation_key` routes are kept exactly.
+ * `_data/languages.yml` may override any link through its `alternates` map (see the README). Links are
+ * plain anchors, so the switcher works without JavaScript; the reader's theme already carries across
+ * languages because every language lives on the same origin and `THEME_KEY` is origin-wide.
  */
 const languageSwitcher: Chrome = ({ site, page }) => {
   const languages = resolvedLanguages(site.config);
@@ -188,6 +302,9 @@ const languageSwitcher: Chrome = ({ site, page }) => {
   const currentLabel = t(site.config.lang, "language_current");
   const alternates = alternatesOf(site.data);
   const identity = identityOf(page, rest);
+  const translations = translationsOf(site, identity);
+  const chain = fallbackChain(site.config, site.data);
+  const unavailable = unavailableLabel(site);
 
   return h(
     "nav",
@@ -196,22 +313,50 @@ const languageSwitcher: Chrome = ({ site, page }) => {
       "ul",
       { class: "language-switcher-list" },
       ...languages.map((language) => {
-        const isCurrent = current !== undefined && tagKey(current.code) === tagKey(language.code);
-        const href = mappedHref(alternates, identity, language, site.config.base) ?? hrefFor(site.config, language, rest);
+        const entry = languageEntry(site, page, language, current, identity, alternates, translations, chain);
+        const classes = ["language-switcher-item"];
+        if (entry.state === "current") classes.push("language-switcher-item--current");
+
+        if (entry.state === "missing") {
+          return h(
+            "li",
+            { class: classes.join(" "), "data-language-state": entry.state },
+            h(
+              "span",
+              {
+                class: "language-switcher-link language-switcher-link--unavailable",
+                lang: language.code,
+                "aria-disabled": "true",
+              },
+              h("span", { class: "language-switcher-name", dir: "auto" }, language.name),
+              h("span", { class: "language-switcher-state", "aria-hidden": "true" }, "—"),
+              h("span", { class: "language-switcher-sr", lang: site.config.lang, dir: site.config.dir }, unavailable),
+            ),
+          );
+        }
+
         return h(
           "li",
-          { class: isCurrent ? "language-switcher-item language-switcher-item--current" : "language-switcher-item" },
+          { class: classes.join(" "), "data-language-state": entry.state },
           h(
             "a",
             {
-              class: "language-switcher-link",
-              href,
-              hreflang: language.code,
+              class: entry.state === "fallback" ? "language-switcher-link language-switcher-link--fallback" : "language-switcher-link",
+              href: entry.href,
+              hreflang: entry.actual?.code ?? language.code,
               lang: language.code,
-              "aria-current": isCurrent ? "true" : undefined,
+              "aria-current": entry.state === "current" ? "true" : undefined,
             },
-            h("span", { class: "language-switcher-name" }, language.name),
-            isCurrent ? h("span", { class: "language-switcher-current" }, ` (${currentLabel})`) : null,
+            h("span", { class: "language-switcher-name", dir: "auto" }, language.name),
+            entry.actual === undefined
+              ? null
+              : h("span", { class: "language-switcher-sr", lang: site.config.lang, dir: site.config.dir }, unavailable),
+            entry.state === "current"
+              ? h("span", { class: "language-switcher-current", lang: site.config.lang, dir: site.config.dir }, ` (${currentLabel})`)
+              : null,
+            entry.actual === undefined
+              ? null
+              : h("span", { class: "language-switcher-state", lang: entry.actual.code, dir: "auto" }, ` (${entry.actual.name})`),
           ),
         );
       }),

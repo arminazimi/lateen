@@ -26,7 +26,8 @@ export function endpointOf(config: SiteConfig): string | undefined {
  * when the site sets no endpoint, so a site that does not use it carries no markup and no request
  * address. The root and both buttons start `hidden`; `client.ts` reveals them, so a visitor without
  * JavaScript sees no control that would do nothing. The vote is posted to
- * `theme.options.feedback.endpoint`; the address is the page's own URL.
+ * `theme.options.feedback.endpoint` with the page's own URL and its canonical source file, so whoever
+ * reads the answers can find the page and the text it came from.
  */
 const feedback: Chrome = ({ site, page }) => {
   const endpoint = endpointOf(site.config);
@@ -41,6 +42,7 @@ const feedback: Chrome = ({ site, page }) => {
       hidden: true,
       "data-endpoint": endpoint,
       "data-url": page.url,
+      "data-source": page.source.file,
       "data-thanks": t(lang, "feedback_thanks"),
       "data-failed": t(lang, "feedback_failed"),
       "data-already": t(lang, "feedback_already"),

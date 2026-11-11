@@ -26,13 +26,13 @@ export const THEME_SCRIPT =
 
 /** Content for the slots the layout places around the page. Each is optional and renders nothing when empty. */
 export interface BaseSlots {
-  /** Site header: logo, tabs, search, theme switch. */
+  /** Site header: logo, tabs, search, theme switch. The header chrome renders the banner landmark. */
   readonly header?: ComponentChildren;
-  /** Sidebar navigation, beside the main column. */
+  /** Sidebar navigation, beside the main column. Its own `<nav>` is the navigation landmark. */
   readonly sidebar?: ComponentChildren;
   /** The page itself; falls back to the page's rendered HTML. */
   readonly main?: ComponentChildren;
-  /** Aside beside the main column, such as the table of contents. */
+  /** Aside beside the main column, such as the table of contents, which brings its own navigation landmark. */
   readonly aside?: ComponentChildren;
   /** Site footer; the theme's own footer (from the `footer` theme options) when none is given. */
   readonly footer?: ComponentChildren;
@@ -87,10 +87,12 @@ function headNodes(head: Head, config: SiteConfig) {
 }
 
 /**
- * The document shell every page uses: `<html lang dir>`, the head, the skip links, and header, main, and
- * footer landmarks, with slots for header, sidebar, main, aside, and footer. It places the footnote
- * popover's mount point once per page. Islands load at the end of the body. The navigation skip link is
- * left out when no sidebar slot is given, since its target is not there.
+ * The document shell every page uses: `<html lang dir>`, the head, the skip links, and the main and footer
+ * landmarks, with slots for header, sidebar, main, aside, and footer. The header, sidebar, and aside slots
+ * render as given: the header chrome carries the banner landmark and the sidebar and table of contents
+ * carry their own named navigation landmarks, so wrapping them here would repeat a landmark and its name.
+ * It places the footnote popover's mount point once per page. Islands load at the end of the body. The
+ * navigation skip link is left out when no sidebar slot is given, since its target is not there.
  */
 export default function base(props: BaseProps) {
   const { page, head, islands, header, sidebar, main, aside, footer } = props;
@@ -104,19 +106,17 @@ export default function base(props: BaseProps) {
       null,
       skipLinks({ ...props, navigation: sidebar != null }),
       announcement(props) as ComponentChildren,
-      header == null ? null : h("header", null, header),
+      header,
       h(
         "div",
         { class: "layout" },
-        sidebar == null
-          ? null
-          : h("aside", { class: "sidebar", id: NAVIGATION_ID, "aria-label": "Site navigation" }, sidebar),
+        sidebar == null ? null : h("div", { class: "sidebar", id: NAVIGATION_ID }, sidebar),
         h(
           "main",
           { id: MAIN_ID, tabIndex: -1 },
           main ?? h("div", { dangerouslySetInnerHTML: { __html: page.html } }),
         ),
-        aside == null ? null : h("aside", { class: "aside", "aria-label": "On this page" }, aside),
+        aside == null ? null : h("div", { class: "aside" }, aside),
       ),
       footnotePopover(props) as ComponentChildren,
       footerNode == null ? null : h("footer", null, footerNode),

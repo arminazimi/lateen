@@ -164,9 +164,9 @@ A site cannot add a component without changing the theme or its fork: components
 3. Add `style.css` only when the component has styles. Read tokens with `var(--…)`, use logical properties, and name classes after the component: the root is `<name>`, its parts add a suffix such as `<name>-title`.
 4. Add `client.ts` only when the component needs the browser. It is an island: it ships only on pages that use the component, and every control it enhances starts `hidden` so the page still reads without JavaScript.
 5. Add `test/component-<name>.test.ts` beside the other component tests. Test the rendered element, each variant, escaping, and the source position.
-6. Run `npm run check`. The registry finds the new folder, and an unknown directive or a missing default export becomes a diagnostic naming the file.
+6. Run `npm run typecheck` and `npm test`. The registry finds the new folder, and an unknown directive or a missing default export becomes a diagnostic naming the file.
 
-The full rules for a unit are in [components/README.md](components/README.md) and `docs/blocks.md`.
+The full rules for a unit are in [components/README.md](components/README.md).
 
 ## Layout
 

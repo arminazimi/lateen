@@ -9,6 +9,8 @@ export type EndpointProps = {
   method?: string;
   /** The path, with parameters as `{id}` (OpenAPI) or `:id` (Express). */
   path?: string;
+  /** Id of the endpoint block. Give one when two endpoints share a method and path. */
+  id?: string;
 };
 
 /** One `{name}` or `:name` in a path. The capture group keeps the parameters at the odd indexes of a split. */
@@ -42,6 +44,39 @@ export function methodClassOf(method: string): string {
   return `endpoint-method endpoint-method-${known ? method.toLowerCase() : "other"}`;
 }
 
+/** A value reduced to letters, digits, `-` and `_`, so it can go in an id. */
+function slugOf(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}_-]+/gu, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/**
+ * The id of an endpoint block: the `id` prop when given, otherwise the method and path, so the same
+ * endpoint keeps the same anchor across builds.
+ */
+export function idOf(props: EndpointProps): string {
+  const given = slugOf(typeof props.id === "string" ? props.id : "");
+  if (given !== "") return given;
+  const method = methodOf(props.method)?.toLowerCase() ?? "";
+  const path = slugOf(typeof props.path === "string" ? props.path : "");
+  const stem = [method, path].filter((part) => part !== "").join("-");
+  return stem === "" ? "endpoint" : `endpoint-${stem}`;
+}
+
+/** The canonical request line a link or a copy action takes, without the badge's styling. */
+export function requestLineOf(method: string | undefined, path: string): string {
+  return method === undefined ? path : `${method} ${path}`.trim();
+}
+
+/** The id of one entry in the parameter list. */
+export function parameterId(base: string, name: string): string {
+  return `${base}-param-${slugOf(name) || "parameter"}`;
+}
+
 /**
  * An API endpoint for a reference page: the method badge, the path with its parameters highlighted,
  * the parameters the path names, and the body (descriptions and request or response samples).
@@ -51,10 +86,17 @@ export default function endpoint({ props, html }: ComponentProps<EndpointProps>)
   const method = methodOf(props.method);
   const path = typeof props.path === "string" ? props.path : "";
   const names = parameterNames(path);
+  const id = idOf(props);
 
   return h(
     "div",
-    { class: "endpoint" },
+    {
+      class: "endpoint",
+      id,
+      "data-method": method,
+      "data-path": path,
+      "data-copy-value": requestLineOf(method, path),
+    },
     h(
       "div",
       { class: "endpoint-line" },
@@ -72,7 +114,13 @@ export default function endpoint({ props, html }: ComponentProps<EndpointProps>)
       : h(
           "ul",
           { class: "endpoint-params" },
-          names.map((name) => h("li", null, h("code", { class: "endpoint-param", dir: "ltr" }, name))),
+          names.map((name) =>
+            h(
+              "li",
+              { id: parameterId(id, name), "data-param": name },
+              h("code", { class: "endpoint-param", dir: "ltr" }, name),
+            ),
+          ),
         ),
     html === ""
       ? null

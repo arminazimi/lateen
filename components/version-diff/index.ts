@@ -13,6 +13,9 @@ export type ChangeKind = (typeof KINDS)[number];
 /** The id prefix used when the directive gives none. */
 export const DEFAULT_ID = "version-diff";
 
+/** Class on text for assistive tech only: the "added" or "removed" word before an excerpt marker. */
+export const SR_CLASS = "version-diff-sr";
+
 /**
  * The icon before each kind's label. Each kind has its own shape, so the kinds differ by shape and
  * by the visible label, never by color alone.
@@ -224,13 +227,30 @@ function icon(kind: ChangeKind) {
   );
 }
 
-/** A section of text from one side of the change, under its `Before` or `After` label. */
-function excerpt(side: "before" | "after", label: string, text: string) {
+/** A section of text from one side of the change, under its `Before` or `After` label and marker. */
+function excerpt(side: "before" | "after", label: string, text: string, lang: string) {
+  const added = side === "after";
   return h(
     "div",
     { class: `version-diff-${side}` },
-    h("span", { class: "version-diff-text-label" }, label),
+    h(
+      "span",
+      { class: "version-diff-text-label" },
+      h("span", { class: SR_CLASS }, `${t(lang, added ? "diff_added" : "diff_removed")} `),
+      h("span", { class: "version-diff-marker", "aria-hidden": "true" }, added ? "+ " : "− "),
+      label,
+    ),
     h("p", { class: "version-diff-text", dir: "auto" }, text),
+  );
+}
+
+/** One side of the comparison: its label and the version it names, both in text. */
+function versionLabel(side: "base" | "target", label: string, version: string) {
+  return h(
+    "span",
+    { class: `version-diff-version version-diff-${side}`, "data-version": version },
+    h("span", { class: "version-diff-version-label" }, label, " "),
+    h("span", { class: "version-diff-version-value", dir: "ltr" }, version),
   );
 }
 
@@ -269,8 +289,8 @@ function changeItem(change: VersionChange, index: number, base: string, lang: st
     );
   }
 
-  if (change.before !== undefined) parts.push(excerpt("before", t(lang, "version_diff_before"), change.before));
-  if (change.after !== undefined) parts.push(excerpt("after", t(lang, "version_diff_after"), change.after));
+  if (change.before !== undefined) parts.push(excerpt("before", t(lang, "version_diff_before"), change.before, lang));
+  if (change.after !== undefined) parts.push(excerpt("after", t(lang, "version_diff_after"), change.after, lang));
 
   return h(
     "li",
@@ -288,8 +308,10 @@ function changeItem(change: VersionChange, index: number, base: string, lang: st
 /**
  * A section-by-section diff between two versions of a page. Every change says what it is with a
  * visible label and its own icon shape, not color alone, and shows the section's heading; moved
- * changes also show their old and new position. The diff is an ordered list with a heading, so
- * without JavaScript it reads top to bottom as written.
+ * changes also show their old and new position. The header names the base and target versions in
+ * text, and each changed excerpt carries a `−` or `+` as real text, so copying or printing the diff
+ * keeps the added and removed markers. The diff is an ordered list with a heading, so without
+ * JavaScript it reads top to bottom as written.
  *
  * `client.ts` is the island: it reveals Previous and Next buttons and a change count, and the arrow
  * keys, Home, and End move between changes with one change in the tab order at a time. The wording
@@ -306,14 +328,31 @@ const versionDiff: Component<VersionDiffProps> = ({ props, page }) => {
 
   return h(
     "section",
-    { class: "version-diff", "data-version-diff": base, "aria-labelledby": titleId },
+    {
+      class: "version-diff",
+      "data-version-diff": base,
+      "data-version-from": diff.from,
+      "data-version-to": diff.to,
+      "aria-labelledby": titleId,
+    },
     h(
       "header",
       { class: "version-diff-header" },
       h(
-        "h2",
-        { class: "version-diff-title", id: titleId },
-        t(page.lang, "version_diff_title", { from: diff.from, to: diff.to }),
+        "div",
+        { class: "version-diff-heading" },
+        h(
+          "h2",
+          { class: "version-diff-title", id: titleId },
+          t(page.lang, "version_diff_title", { from: diff.from, to: diff.to }),
+        ),
+        h(
+          "p",
+          { class: "version-diff-versions" },
+          versionLabel("base", t(page.lang, "version_diff_base"), diff.from),
+          " ",
+          versionLabel("target", t(page.lang, "version_diff_target"), diff.to),
+        ),
       ),
       h(
         "div",

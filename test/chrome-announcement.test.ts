@@ -256,11 +256,14 @@ test("activate survives a broken store, still hiding the bar for this view", () 
 
 test("the base layout places the bar above the header", () => {
   const out = renderToString(
-    base({ ...layoutProps({ announcement: { id: "v0-4", text: "Mizzen 0.4 is out." } }), header: h("span", null, "H") }) as never,
+    base({
+      ...layoutProps({ announcement: { id: "v0-4", text: "Mizzen 0.4 is out." } }),
+      header: h("header", { class: "header" }, "H"),
+    }) as never,
   );
 
   const bar = out.indexOf('class="announcement"');
-  const header = out.indexOf("<header>");
+  const header = out.indexOf('<header class="header"');
   assert.ok(bar > out.indexOf("</a>"), "the bar comes after the skip link");
   assert.ok(header > bar, "the header comes after the bar");
 });
