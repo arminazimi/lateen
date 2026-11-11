@@ -11,6 +11,9 @@ export const PANEL_SELECTOR = ".os-tabs-panel";
 /** localStorage key the chosen operating system is remembered under. */
 export const STORAGE_KEY = "lateen-os-tabs";
 
+/** Attribute `activate()` leaves on the groups it wired; a stacked group never carries it. */
+export const ENHANCED_ATTR = "data-enhanced";
+
 /** The operating systems a tab can name. `unknown` means the browser did not say, or a tab named none. */
 export type Os = "mac" | "win" | "linux" | "unknown";
 
@@ -77,6 +80,7 @@ export interface TabsEvent {
 /** One group root as the island touches it. */
 export interface TabsGroup {
   setAttribute(name: string, value: string): void;
+  getAttribute(name: string): string | null;
   querySelector(selector: string): TabsElement | null;
   querySelectorAll(selector: string): Iterable<TabsElement>;
 }
@@ -154,7 +158,8 @@ export function choose(group: TabsGroup, os: Os): boolean {
 /**
  * Wires one group: reveals the tab list, pairs each panel with its tab, and selects the first tab. A group
  * whose tabs and panels do not pair up stays stacked: the island changes nothing. `rtl` is the group's
- * direction, which decides which arrow key moves forward.
+ * direction, which decides which arrow key moves forward. The group is enhanced only after every part is
+ * wired; a failure halfway through leaves its sections stacked and readable.
  */
 export function activate(group: TabsGroup, rtl: boolean): void {
   const list = group.querySelector(TABLIST_SELECTOR);
@@ -162,36 +167,46 @@ export function activate(group: TabsGroup, rtl: boolean): void {
   const panels = [...group.querySelectorAll(PANEL_SELECTOR)];
   if (!list || tabs.length === 0 || tabs.length !== panels.length) return;
 
-  tabs.forEach((tab, i) => {
-    const panel = panels[i];
-    if (panel) {
-      panel.setAttribute("role", "tabpanel");
-      panel.setAttribute("aria-labelledby", tab.id);
-    }
-  });
+  try {
+    tabs.forEach((tab, i) => {
+      const panel = panels[i];
+      if (panel) {
+        panel.setAttribute("role", "tabpanel");
+        panel.setAttribute("aria-labelledby", tab.id);
+      }
+    });
 
-  list.addEventListener("keydown", (event) => {
-    const from = tabs.indexOf(event.target as TabsElement);
-    if (from === -1) return;
-    const to = step(event.key ?? "", from, tabs.length, rtl);
-    if (to === undefined) return;
-    event.preventDefault();
-    select(tabs, panels, to);
-    tabs[to]?.focus();
-  });
+    list.addEventListener("keydown", (event) => {
+      const from = tabs.indexOf(event.target as TabsElement);
+      if (from === -1) return;
+      const to = step(event.key ?? "", from, tabs.length, rtl);
+      if (to === undefined) return;
+      event.preventDefault();
+      select(tabs, panels, to);
+      tabs[to]?.focus();
+    });
 
-  group.setAttribute("data-enhanced", "");
-  list.hidden = false;
-  select(tabs, panels, 0);
+    select(tabs, panels, 0);
+    list.hidden = false;
+  } catch {
+    list.hidden = true;
+    for (const panel of panels) panel.hidden = false;
+    return;
+  }
+
+  group.setAttribute(ENHANCED_ATTR, "");
 }
 
 /**
- * Chooses the starting operating system for every group — what was remembered, else what the browser
- * reports, else the first tab — then remembers each tab a visitor clicks and switches every other
- * group that offers it. Switching can change how tall the page is, so the scroll offset is put back.
+ * Chooses the starting operating system for every enhanced group — what was remembered, else what the
+ * browser reports, else the first tab — then remembers each tab a visitor clicks and switches every other
+ * group that offers it. Switching can change how tall the page is, so the scroll offset is put back. A
+ * group the island could not enhance stays stacked and is never switched.
  */
 export function sync(env: OsEnv): void {
-  const groups = [...env.querySelectorAll(GROUP_SELECTOR)];
+  const groups = [...env.querySelectorAll(GROUP_SELECTOR)].filter(
+    (group) => group.getAttribute(ENHANCED_ATTR) !== null,
+  );
   const os = readChoice(env.read) ?? detectOs(env.platform());
   for (const group of groups) choose(group, os);
 
@@ -239,7 +254,13 @@ function platformOf(): string {
 // The island runs when the browser loads it; nothing happens in a runtime without a document.
 if (typeof document !== "undefined") {
   const groups = [...document.querySelectorAll(GROUP_SELECTOR)] as TabsGroup[];
-  for (const group of groups) activate(group, getComputedStyle(group).direction === "rtl");
+  for (const group of groups) {
+    try {
+      activate(group, getComputedStyle(group).direction === "rtl");
+    } catch {
+      // One group that cannot be read must not keep the rest of the page from enhancing.
+    }
+  }
   sync({
     querySelectorAll: (selector) => (selector === GROUP_SELECTOR ? groups : []),
     platform: platformOf,
