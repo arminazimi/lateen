@@ -1,7 +1,7 @@
 import { h } from "preact";
 import type { ComponentProps } from "@velella/mizzen/contracts";
 import { t } from "../../i18n/index.ts";
-import { embedSrc, httpsHref, providerOf, youtubeId } from "../embed/index.ts";
+import { embedSrc, httpsHref, providerOf } from "../embed/index.ts";
 
 /** The Markdown directive this component handles: `::video`. */
 export const directive = "video";
@@ -30,6 +30,13 @@ export const DIAGNOSTIC_CLASS = "video-diagnostic";
 /** Class on the iframe that `client.ts` inserts. */
 export const FRAME_CLASS = "video-frame";
 
+/** Class on the captions link and on the transcript alternative. */
+export const CAPTIONS_CLASS = "video-captions";
+export const TRANSCRIPT_CLASS = "video-transcript";
+
+/** Class on the transcript body inside the disclosure. */
+export const TRANSCRIPT_BODY_CLASS = "video-transcript-body";
+
 /** The privacy-friendly YouTube host: no cookies are set until the video plays. */
 export const YOUTUBE_HOST = "www.youtube-nocookie.com";
 
@@ -39,50 +46,103 @@ export type VideoProps = {
   src?: string;
   /** Accessible name of the video. Required: without it the component renders a diagnostic instead. */
   title?: string;
-  /** The image shown before the reader plays the video: an `https` address or a root-relative path. */
+  /** The image shown before the reader plays the video: a root-relative path, so no third party is asked. */
   poster?: string;
+  /** A WebVTT captions file: an `https` address or a root-relative path. Rendered as a link, not a request. */
+  captions?: string;
+  /** The visible, accessible label of the captions link. Without it the link is not rendered. */
+  captions_label?: string;
+  /** An external transcript: an `https` address or a root-relative path. The inline body wins when both exist. */
+  transcript?: string;
+  /** The label of the transcript disclosure or link. Without it the body is shown plainly and a URL is ignored. */
+  transcript_label?: string;
 };
 
-/** The poster image: an `https` address or a root-relative path, or `undefined` for anything else. */
-export function posterSrc(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const raw = value.trim();
-  if (raw.startsWith("/") && !raw.startsWith("//")) return raw;
-  return httpsHref(raw);
+/** A root-relative path: one slash, no backslash or whitespace, so browsers cannot read it as another host. */
+const LOCAL_PATH = /^\/(?![/\\])[^\s\\]*$/;
+
+/** A root-relative path, or `undefined` for anything else. Protocol-relative addresses are remote. */
+function localPath(value: string): string | undefined {
+  return LOCAL_PATH.test(value) ? value : undefined;
 }
 
-/** YouTube's thumbnail for a video, or `undefined` when the address names no YouTube video. */
-export function youtubePoster(src: string | undefined): string | undefined {
-  if (src === undefined) return undefined;
-  try {
-    const id = youtubeId(new URL(src));
-    return id === undefined ? undefined : `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
-  } catch {
-    return undefined;
-  }
+/** The poster image: a local root-relative path, or `undefined` for any remote address. */
+export function posterSrc(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  return localPath(value.trim());
+}
+
+/** A linked file: an `https` address or a root-relative path, or `undefined` for anything else. */
+export function mediaHref(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const raw = value.trim();
+  return localPath(raw) ?? httpsHref(raw);
+}
+
+function text(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 /**
- * `::video{src=… title=… poster=…}` shows a 16:9 poster, a play button, and a link to the provider.
- * The player loads only when the reader clicks the button (`client.ts`), so nothing is requested from the
- * provider before then; without JavaScript the link still opens the video in a new tab. The link sits
- * under the box, so it stays after the player loads and when a player is blocked. Without a title the
- * component renders a message instead, because the player would have no accessible name. An empty or
+ * `::video{src=… title=… poster=… captions=…}` shows a 16:9 poster, a play button, and a link to the
+ * provider. Nothing remote is requested before the reader consents: an automatic provider thumbnail is
+ * never loaded, `poster` must be local, and the player is inserted only on click (`client.ts`). Without
+ * JavaScript the link still opens the video in a new tab. Authored captions and a transcript (the
+ * directive body, or a linked file) are static markup, so they survive a blocked player. Without a title
+ * the component renders a message instead, because the player would have no accessible name. An empty or
  * unsafe `src` renders nothing.
  */
-export default function video({ props, page }: ComponentProps<VideoProps>) {
+export default function video({ props, html, page }: ComponentProps<VideoProps>) {
   const lang = page.lang;
   const src = embedSrc(props.src);
   const href = httpsHref(props.src);
   if (src === undefined || href === undefined) return null;
 
-  const title = typeof props.title === "string" ? props.title.trim() : "";
+  const title = text(props.title);
   if (title === "") {
     return h("p", { class: DIAGNOSTIC_CLASS }, t(lang, "video_missing_title"));
   }
 
-  const poster = posterSrc(props.poster) ?? youtubePoster(src);
+  const poster = posterSrc(props.poster);
   const provider = providerOf(href);
+
+  const captions = mediaHref(props.captions);
+  const captionsLabel = text(props.captions_label);
+  const captionsNode =
+    captions === undefined || captionsLabel === ""
+      ? null
+      : h(
+          "p",
+          { class: CAPTIONS_CLASS, "data-video-captions": true },
+          h("a", { href: captions, rel: "noopener" }, captionsLabel),
+        );
+
+  const body = typeof html === "string" ? html.trim() : "";
+  const transcriptHref = mediaHref(props.transcript);
+  const transcriptLabel = text(props.transcript_label);
+
+  let transcriptNode = null;
+  if (body !== "") {
+    const content = h("div", {
+      class: TRANSCRIPT_BODY_CLASS,
+      dangerouslySetInnerHTML: { __html: html },
+    });
+    transcriptNode =
+      transcriptLabel === ""
+        ? h("div", { class: TRANSCRIPT_CLASS, "data-video-transcript": true }, content)
+        : h(
+            "details",
+            { class: TRANSCRIPT_CLASS, "data-video-transcript": true },
+            h("summary", {}, transcriptLabel),
+            content,
+          );
+  } else if (transcriptHref !== undefined && transcriptLabel !== "") {
+    transcriptNode = h(
+      "p",
+      { class: TRANSCRIPT_CLASS, "data-video-transcript": true },
+      h("a", { href: transcriptHref, rel: "noopener" }, transcriptLabel),
+    );
+  }
 
   return h(
     "div",
@@ -125,5 +185,7 @@ export default function video({ props, page }: ComponentProps<VideoProps>) {
       { class: LINK_CLASS, href, target: "_blank", rel: "noopener noreferrer" },
       t(lang, "video_watch", { provider }),
     ),
+    captionsNode,
+    transcriptNode,
   );
 }

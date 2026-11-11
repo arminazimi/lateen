@@ -69,7 +69,10 @@
 }
 
 .video-play:focus-visible,
-.video-link:focus-visible {
+.video-link:focus-visible,
+.video-captions a:focus-visible,
+.video-transcript a:focus-visible,
+.video-transcript > summary:focus-visible {
   outline: 2px solid var(--state-focus-ring);
   outline-offset: 2px;
 }
@@ -85,6 +88,35 @@
 .video-link:hover {
   color: var(--color-link-hover);
   text-decoration: underline;
+}
+
+/* Captions and the transcript sit under the link, so a blocked or failed player never takes them away. */
+.video-captions,
+.video-transcript {
+  margin-block-start: var(--space-2);
+  color: var(--color-text);
+  font-size: var(--type-size-sm);
+}
+
+.video-captions a,
+.video-transcript a {
+  color: var(--color-link);
+}
+
+.video-captions a:hover,
+.video-transcript a:hover {
+  color: var(--color-link-hover);
+  text-decoration: underline;
+}
+
+.video-transcript > summary {
+  color: var(--color-link);
+  cursor: pointer;
+}
+
+.video-transcript-body {
+  margin-block-start: var(--space-2);
+  line-height: var(--type-leading-body);
 }
 
 /* The message for a video without a title: a visible note, styled like the callouts' text. */
