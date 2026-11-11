@@ -31,17 +31,38 @@ const LABELS: Readonly<Record<DateSource, string>> = { source: "updated", review
 
 const DAY_MS = 86_400_000;
 
-/** The locale `Intl.RelativeTimeFormat` uses for a language; anything but the theme's languages reads as English. */
-const LOCALES: Readonly<Record<string, string>> = { ar: "ar", en: "en", fa: "fa" };
-
 /** True for a plain object, never an array or `null`. */
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/** The locale for a language code, falling back to English for a code the theme does not ship. */
+/**
+ * The canonical form of `tag` when `Intl` can format it, else its language alone when that is supported.
+ * `undefined` for a malformed or unsupported tag. Negotiation is a pure function of the tag, so a build's
+ * text never depends on the runtime's default locale.
+ */
+function negotiate(tag: string): string | undefined {
+  try {
+    const canonical = Intl.getCanonicalLocales(tag)[0];
+    if (canonical === undefined) return undefined;
+    if (Intl.RelativeTimeFormat.supportedLocalesOf(canonical).length > 0) return canonical;
+
+    const language = canonical.split("-")[0];
+    return language !== undefined && Intl.RelativeTimeFormat.supportedLocalesOf(language).length > 0
+      ? language
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The locale `Intl.RelativeTimeFormat` uses for a BCP 47 tag: regional tags keep their region
+ * (`fa-IR`, `ar-EG`, `en-CA`), other languages `Intl` supports use their own wording (`de`), and an
+ * invalid or unsupported tag falls back to English.
+ */
 export function localeOf(lang: string): string {
-  return LOCALES[lang.split("-")[0] ?? ""] ?? "en";
+  return negotiate(lang.trim()) ?? "en";
 }
 
 /**
@@ -174,9 +195,19 @@ function datePart(entry: PageDate, asOf: string | undefined, lang: string) {
     h(
       "time",
       { datetime: absolute.datetime, title: absolute.text, "aria-label": absolute.text },
-      text ?? absolute.text,
+      // Isolated so a Latin date inside an RTL sentence, or vice versa, keeps its own direction.
+      h("bdi", {}, text ?? absolute.text),
     ),
   );
+}
+
+/**
+ * The contributor parts of the line. Each name is isolated in `<bdi>`, with the localized comma between
+ * names, so mixed-direction names keep their own order and the sentence keeps its separators.
+ */
+function contributorNodes(names: readonly string[], lang: string) {
+  const comma = `${t(lang, "comma")} `;
+  return names.flatMap((name, index) => (index === 0 ? [h("bdi", {}, name)] : [comma, h("bdi", {}, name)]));
 }
 
 /**
@@ -208,7 +239,7 @@ const lastUpdated: Chrome = ({ site, page }) => {
           { class: CONTRIBUTORS_CLASS },
           t(page.lang, "contributors_label"),
           " ",
-          names.join(`${t(page.lang, "comma")} `),
+          ...contributorNodes(names, page.lang),
         ),
   );
 };

@@ -94,7 +94,7 @@ test("a front matter date shows the relative date from the build's as-of date", 
   assert.match(
     out,
     new RegExp(
-      `<p class="${CLASS}"><span class="${DATE_CLASS}" data-date-source="source">Updated <time datetime="2026-03-04" title="March 4, 2026" aria-label="March 4, 2026">2 days ago</time></span></p>`,
+      `<p class="${CLASS}"><span class="${DATE_CLASS}" data-date-source="source">Updated <time datetime="2026-03-04" title="March 4, 2026" aria-label="March 4, 2026"><bdi>2 days ago</bdi></time></span></p>`,
     ),
   );
 });
@@ -103,7 +103,7 @@ test("without an as-of date the absolute date is shown, with the same tooltip", 
   const out = render(pageWith({ last_modified_at: "2026-03-04" }));
 
   assert.ok(out);
-  assert.match(out, /Updated <time datetime="2026-03-04" title="March 4, 2026" aria-label="March 4, 2026">March 4, 2026<\/time>/);
+  assert.match(out, /<bdi>March 4, 2026<\/bdi><\/time>/);
   assert.doesNotMatch(out, /days ago/);
 });
 
@@ -111,9 +111,8 @@ test("the as-of date may come from the reviewers data instead", () => {
   const out = render(pageWith({ last_modified_at: "2026-03-04" }), { reviewers: { asOf: "2026-03-06" } });
 
   assert.ok(out);
-  assert.match(out, />2 days ago<\/time>/);
+  assert.match(out, /><bdi>2 days ago<\/bdi><\/time>/);
 });
-
 test("the date falls back from last_modified_at to updated, then to the reviewers entry", () => {
   const updated = render(pageWith({ last_modified_at: "2026-03-01", updated: "2026-03-04" }), build("2026-03-06"));
   assert.ok(updated);
@@ -142,7 +141,7 @@ test("a review date is labelled as a review, with the same accessible exact valu
   assert.match(
     out,
     new RegExp(
-      `<span class="${DATE_CLASS}" data-date-source="review">Reviewed <time datetime="2026-03-04" title="March 4, 2026" aria-label="March 4, 2026">2 days ago</time></span>`,
+      `<span class="${DATE_CLASS}" data-date-source="review">Reviewed <time datetime="2026-03-04" title="March 4, 2026" aria-label="March 4, 2026"><bdi>2 days ago</bdi></time></span>`,
     ),
   );
 });
@@ -164,7 +163,7 @@ test("a date after the build's as-of date stays absolute, so bad data never read
   const out = render(pageWith({ last_modified_at: "2026-03-08" }), build("2026-03-06"));
 
   assert.ok(out);
-  assert.match(out, /title="March 8, 2026" aria-label="March 8, 2026">March 8, 2026<\/time>/);
+  assert.match(out, /title="March 8, 2026" aria-label="March 8, 2026"><bdi>March 8, 2026<\/bdi><\/time>/);
   assert.doesNotMatch(out, /in 2 days/);
 });
 
@@ -172,7 +171,7 @@ test("an unreadable date falls back or is left out, never becoming a relative cl
   const fallback = render(pageWith({ last_modified_at: "2026-02-30", updated: "2026-03-04" }), build("2026-03-06"));
   assert.ok(fallback);
   assert.match(fallback, /datetime="2026-03-04"/);
-  assert.match(fallback, />2 days ago<\/time>/);
+  assert.match(fallback, /><bdi>2 days ago<\/bdi><\/time>/);
 
   const invalidReview = render(pageWith({ last_modified_at: "2026-03-04" }), reviewers({ date: "2026-02-31" }));
   assert.ok(invalidReview);
@@ -189,7 +188,12 @@ test("contributors come from author and the contributors array, sorted and dedup
   const out = render(pageWith(), data);
 
   assert.ok(out);
-  assert.match(out, new RegExp(`<span class="${CONTRIBUTORS_CLASS}">Contributors: Ada Lovelace, Barbara Liskov, Grace Hopper</span>`));
+  assert.match(
+    out,
+    new RegExp(
+      `<span class="${CONTRIBUTORS_CLASS}">Contributors: <bdi>Ada Lovelace</bdi>, <bdi>Barbara Liskov</bdi>, <bdi>Grace Hopper</bdi></span>`,
+    ),
+  );
   assert.doesNotMatch(out, /Margaret Hamilton/);
 });
 
@@ -197,7 +201,12 @@ test("contributors alone still render a line, without a date", () => {
   const out = render(pageWith(), reviewers({ author: "Ada Lovelace" }));
 
   assert.ok(out);
-  assert.match(out, new RegExp(`^<p class="${CLASS}"><span class="${CONTRIBUTORS_CLASS}">Contributors: Ada Lovelace</span></p>$`));
+  assert.match(
+    out,
+    new RegExp(
+      `^<p class="${CLASS}"><span class="${CONTRIBUTORS_CLASS}">Contributors: <bdi>Ada Lovelace</bdi></span></p>$`,
+    ),
+  );
   assert.doesNotMatch(out, /<time/);
 });
 
@@ -261,11 +270,79 @@ test("the relative date and the calendar are localised for Persian and Arabic", 
   assert.match(ar, /أول أمس/);
   assert.match(ar, /١٤٤٧/);
   assert.match(ar, /المساهمون:/);
+});
 
-  assert.equal(localeOf("en-US"), "en");
-  assert.equal(localeOf("fa-IR"), "fa");
-  assert.equal(localeOf("ar-SA"), "ar");
-  assert.equal(localeOf("de"), "en");
+test("regional and additional valid language tags keep their own locale", () => {
+  assert.equal(localeOf("fa-IR"), "fa-IR");
+  assert.equal(localeOf("ar-EG"), "ar-EG");
+  assert.equal(localeOf("en-CA"), "en-CA");
+  assert.equal(localeOf("de"), "de");
+  assert.equal(localeOf("sv-SE"), "sv-SE");
+  // Tags are canonicalised, not matched case-sensitively against a fixed map.
+  assert.equal(localeOf("FA-ir"), "fa-IR");
+
+  // ar-EG writes Arabic-Indic digits where plain ar writes Latin ones, so the region is really used.
+  assert.equal(relativeDate("2026-03-04", "2026-03-07", "ar"), "قبل 3 أيام");
+  assert.equal(relativeDate("2026-03-04", "2026-03-07", "ar-EG"), "قبل ٣ أيام");
+  assert.equal(relativeDate("2026-03-04", "2026-03-07", "fa-IR"), "۳ روز پیش");
+  assert.equal(relativeDate("2026-03-04", "2026-03-07", "en-CA"), "3 days ago");
+  assert.equal(relativeDate("2026-03-04", "2026-03-07", "de"), "vor 3 Tagen");
+});
+
+test("invalid and unsupported tags fail soft to English", () => {
+  assert.equal(localeOf(""), "en");
+  assert.equal(localeOf("  "), "en");
+  assert.equal(localeOf("not a locale"), "en");
+  assert.equal(localeOf("xx"), "en");
+  assert.equal(localeOf("xx-YY"), "en");
+  assert.equal(relativeDate("2026-03-04", "2026-03-06", "not a locale"), "2 days ago");
+  assert.equal(relativeDate("2026-03-04", "2026-03-06", "xx-YY"), "2 days ago");
+});
+
+test("a regional page tag localises its line and calendar", () => {
+  const out = render(pageWith({ last_modified_at: "2026-03-04" }, "ar-EG"), {
+    ...build("2026-03-07"),
+    reviewers: { [PAGE_URL]: { author: "Ada Lovelace" } },
+  });
+
+  assert.ok(out);
+  assert.ok(out.includes(stringsOf("ar").updated ?? ""));
+  // Arabic-Indic digits come from ar-EG; the hardcoded `ar` locale writes Latin digits.
+  assert.match(out, /><bdi>قبل ٣ أيام<\/bdi><\/time>/);
+  assert.match(out, /aria-label="[^"]*١٤٤٧[^"]*"/);
+});
+
+test("mixed-direction contributor names are isolated, with localized separators", () => {
+  const out = render(pageWith({ last_modified_at: "2026-03-04" }, "fa"), {
+    ...build("2026-03-06"),
+    reviewers: { [PAGE_URL]: { author: "Ada Lovelace", contributors: ["علی رضایی", "أحمد"] } },
+  });
+
+  assert.ok(out);
+  // Sorted by code point: Latin first, then Arabic, then Persian. Each name is its own `bdi`, and the
+  // Persian comma stays between them in the sentence's direction.
+  assert.match(
+    out,
+    /<span class="last-updated-contributors">مشارکت‌کنندگان: <bdi>Ada Lovelace<\/bdi>، <bdi>أحمد<\/bdi>، <bdi>علی رضایی<\/bdi><\/span>/,
+  );
+  assert.match(out, /<time datetime="2026-03-04" title="[^"]+" aria-label="[^"]+"><bdi>پریروز<\/bdi><\/time>/);
+});
+
+test("identical inputs give identical output, including duplicate and future dates", () => {
+  const page = pageWith({ last_modified_at: "2026-03-04" }, "fa");
+  const data = { ...build("2026-03-06"), reviewers: { [PAGE_URL]: { date: "2026-03-04", author: "Ada" } } };
+
+  const first = render(page, data);
+  assert.ok(first);
+  assert.equal(first, render(page, data));
+  assert.equal([...first.matchAll(/<time /g)].length, 1, "a review on the source's day is a duplicate");
+  assert.equal(relativeDate("2026-03-04", "2026-03-06", "fa"), relativeDate("2026-03-04", "2026-03-06", "fa"));
+
+  const future = render(pageWith({ last_modified_at: "2026-03-08" }), build("2026-03-06"));
+  assert.ok(future);
+  assert.equal(future, render(pageWith({ last_modified_at: "2026-03-08" }), build("2026-03-06")));
+  assert.doesNotMatch(future, /in 2 days|<bdi>2 days/);
+  assert.match(future, /<bdi>March 8, 2026<\/bdi>/);
 });
 
 test("the review label is localised in Persian and Arabic", () => {

@@ -38,6 +38,19 @@ and `aria-label`, and is written in the page's calendar through `calendarDate` (
 Jalali for Persian, Hijri for Arabic), so the accessible value is exact even when the visible text is
 relative.
 
+The relative date is formatted for the page's BCP 47 tag, negotiated through `Intl` rather than a fixed
+map: `fa-IR`, `ar-EG`, and `en-CA` keep their region, other languages `Intl` supports (`de`, `sv-SE`)
+use their own wording, and an invalid or unsupported tag falls back to English. The tag is canonicalised,
+so the same input always gives the same text.
+
+## Direction isolation
+
+A contributor name's script can differ from the page's, so each name is wrapped in a `<bdi>` element
+and the localized comma stays between the names in the sentence's direction. The visible date text
+(relative or absolute) is likewise wrapped in a `<bdi>`. The `<time>` element's `datetime`, `title`, and
+`aria-label` carry the exact date unchanged, so assistive technology reads the real value rather than
+the isolated rendering.
+
 A date after the build's as-of date is not a recency the build can vouch for, so it stays absolute
 rather than reading as "in 2 days". A date that is not a real calendar date (`2026-02-30`) is left out
 entirely; it never becomes "today" or any other relative claim. A page with no usable date and no
