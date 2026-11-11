@@ -1,12 +1,16 @@
-/* Video: a 16:9 poster with a play button that loads the provider's player on click, plus a link that works without JavaScript. Colors come from tokens, so dark mode follows. */
+/* Video: a 16:9 poster with a play button that loads the provider's player on click, plus a link under the box that works without JavaScript. Colors come from tokens, so dark mode follows. */
 
 .video {
-  position: relative;
-  inline-size: 100%;
   max-inline-size: 100%;
-  aspect-ratio: 16 / 9;
   margin-block: var(--space-6);
   margin-inline: auto;
+}
+
+/* The box keeps the 16:9 ratio before and after the player loads, so nothing shifts when it replaces the poster. */
+.video-box {
+  position: relative;
+  inline-size: 100%;
+  aspect-ratio: 16 / 9;
   overflow: hidden;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -70,19 +74,12 @@
   outline-offset: 2px;
 }
 
-/* The text link sits over the poster's lower edge, so the poster keeps its full height. */
+/* The fallback link stays under the box, so it survives the player and a blocked player keeps a way through. */
 .video-link {
-  position: absolute;
-  inset-block-end: var(--space-2);
-  inset-inline-start: var(--space-2);
-  padding-block: var(--space-1);
-  padding-inline: var(--space-2);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background-color: var(--color-surface-raised);
+  display: inline-block;
+  margin-block-start: var(--space-2);
   color: var(--color-link);
   font-size: var(--type-size-sm);
-  text-decoration: none;
 }
 
 .video-link:hover {
