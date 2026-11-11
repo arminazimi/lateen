@@ -11,9 +11,11 @@ heading in its body names an OS — macOS, Windows, or Linux — and starts that
 - `style.css`: the tab list and panels, styled with tokens and logical properties. Without JavaScript the
   list stays hidden and every panel shows stacked under its title.
 - `client.ts`: the island. `detectOs()` maps `navigator.platform` to `mac`, `win`, `linux`, or `unknown`;
-  the remembered choice in `localStorage["lateen-os-tabs"]` wins over it, and `unknown` falls back to the
-  first tab. A click is remembered and applied to every other `os-tabs` group on the page, keeping the
-  scroll offset where it was.
+  a valid `?os=` in the URL wins, then the remembered choice in `localStorage["lateen-os-tabs"]`, and
+  `unknown` falls back to the first tab. A click or arrow-key choice is remembered, applied to every
+  other `os-tabs` group on the page, written back to the URL as `?os=` without losing other parameters
+  or the fragment, and shared with other browser tabs; a storage event that a newer write replaced is
+  ignored, and storage that throws is not fatal.
 
 ## Known gap
 

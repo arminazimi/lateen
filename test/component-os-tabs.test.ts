@@ -19,6 +19,7 @@ import osTabs, {
 } from "../components/os-tabs/index.ts";
 import {
   ENHANCED_ATTR,
+  OS_PARAM,
   PANEL_SELECTOR,
   STORAGE_KEY,
   TABLIST_SELECTOR,
@@ -26,11 +27,13 @@ import {
   choose,
   detectOs,
   isKnownOs,
+  osFromUrl,
   readChoice,
   saveChoice,
   select,
   step,
   sync,
+  withOs,
   type OsEnv,
   type TabsElement,
   type TabsEvent,
@@ -249,16 +252,39 @@ test("isKnownOs() accepts only the three names the island chooses", () => {
 });
 
 test("readChoice() takes only a remembered OS, and treats storage that throws as absent", () => {
-  assert.equal(readChoice(() => "linux"), "linux");
-  assert.equal(readChoice(() => "unknown"), undefined);
-  assert.equal(readChoice(() => "freebsd"), undefined);
-  assert.equal(readChoice(() => undefined), undefined);
+  assert.equal(readChoice("", () => "linux"), "linux");
+  assert.equal(readChoice("", () => "unknown"), undefined);
+  assert.equal(readChoice("", () => "freebsd"), undefined);
+  assert.equal(readChoice("", () => undefined), undefined);
   assert.equal(
-    readChoice(() => {
+    readChoice("", () => {
       throw new Error("blocked");
     }),
     undefined,
   );
+});
+
+test("osFromUrl() takes only a known OS from a valid ?os=, ignoring anything else", () => {
+  assert.equal(osFromUrl("?os=mac"), "mac");
+  assert.equal(osFromUrl("?page=2&os=Win"), "win");
+  assert.equal(osFromUrl("?os=%20linux%20"), "linux");
+  assert.equal(osFromUrl("?os="), undefined);
+  assert.equal(osFromUrl("?os=windows"), undefined);
+  assert.equal(osFromUrl("?os=unknown"), undefined);
+  assert.equal(osFromUrl("?tab=linux"), undefined);
+  assert.equal(osFromUrl(""), undefined);
+});
+
+test("withOs() sets ?os= and keeps every other parameter and the fragment", () => {
+  assert.equal(withOs("", "", "linux"), `?${OS_PARAM}=linux`);
+  assert.equal(withOs("?page=2&os=mac", "", "linux"), `?page=2&${OS_PARAM}=linux`);
+  assert.equal(withOs("?page=2", "#install-macos", "win"), `?page=2&${OS_PARAM}=win#install-macos`);
+});
+
+test("readChoice() prefers a valid ?os= over storage and ignores an invalid one", () => {
+  assert.equal(readChoice("?os=linux", () => "win"), "linux");
+  assert.equal(readChoice("?os=freebsd", () => "win"), "win", "an unknown ?os= falls back to storage");
+  assert.equal(readChoice("?os=freebsd", () => undefined), undefined, "and then to the platform");
 });
 
 test("saveChoice() remembers the OS under the storage key and ignores storage that throws", () => {
@@ -349,30 +375,64 @@ function fakeGroup(names: string[], { panels = names.length, enhanced = true }: 
   return { group, list, tabs, panels: panelEls };
 }
 
-/** An environment over `groups`, with a platform, storage, and a scroll position the tests can move. */
+/** An environment over `groups`, with storage, a URL, a scroll position, and listeners tests can fire. */
 function fakeEnv(
   groups: ReturnType<typeof fakeGroup>[],
-  { platform = "Unknown", stored = {} as Record<string, string>, scrollY = 200 } = {},
+  {
+    platform = "Unknown",
+    stored = {} as Record<string, string>,
+    scrollY = 200,
+    search = "",
+    hash = "",
+    denyStorage = false,
+  } = {},
 ) {
+  const values = new Map(Object.entries(stored));
   const written = new Map<string, string>();
   const writes: Array<[string, string]> = [];
   const scrolls: number[] = [];
+  const urls: string[] = [];
+  const listeners: Array<(key: string, value: string | undefined) => void> = [];
   let top = scrollY;
   const env: OsEnv = {
     querySelectorAll: (selector) => (selector === "[data-os-tabs]" ? groups.map((g) => g.group) : []),
     platform: () => platform,
+    search: () => search,
+    hash: () => hash,
+    replaceUrl: (url: string) => urls.push(url),
+    listen: (listener: (key: string, value: string | undefined) => void) => listeners.push(listener),
     scrollY: () => top,
     scrollTo: (position: number) => {
       scrolls.push(position);
       top = position;
     },
-    read: (key: string) => stored[key],
+    read: (key: string) => {
+      if (denyStorage) throw new Error("blocked");
+      return values.get(key);
+    },
     write: (key: string, value: string) => {
+      if (denyStorage) throw new Error("blocked");
+      values.set(key, value);
       written.set(key, value);
       writes.push([key, value]);
     },
   };
-  return { env, written, writes, scrolls, at: () => top };
+  return {
+    env,
+    written,
+    writes,
+    scrolls,
+    urls,
+    at: () => top,
+    /** Another tab's write: stores it, then delivers the storage event it would fire here. */
+    otherTab: (key: string, value: string) => {
+      values.set(key, value);
+      for (const listener of listeners) listener(key, value);
+    },
+    emit: (key: string, value: string | undefined) => {
+      for (const listener of listeners) listener(key, value);
+    },
+  };
 }
 
 const selected = (tabs: FakeEl[]) => tabs.map((tab) => tab.attrs.get("aria-selected"));
@@ -412,6 +472,27 @@ test("activate() moves focus with the arrow keys and stops the default scroll", 
   list.fire("keydown", { key: "ArrowLeft", target: tabs[1] });
   assert.equal(tabs[0]?.focused, true);
   assert.equal(tabs[0]?.attrs.get("aria-selected"), "true");
+});
+
+test("activate() reports a click and a key as an explicit choice with its OS", () => {
+  const { group, list, tabs } = fakeGroup(["mac", "win", "linux"]);
+  const picked: string[] = [];
+  activate(group, false, (os) => picked.push(os));
+  tabs[1]!.fire("click", { target: tabs[1] });
+  assert.deepEqual(picked, ["win"]);
+  assert.deepEqual(selected(tabs), ["false", "true", "false"], "clicking selects the tab itself");
+  list.fire("keydown", { key: "End", target: tabs[1] });
+  assert.deepEqual(picked, ["win", "linux"]);
+  assert.equal(tabs[2]?.attrs.get("aria-selected"), "true");
+});
+
+test("activate() reports a right-to-left arrow choice with the OS it lands on", () => {
+  const { group, list, tabs } = fakeGroup(["mac", "win", "linux"]);
+  const picked: string[] = [];
+  activate(group, true, (os) => picked.push(os));
+  list.fire("keydown", { key: "ArrowRight", target: tabs[0] });
+  assert.deepEqual(picked, ["linux"], "ArrowRight moves back in a right-to-left group");
+  assert.equal(tabs[2]?.focused, true);
 });
 
 test("activate() leaves a group whose tabs and panels do not pair up stacked", () => {
@@ -503,35 +584,36 @@ test("sync() ignores a stored value that names no OS and falls back to the platf
   assert.deepEqual(selected(a.tabs), ["true", "false"]);
 });
 
-test("sync() remembers a manual choice and applies it to every other group", () => {
+test("sync() remembers a manual choice and applies it to every group", () => {
   const a = fakeGroup(["mac", "win", "linux"]);
   const b = fakeGroup(["mac", "win", "linux"]);
   const c = fakeGroup(["mac", "win"]);
   const { env, written, scrolls } = fakeEnv([a, b, c], { platform: "MacIntel", scrollY: 340 });
-  sync(env);
-  a.tabs[2]!.fire("click", { target: a.tabs[2] });
+  const pick = sync(env);
+  pick("linux");
+  assert.deepEqual(selected(a.tabs), ["false", "false", "true"], "the chosen group shows the choice");
   assert.deepEqual(selected(b.tabs), ["false", "false", "true"], "group b follows the chosen OS");
   assert.deepEqual(selected(c.tabs), ["true", "false"], "a group without Linux stays on its first tab");
   assert.deepEqual([...written], [[STORAGE_KEY, "linux"]], "the choice is remembered for later pages");
   assert.deepEqual(scrolls, [340], "the scroll offset goes back to where it was");
 });
 
-test("sync() does not scroll when no other group offers the chosen OS", () => {
+test("sync() does not scroll when every group already shows the chosen OS", () => {
   const a = fakeGroup(["mac", "linux"]);
   const b = fakeGroup(["win"]);
   const { env, scrolls } = fakeEnv([a, b], { platform: "MacIntel" });
-  sync(env);
-  a.tabs[1]!.fire("click", { target: a.tabs[1] });
-  assert.deepEqual(scrolls, []);
+  const pick = sync(env);
+  pick("mac");
+  assert.deepEqual(scrolls, [], "nothing moved, so the page must not scroll");
 });
 
 test("sync() keeps the stored choice shared across a page that changes its mind", () => {
   const a = fakeGroup(["mac", "win"]);
   const b = fakeGroup(["mac", "win"]);
   const { env, writes } = fakeEnv([a, b], { platform: "MacIntel" });
-  sync(env);
-  a.tabs[1]!.fire("click", { target: a.tabs[1] });
-  b.tabs[0]!.fire("click", { target: b.tabs[0] });
+  const pick = sync(env);
+  pick("win");
+  pick("mac");
   assert.deepEqual(writes, [
     [STORAGE_KEY, "win"],
     [STORAGE_KEY, "mac"],
@@ -542,6 +624,89 @@ test("sync() keeps the stored choice shared across a page that changes its mind"
 test("sync() wires nothing for a page with no group", () => {
   const { env } = fakeEnv([]);
   assert.doesNotThrow(() => sync(env));
+});
+
+test("sync() prefers a shared ?os= over the remembered choice and the reader's device", () => {
+  const a = fakeGroup(["mac", "win", "linux"]);
+  const { env } = fakeEnv([a], {
+    platform: "MacIntel",
+    stored: { [STORAGE_KEY]: "win" },
+    search: `?${OS_PARAM}=linux`,
+  });
+  sync(env);
+  assert.deepEqual(selected(a.tabs), ["false", "false", "true"], "the shared link beats both");
+});
+
+test("sync() ignores an invalid ?os= and falls back to the remembered choice, then the platform", () => {
+  const remembered = fakeGroup(["mac", "win"]);
+  const stored = fakeEnv([remembered], {
+    platform: "MacIntel",
+    stored: { [STORAGE_KEY]: "win" },
+    search: `?${OS_PARAM}=freebsd`,
+  });
+  sync(stored.env);
+  assert.deepEqual(selected(remembered.tabs), ["false", "true"]);
+
+  const detected = fakeGroup(["mac", "win"]);
+  const platform = fakeEnv([detected], { platform: "MacIntel", search: `?${OS_PARAM}=freebsd` });
+  sync(platform.env);
+  assert.deepEqual(selected(detected.tabs), ["true", "false"]);
+});
+
+test("sync() shares an explicit choice in the URL, keeping other parameters and the fragment", () => {
+  const a = fakeGroup(["mac", "win", "linux"]);
+  const b = fakeGroup(["mac", "win", "linux"]);
+  const { env, scrolls, urls } = fakeEnv([a, b], {
+    platform: "MacIntel",
+    scrollY: 512,
+    search: "?page=2&os=mac&q=tabs",
+    hash: "#install",
+  });
+  const pick = sync(env);
+  pick("linux");
+  assert.deepEqual(urls, [`?page=2&os=linux&q=tabs#install`]);
+  assert.deepEqual(scrolls, [512], "writing the URL does not move the page");
+});
+
+test("sync() follows a choice another browser tab remembers", () => {
+  const a = fakeGroup(["mac", "win", "linux"]);
+  const b = fakeGroup(["mac", "win", "linux"]);
+  const { env, otherTab, scrolls } = fakeEnv([a, b], { platform: "MacIntel", scrollY: 260 });
+  sync(env);
+  otherTab(STORAGE_KEY, "win");
+  assert.deepEqual(selected(a.tabs), ["false", "true", "false"]);
+  assert.deepEqual(selected(b.tabs), ["false", "true", "false"]);
+  assert.deepEqual(scrolls, [260], "the reader's position stays where it was");
+});
+
+test("sync() ignores a storage change for another key, an invalid value, or a removal", () => {
+  const a = fakeGroup(["mac", "win", "linux"]);
+  const { env, otherTab, emit } = fakeEnv([a], { platform: "MacIntel" });
+  sync(env);
+  otherTab("lateen-something", "win");
+  otherTab(STORAGE_KEY, "freebsd");
+  emit(STORAGE_KEY, undefined);
+  assert.deepEqual(selected(a.tabs), ["true", "false", "false"], "the platform choice stands");
+});
+
+test("sync() ignores a stale storage event after a newer explicit choice", () => {
+  const a = fakeGroup(["mac", "win", "linux"]);
+  const { env, emit, urls } = fakeEnv([a], { platform: "MacIntel" });
+  const pick = sync(env);
+  pick("linux");
+  emit(STORAGE_KEY, "win");
+  assert.deepEqual(selected(a.tabs), ["false", "false", "true"], "the newer choice wins");
+  assert.deepEqual(urls, [`?os=linux`]);
+});
+
+test("sync() survives storage that denies reading and writing", () => {
+  const a = fakeGroup(["mac", "win", "linux"]);
+  const { env, urls } = fakeEnv([a], { platform: "Win32", denyStorage: true });
+  const pick = sync(env);
+  assert.deepEqual(selected(a.tabs), ["false", "true", "false"], "the platform still decides");
+  assert.doesNotThrow(() => pick("linux"));
+  assert.deepEqual(selected(a.tabs), ["false", "false", "true"], "a manual choice still switches");
+  assert.deepEqual(urls, [`?os=linux`], "and can still be shared");
 });
 
 const styleCss = readFileSync(new URL("../components/os-tabs/style.css", import.meta.url), "utf8");
