@@ -7,8 +7,8 @@ permalink: /components/diff-block/
 
 A diff block shows a change to a file as an ordered list: added lines, removed lines, and the context
 around them. Each line carries a visible `+` or `−`, added and removed lines carry a "Added:" or
-"Removed:" prefix for screen readers, and two copy buttons take the authored patch or the resulting
-source.
+"Removed:" prefix for screen readers, and copy buttons take the authored patch or each file's
+resulting source.
 
 ## Syntax
 
@@ -39,9 +39,10 @@ the diff.
 
 - **Copy patch** writes the diff exactly as authored: every line, marker, and header, so it
   round-trips to the directive's text.
-- **Copy source** writes the resulting file: added and context lines, with markers and leading spaces
-  removed. Removed lines, headers, and the no-newline marker are left out, so a deleted file copies an
-  empty string.
+- **Copy source** has one action per file, labelled with that file's path. Each writes only its own
+  added and context lines, with markers and leading spaces removed. Removed lines, headers, and the
+  no-newline marker are left out, so a deleted file copies an empty string. A multi-file diff never
+  joins its files into one text.
 
 Each button has its own status region, so a slow copy from one action never changes the result shown
 for the other. A result that arrives after a newer click on the same button is dropped.

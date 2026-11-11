@@ -17,8 +17,10 @@ The body is a *line-oriented* diff: each line starts with `+` (added), `-` (remo
 
 - **Patch**: every line exactly as authored, including file and hunk headers and all markers. It
   round-trips to the text inside the directive.
-- **Source**: added and context lines only, with markers and leading spaces removed; removed lines,
-  headers, and the `\ No newline at end of file` marker are left out. A deleted file's source is empty.
+- **Source**: one action per file in the diff, labelled with that file's path. Each writes only its
+  own added and context lines, with markers and leading spaces removed; removed lines, headers, and
+  the `\ No newline at end of file` marker are left out. A deleted file's source is empty, and files
+  are never joined into one ambiguous text.
 
 ## Metadata
 

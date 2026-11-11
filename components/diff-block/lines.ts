@@ -154,12 +154,42 @@ export function parseDiff(text: string): DiffLine[] {
   });
 }
 
-/** The new version of the file: added and context lines, without markers or headers, one per line. */
+/** The new version of one file: added and context lines, without markers or headers, one per line. */
 export function copyText(lines: readonly DiffLine[]): string {
   return lines
     .filter((line) => line.kind === "added" || line.kind === "context")
     .map((line) => line.text)
     .join("\n");
+}
+
+/** One file's resulting source: the path a file header names, when it names one, and its source text. */
+export interface DiffSource {
+  readonly path?: string;
+  readonly text: string;
+}
+
+/**
+ * Splits a diff into files and returns each file's resulting source. A `diff --git` header starts a
+ * file; in a diff without one, a `---` header after a `+++` starts the next file. Text before any file
+ * header stays one unnamed source, so a plain source-only diff still copies as a single file.
+ */
+export function sourceFilesOf(lines: readonly DiffLine[]): DiffSource[] {
+  const sections: DiffLine[][] = [];
+  let current: DiffLine[] | undefined;
+  for (const line of lines) {
+    const startsGit = line.raw.startsWith("diff --git ");
+    const startsUnified = line.raw.startsWith("--- ") && current?.some((item) => item.raw.startsWith("+++ ")) === true;
+    if (current === undefined || startsGit || startsUnified) {
+      current = [];
+      sections.push(current);
+    }
+    current.push(line);
+  }
+  return sections.map((section) => {
+    const file = section.findLast((line) => line.file !== undefined)?.file;
+    const path = file?.newPath ?? file?.oldPath;
+    return { ...(path === undefined ? {} : { path }), text: copyText(section) };
+  });
 }
 
 /** The authored unified diff exactly as written: every marker, header, and context line, in order. */

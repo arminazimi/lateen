@@ -21,7 +21,7 @@ import diffBlock, {
   directive,
   idBase,
 } from "../components/diff-block/index.ts";
-import { bodyText, copyText, parseDiff, patchText } from "../components/diff-block/lines.ts";
+import { bodyText, copyText, parseDiff, patchText, sourceFilesOf } from "../components/diff-block/lines.ts";
 import {
   activate,
   activateAll,
@@ -45,6 +45,21 @@ const DIFF = `<pre><code class="language-diff">${[
 
 const SOURCE = "publish:\n  dir: dist\nkeep:";
 const PATCH = "--- a/mizzen.yml\n+++ b/mizzen.yml\n@@ -1,3 +1,3 @@\n publish:\n-  dir: build\n+  dir: dist\n keep:";
+
+const MULTI_DIFF = [
+  "diff --git a/a.txt b/a.txt",
+  "--- a/a.txt",
+  "+++ b/a.txt",
+  "@@ -1 +1 @@",
+  "-old a",
+  "+new a",
+  "diff --git a/b.txt b/b.txt",
+  "--- a/b.txt",
+  "+++ b/b.txt",
+  "@@ -1 +1 @@",
+  "-old b",
+  "+new b",
+].join("\n");
 
 function render(html = DIFF, lang = "en", props: Record<string, string> = {}): string {
   const input = { props, html, page: { lang }, site: {} } as unknown as ComponentProps;
@@ -145,6 +160,23 @@ test("copyText is the resulting source: added and context lines, no markers, rem
   const lines = parseDiff(PATCH);
   assert.equal(copyText(lines), SOURCE);
   assert.equal(copyText([]), "");
+});
+
+test("a multi-file diff exports one source per file, never their concatenation", () => {
+  const lines = parseDiff(MULTI_DIFF);
+  assert.deepEqual(sourceFilesOf(lines), [
+    { path: "b/a.txt", text: "new a" },
+    { path: "b/b.txt", text: "new b" },
+  ]);
+
+  const out = render(MULTI_DIFF);
+  assert.equal(out.match(/data-diff-copy="true"/g)?.length, 2);
+  assert.equal(out.match(/data-patch-copy="true"/g)?.length, 1);
+  assert.ok(out.includes('data-diff="new a"'), "the first file keeps its own source");
+  assert.ok(out.includes('data-diff="new b"'), "the second file keeps its own source");
+  assert.ok(!out.includes("new a\nnew b"), "the files are never joined into one invalid source");
+  assert.match(out, />Copy source: b\/a\.txt<\/button>/);
+  assert.match(out, />Copy source: b\/b\.txt<\/button>/);
 });
 
 test("patchText reproduces the authored diff exactly, markers and headers included", () => {

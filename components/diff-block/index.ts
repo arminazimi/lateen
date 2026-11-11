@@ -1,7 +1,7 @@
 import { h } from "preact";
 import type { ComponentProps } from "@velella/mizzen/contracts";
 import { t } from "../../i18n/index.ts";
-import { bodyText, copyText, parseDiff, patchText, type DiffLine } from "./lines.ts";
+import { bodyText, parseDiff, patchText, sourceFilesOf, type DiffLine } from "./lines.ts";
 
 /** The Markdown directive this component handles: `:::diff-block`. */
 export const directive = "diff-block";
@@ -150,9 +150,9 @@ function actionElement(
 /**
  * `:::diff-block` renders a diff as an ordered list: added lines carry a `+`, removed lines a `−`, and
  * every added or removed line also says "Added:" or "Removed:" to a screen reader, so the meaning never
- * rests on colour. Two copy actions start `hidden` and `client.ts` reveals them: one copies the
- * authored patch line for line, and one copies the resulting file with removed lines and headers left
- * out. Without JavaScript the list still shows and selects the whole diff, and both texts are on the
+ * rests on colour. Copy actions start `hidden` and `client.ts` reveals them: one copies the authored
+ * patch line for line, and each file gets its own source action with removed lines and headers left out.
+ * Without JavaScript the list still shows and selects the whole diff, and both texts are on the
  * buttons' `data-*` attributes.
  */
 export default function diffBlock({ props, html, page }: ComponentProps<DiffBlockProps>) {
@@ -162,6 +162,7 @@ export default function diffBlock({ props, html, page }: ComponentProps<DiffBloc
   const lang = page.lang;
   const labelId = `${idBase(props.id, html)}-label`;
   const labels = actionLabels(lang);
+  const sources = sourceFilesOf(lines);
 
   return h(
     "div",
@@ -170,7 +171,13 @@ export default function diffBlock({ props, html, page }: ComponentProps<DiffBloc
     h(
       "div",
       { class: BAR_CLASS },
-      actionElement(labels.source, { "data-diff-copy": true, "data-diff": copyText(lines) }, lang),
+      ...sources.map((source, index) =>
+        actionElement(
+          sources.length > 1 ? `${labels.source}: ${source.path ?? String(index + 1)}` : labels.source,
+          { "data-diff-copy": true, "data-diff": source.text },
+          lang,
+        ),
+      ),
       actionElement(labels.patch, { "data-patch-copy": true, "data-patch": patchText(lines) }, lang),
     ),
     h("ol", { class: LIST_CLASS }, ...lines.map((line) => lineElement(line, lang))),
