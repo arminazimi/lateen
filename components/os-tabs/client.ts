@@ -1,6 +1,7 @@
 /* OS tabs island: turns a group's section headings into a WAI-ARIA tab list, selects the reader's
- * operating system, and keeps a manual choice for every OS tab on the site. Without this script the
- * tab list stays hidden and every section stays stacked. */
+ * operating system, and keeps a manual choice for every OS tab on the site — in the query, in every
+ * other browser tab, and in storage. Without this script the tab list stays hidden and every section
+ * stays stacked. */
 
 /** Attribute on each group root (`data-os-tabs`); the island finds groups by it. */
 export const GROUP_SELECTOR = "[data-os-tabs]";
@@ -10,6 +11,9 @@ export const PANEL_SELECTOR = ".os-tabs-panel";
 
 /** localStorage key the chosen operating system is remembered under. */
 export const STORAGE_KEY = "lateen-os-tabs";
+
+/** Query parameter whose value chooses the operating system and beats what is remembered. */
+export const OS_PARAM = "os";
 
 /** Attribute `activate()` leaves on the groups it wired; a stacked group never carries it. */
 export const ENHANCED_ATTR = "data-enhanced";
@@ -41,8 +45,27 @@ export function detectOs(platform: string | null | undefined): Os {
   return "unknown";
 }
 
-/** Reads the remembered operating system. A value that names none, or storage that throws, reads as absent. */
-export function readChoice(read: (key: string) => string | undefined): KnownOs | undefined {
+/** The operating system a shared URL names, when `?os=` holds one the island can choose. */
+export function osFromUrl(search: string): KnownOs | undefined {
+  const value = new URLSearchParams(search).get(OS_PARAM)?.trim().toLowerCase();
+  return isKnownOs(value) ? value : undefined;
+}
+
+/** The page URL's query with `?os=` set to `os`; every other parameter stays, and `hash` is kept. */
+export function withOs(search: string, hash: string, os: KnownOs): string {
+  const params = new URLSearchParams(search);
+  params.set(OS_PARAM, os);
+  return `?${params.toString()}${hash}`;
+}
+
+/**
+ * The operating system this page starts on: a valid `?os=` in `search` wins, then what `read`
+ * remembers. An `?os=` that names none is ignored, so the remembered choice or the platform applies.
+ * A storage read that throws counts as nothing remembered.
+ */
+export function readChoice(search: string, read: (key: string) => string | undefined): KnownOs | undefined {
+  const fromUrl = osFromUrl(search);
+  if (fromUrl !== undefined) return fromUrl;
   try {
     const value = read(STORAGE_KEY);
     return isKnownOs(value) ? value : undefined;
@@ -91,6 +114,14 @@ export interface OsEnv {
   querySelectorAll(selector: string): Iterable<TabsGroup>;
   /** The browser's platform string, as `navigator.platform` gives it. */
   platform(): string;
+  /** The page URL's query, as `location.search` gives it (`"?os=mac"` or `""`). */
+  search(): string;
+  /** The page URL's fragment, as `location.hash` gives it (`"#install"` or `""`). */
+  hash(): string;
+  /** Replaces the page URL, without a history entry, a reload, a scroll, or a focus change. */
+  replaceUrl(url: string): void;
+  /** Hears each storage change another browser tab makes; `value` is `undefined` when it was removed. */
+  listen(listener: (key: string, value: string | undefined) => void): void;
   /** The current vertical scroll offset, in pixels. */
   scrollY(): number;
   /** Scrolls back to a saved offset. */
@@ -103,7 +134,13 @@ export interface OsEnv {
 
 // The theme's tsconfig has no DOM lib; these are the browser globals the island needs, no more.
 declare const document: { querySelectorAll(selector: string): Iterable<unknown> };
-declare const window: { scrollY: number; scrollTo(x: number, y: number): void };
+declare const window: {
+  location: { search: string; hash: string };
+  scrollY: number;
+  scrollTo(x: number, y: number): void;
+  addEventListener(type: string, listener: (event: { key: string | null; newValue: string | null }) => void): void;
+};
+declare const history: { replaceState(data: unknown, unused: string, url: string): void };
 declare function getComputedStyle(element: unknown): { direction: string };
 
 /**
@@ -158,14 +195,21 @@ export function choose(group: TabsGroup, os: Os): boolean {
 /**
  * Wires one group: reveals the tab list, pairs each panel with its tab, and selects the first tab. A group
  * whose tabs and panels do not pair up stays stacked: the island changes nothing. `rtl` is the group's
- * direction, which decides which arrow key moves forward. The group is enhanced only after every part is
- * wired; a failure halfway through leaves its sections stacked and readable.
+ * direction, which decides which arrow key moves forward. `onSelect` hears every explicit choice — a
+ * click or an arrow key — as the OS it names, so the page can remember and share it. The group is
+ * enhanced only after every part is wired; a failure halfway through leaves its sections stacked.
  */
-export function activate(group: TabsGroup, rtl: boolean): void {
+export function activate(group: TabsGroup, rtl: boolean, onSelect?: (os: KnownOs) => void): void {
   const list = group.querySelector(TABLIST_SELECTOR);
   const tabs = [...group.querySelectorAll(TAB_SELECTOR)];
   const panels = [...group.querySelectorAll(PANEL_SELECTOR)];
   if (!list || tabs.length === 0 || tabs.length !== panels.length) return;
+
+  const chose = (index: number): void => {
+    select(tabs, panels, index);
+    const value = tabs[index]?.getAttribute("data-os");
+    if (isKnownOs(value)) onSelect?.(value);
+  };
 
   try {
     tabs.forEach((tab, i) => {
@@ -174,6 +218,7 @@ export function activate(group: TabsGroup, rtl: boolean): void {
         panel.setAttribute("role", "tabpanel");
         panel.setAttribute("aria-labelledby", tab.id);
       }
+      tab.addEventListener("click", () => chose(i));
     });
 
     list.addEventListener("keydown", (event) => {
@@ -182,7 +227,7 @@ export function activate(group: TabsGroup, rtl: boolean): void {
       const to = step(event.key ?? "", from, tabs.length, rtl);
       if (to === undefined) return;
       event.preventDefault();
-      select(tabs, panels, to);
+      chose(to);
       tabs[to]?.focus();
     });
 
@@ -198,33 +243,47 @@ export function activate(group: TabsGroup, rtl: boolean): void {
 }
 
 /**
- * Chooses the starting operating system for every enhanced group — what was remembered, else what the
- * browser reports, else the first tab — then remembers each tab a visitor clicks and switches every other
- * group that offers it. Switching can change how tall the page is, so the scroll offset is put back. A
- * group the island could not enhance stays stacked and is never switched.
+ * Wires the page: chooses the starting OS — a valid `?os=`, else what was remembered, else what the
+ * browser reports, else the first tab — and switches every enhanced group to it. Returns the handler
+ * for an explicit choice: it remembers the OS, switches every group that offers it, restores the scroll
+ * offset, and writes `?os=` into the URL without touching other parameters or the fragment. It also
+ * follows valid choices made in other browser tabs, ignoring an event that a newer write already
+ * replaced so a stale one never undoes a newer explicit choice. A group the island could not enhance
+ * stays stacked and is never switched.
  */
-export function sync(env: OsEnv): void {
+export function sync(env: OsEnv): (os: KnownOs) => void {
   const groups = [...env.querySelectorAll(GROUP_SELECTOR)].filter(
     (group) => group.getAttribute(ENHANCED_ATTR) !== null,
   );
-  const os = readChoice(env.read) ?? detectOs(env.platform());
+
+  const apply = (value: KnownOs): void => {
+    const top = env.scrollY();
+    let moved = false;
+    for (const group of groups) {
+      if (choose(group, value)) moved = true;
+    }
+    if (moved) env.scrollTo(top);
+  };
+
+  const os = readChoice(env.search(), env.read) ?? detectOs(env.platform());
   for (const group of groups) choose(group, os);
 
-  for (const group of groups) {
-    for (const tab of group.querySelectorAll(TAB_SELECTOR)) {
-      tab.addEventListener("click", () => {
-        const value = tab.getAttribute("data-os");
-        if (!isKnownOs(value)) return;
-        saveChoice(value, env.write);
-        const top = env.scrollY();
-        let moved = false;
-        for (const other of groups) {
-          if (other !== group && choose(other, value)) moved = true;
-        }
-        if (moved) env.scrollTo(top);
-      });
+  env.listen((key, value) => {
+    if (key !== STORAGE_KEY || !isKnownOs(value)) return;
+    // Another tab may have written again between the event and this read; the newer value wins.
+    if (readChoice("", env.read) !== value) return;
+    apply(value);
+  });
+
+  return (value) => {
+    saveChoice(value, env.write);
+    apply(value);
+    try {
+      env.replaceUrl(withOs(env.search(), env.hash(), value));
+    } catch {
+      // A URL the browser refuses costs sharing only; the tabs still work.
     }
-  }
+  };
 }
 
 /** Reads one key from localStorage. Access itself can throw, so the whole touch is guarded. */
@@ -254,16 +313,23 @@ function platformOf(): string {
 // The island runs when the browser loads it; nothing happens in a runtime without a document.
 if (typeof document !== "undefined") {
   const groups = [...document.querySelectorAll(GROUP_SELECTOR)] as TabsGroup[];
+  let explicit: (os: KnownOs) => void = () => {};
+
   for (const group of groups) {
     try {
-      activate(group, getComputedStyle(group).direction === "rtl");
+      activate(group, getComputedStyle(group).direction === "rtl", (os) => explicit(os));
     } catch {
       // One group that cannot be read must not keep the rest of the page from enhancing.
     }
   }
-  sync({
+  explicit = sync({
     querySelectorAll: (selector) => (selector === GROUP_SELECTOR ? groups : []),
     platform: platformOf,
+    search: () => window.location.search,
+    hash: () => window.location.hash,
+    replaceUrl: (url) => history.replaceState(null, "", url),
+    listen: (listener) =>
+      window.addEventListener("storage", (event) => listener(event.key ?? "", event.newValue ?? undefined)),
     scrollY: () => window.scrollY,
     scrollTo: (top) => window.scrollTo(0, top),
     read: storageRead,
