@@ -54,25 +54,64 @@ function providersOf(config: SiteConfig): readonly Provider[] {
   return providers;
 }
 
-/** A site-relative URL as an absolute one, when the config names the published site. */
-function absolute(config: SiteConfig, url: string): string {
-  if (config.url === undefined) return url;
-  return `${config.url.replace(/\/+$/, "")}${url}`;
+/** The site's base path without a trailing slash; `""` at a domain root. */
+function baseOf(config: SiteConfig): string {
+  return config.base.replace(/\/+$/, "");
 }
 
 /**
- * Fills `{markdown}`, `{url}`, and `{title}` in a provider template, encoding each value. A template
- * that needs the page's address returns nothing when the config names no published site: a relative
- * path would give an agent a link it cannot open.
+ * A site-relative URL as an absolute one, joined by URL parts rather than by string concatenation.
+ * A configured URL may itself carry a path (`https://example.com/docs`), which stays in front of the
+ * page URL once: when that path ends in the site's base, the page URL already carries it, so copying
+ * it again would give `/docs/docs/…`. Returns `undefined` when the config names no usable site, so
+ * the provider that needs an absolute link is left out instead of receiving a relative one.
+ */
+function absolute(config: SiteConfig, url: string): string | undefined {
+  const configured = text(config.url);
+  if (configured === undefined) return undefined;
+
+  let site: URL;
+  try {
+    site = new URL(configured);
+  } catch {
+    return undefined;
+  }
+
+  const path = site.pathname.replace(/\/+$/, "");
+  const base = baseOf(config);
+  const at = path.length - base.length;
+  const pathAlreadyCarriesBase =
+    base !== "" && at >= 0 && path.slice(at) === base && (at === 0 || path[at - 1] === "/");
+  const prefix = pathAlreadyCarriesBase ? path.slice(0, at) : path;
+  return `${site.origin}${prefix}${url}`;
+}
+
+/**
+ * Fills a provider template's placeholders in one pass, encoding every value once. `{url}` and
+ * `{markdown}` are absolute page addresses, `{lang}` the page language, `{source}` its source file,
+ * `{title}` its title, and `{version}` the version its front matter declares. A template that uses a
+ * value the page cannot supply returns nothing, so the menu omits that provider rather than showing a
+ * half-filled link: `{version}` on a page that declares none, or an absolute address when the config
+ * names no published site. One pass means a value that contains braces is copied as text and never
+ * read as another placeholder.
  */
 function expand(config: SiteConfig, page: Page, template: string, markdown: string): string | undefined {
-  if (config.url === undefined && /\{(?:markdown|url)\}/.test(template)) return undefined;
-  const values: Readonly<Record<string, string>> = {
+  const values: Readonly<Record<string, string | undefined>> = {
     markdown: absolute(config, markdown),
     url: absolute(config, page.url),
     title: page.title,
+    lang: text(page.lang),
+    source: text(page.source.file),
+    version: text(page.frontMatter.version),
   };
-  return template.replace(/\{(markdown|url|title)\}/g, (_placeholder, name: string) => encodeURIComponent(values[name] ?? ""));
+
+  for (const [name, value] of Object.entries(values)) {
+    if (value === undefined && template.includes(`{${name}}`)) return undefined;
+  }
+
+  return template.replace(/\{([a-z]+)\}/g, (placeholder, name: string) =>
+    Object.hasOwn(values, name) ? encodeURIComponent(values[name] ?? "") : placeholder,
+  );
 }
 
 /** The chevron that turns over when the menu opens; decorative, so it is hidden from assistive tech. */
