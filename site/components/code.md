@@ -50,6 +50,7 @@ export function render(component: Component): string {
 ## Notes
 
 - The copy button is made by JavaScript and starts hidden. Without JavaScript the code still reads and selects by hand.
+- A `console`, `shellsession`, or `terminal` fence is read as a recorded session: the copy takes only the `$`/`%` command lines and their `>` continuations, never the output. A `bash` fence is a script, so every line is copied with any prompt taken off.
 - A `diff` fence keeps its `+` and `−` lines. Use it to show a change to a file.
 - Fence meta such as `title="…"`, line marks, and `ins`/`del` is parsed by the engine, but the current component does not render it. Put a file name in the sentence above the block.
 - The block keeps its source span, so the page footer can edit the exact block with an agent.

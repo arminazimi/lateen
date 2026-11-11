@@ -168,6 +168,79 @@ test("copyText takes the prompt off each shell line and keeps the command", () =
   assert.equal(copyText("$ npm ci", "shell"), "npm ci");
 });
 
+test("copyText keeps every line of an ordinary shell script, prompt or not", () => {
+  assert.equal(copyText("$ npm ci\nadded 42 packages\n$ npm test\nok 1", "bash"), "npm ci\nadded 42 packages\nnpm test\nok 1");
+  assert.equal(copyText("$ npm ci\nadded 42 packages", "sh"), "npm ci\nadded 42 packages");
+});
+
+test("copyText copies only the commands of a recorded session, never its output", () => {
+  const session = "$ npm ci\nadded 42 packages\n$ npm test\nok 1\n";
+  assert.equal(copyText(session, "console"), "npm ci\nnpm test");
+  assert.equal(copyText(session, "ShellSession"), "npm ci\nnpm test");
+  assert.equal(copyText("% npm run check\nall good", "console"), "npm run check");
+});
+
+test("a recorded session keeps multiline continuations and drops the prompts", () => {
+  const slashed = "$ docker run \\\n    --rm \\\n    nginx\nUnable to find image";
+  assert.equal(copyText(slashed, "shellsession"), "docker run \\\n    --rm \\\n    nginx");
+  const prompted = "$ cat <<EOF\n> hello\n> EOF\nhello";
+  assert.equal(copyText(prompted, "console"), "cat <<EOF\nhello\nEOF");
+});
+
+test("a recorded session with an empty command copies nothing for that line", () => {
+  assert.equal(copyText("$ \n$ ls\n", "console"), "ls");
+  assert.equal(copyText("$", "console"), "");
+  assert.equal(copyText("$ \n> still output", "console"), "");
+});
+
+test("a recorded session drops the diff metadata its output shows", () => {
+  const session = "$ git diff\ndiff --git a/x b/x\nindex 1..2 100644\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-old\n+new\n$ diff a b\n1c1\n< old\n---\n> new\n$ git status";
+  assert.equal(copyText(session, "console"), "git diff\ndiff a b\ngit status");
+});
+
+test("other languages keep their copy semantics", () => {
+  assert.equal(copyText("const a = 1;\n", "ts"), "const a = 1;\n");
+  assert.equal(copyText(">>> x = 1\n... y = 2\nprint(x)", "python"), "x = 1\ny = 2\nprint(x)");
+});
+
+test("a recorded session block copies its commands on every click and keeps its metadata", async () => {
+  const clip = clipboard();
+  const block = new FakeBlock(
+    { "data-lang": "console", "data-src": "docs/a.md:3:1-6:2", id: "code-docs-a-md-3-1-6-2" },
+    "$ npm ci\nadded 1 package\n$ npm test\nok",
+  );
+  const clock = timers();
+  activate(new FakeDoc([block]), { clipboard: clip, schedule: clock.schedule });
+  const bar = block.inserted[0]!;
+  const button = bar.children[0] as FakeNode;
+  const status = bar.children[1] as FakeNode;
+
+  button.click();
+  await flush();
+  button.click();
+  await flush();
+
+  assert.deepEqual(clip.written, ["npm ci\nnpm test", "npm ci\nnpm test"]);
+  assert.equal(button.attrs["data-lang"], "console");
+  assert.equal(button.attrs["data-src"], "docs/a.md:3:1-6:2");
+  assert.equal(button.attrs["data-block-id"], "code-docs-a-md-3-1-6-2");
+
+  clock.pending[0]!.callback();
+  assert.equal(status.textContent, COPIED);
+  clock.pending[1]!.callback();
+  assert.equal(status.textContent, "");
+});
+
+test("a failed copy of a recorded session shows the fallback message", async () => {
+  const { button, status, copyIcon, checkIcon } = page("$ npm ci\nok", "console", clipboard("reject"));
+  button.click();
+  await flush();
+
+  assert.equal(status.textContent, FAILED);
+  assert.equal(copyIcon.hasAttr("hidden"), false);
+  assert.equal(checkIcon.hasAttr("hidden"), true);
+});
+
 test("copyText takes the Python prompts off and keeps the code", () => {
   assert.equal(copyText(">>> x = 1\n... y = 2\nprint(x)", "python"), "x = 1\ny = 2\nprint(x)");
 });

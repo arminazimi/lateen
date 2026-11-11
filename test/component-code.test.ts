@@ -106,6 +106,13 @@ test("an unloaded language renders as plain escaped text", () => {
   assert.match(out, /a (&lt;|&#x3C;) b/);
 });
 
+test("a recorded session fence keeps its language and source identity", () => {
+  const out = render({ lang: "console", src: "docs/a.md:3:1-6:2" }, "$ npm ci\nadded 1 package");
+  assert.match(out, /data-lang="console"/);
+  assert.match(out, /data-src="docs\/a\.md:3:1-6:2"/);
+  assert.match(out, /id="code-docs-a-md-3-1-6-2"/);
+});
+
 test("the light theme comes from code.light.json (#1095)", () => {
   const theme = buildTheme("light");
   assert.equal(theme.name, "lateen-light");
