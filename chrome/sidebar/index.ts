@@ -50,6 +50,20 @@ function marks(item: NavItem, url: string): boolean {
   return item.match !== undefined && under(url, item.match);
 }
 
+/**
+ * FNV-1a over the group's structural path, depth, and descendant urls: a stable, bounded identity
+ * that survives retitling and translation while keeping two different groups with the same urls apart.
+ */
+function groupId(pages: readonly NavLink[], depth: number, path: string): string {
+  const urls = `${path}\n${depth}\n${[...new Set(pages.map((page) => page.url))].sort(byCodePoint).join("\n")}`;
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < urls.length; i += 1) {
+    hash ^= urls.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return `g${hash.toString(36)}`;
+}
+
 /** Longest shared prefix of site-local urls, cut back to a `/`: the `match` of a collapsed section. */
 function sectionPrefix(urls: readonly string[]): string | undefined {
   if (urls.length === 0 || !urls.every((url) => url.startsWith("/"))) return undefined;
@@ -92,15 +106,26 @@ function collapsedNode(group: NavGroup, pages: readonly NavLink[], url: string) 
 
 /**
  * A group as a native `<details>`, so it opens and closes without JavaScript. The group that holds the
- * page is open; the others start closed. `data-sidebar-group` is the key the client remembers the state under.
+ * page is open; the others start closed. `data-sidebar-group` is the stable key the client remembers the
+ * state under; `data-sidebar-legacy` is the title-based key older versions used, read once for migration.
  */
-function groupNode(group: NavGroup, key: string, url: string, depth: number) {
+function groupNode(
+  group: NavGroup,
+  key: string,
+  legacy: string,
+  url: string,
+  depth: number,
+  site: string,
+  path: string,
+) {
   const current = marks(group, url);
   return h(
     "details",
     {
       class: "sidebar-group",
       "data-sidebar-group": key,
+      "data-sidebar-legacy": legacy,
+      "data-sidebar-site": site,
       ...(current ? { "data-current": "true", open: true } : {}),
     },
     h(
@@ -108,7 +133,7 @@ function groupNode(group: NavGroup, key: string, url: string, depth: number) {
       null,
       h(`h${Math.min(depth, 6)}`, current ? { "aria-current": "true" } : {}, group.title),
     ),
-    h("ul", null, entries(group.children, url, depth + 1, key)),
+    h("ul", null, entries(group.children, url, depth + 1, legacy, site, path)),
   );
 }
 
@@ -117,10 +142,12 @@ function entries(
   items: readonly NavItem[],
   url: string,
   depth: number,
-  parent: string | undefined,
+  parentLegacy: string | undefined,
+  site: string,
+  parentPath: string,
 ): ComponentChildren[] {
   const nodes = [];
-  for (const item of items) {
+  for (const [index, item] of items.entries()) {
     if (!isGroup(item)) {
       nodes.push(h("li", null, linkNode(item, url)));
       continue;
@@ -131,17 +158,18 @@ function entries(
       nodes.push(h("li", null, collapsedNode(item, pages, url)));
       continue;
     }
-    const key = parent === undefined ? item.title : `${parent}/${item.title}`;
-    nodes.push(h("li", null, groupNode(item, key, url, depth)));
+    const legacy = parentLegacy === undefined ? item.title : `${parentLegacy}/${item.title}`;
+    const path = `${parentPath}/${index}`;
+    nodes.push(h("li", null, groupNode(item, groupId(pages, depth, path), legacy, url, depth, site, path)));
   }
   return nodes;
 }
 
 /** The blocks of the top level: the leading links first, then each group as a disclosure with its list. */
-function blocks(items: readonly NavItem[], url: string): ComponentChildren[] {
+function blocks(items: readonly NavItem[], url: string, site: string): ComponentChildren[] {
   const out = [];
   let leading = [];
-  for (const item of items) {
+  for (const [index, item] of items.entries()) {
     if (!isGroup(item)) {
       leading.push(h("li", null, linkNode(item, url)));
       continue;
@@ -156,7 +184,8 @@ function blocks(items: readonly NavItem[], url: string): ComponentChildren[] {
       out.push(h("ul", null, h("li", null, collapsedNode(item, pages, url))));
       continue;
     }
-    out.push(groupNode(item, item.title, url, 2));
+    const path = `${index}`;
+    out.push(groupNode(item, groupId(pages, 2, path), item.title, url, 2, site, path));
   }
   if (leading.length > 0) out.push(h("ul", null, leading));
   return out;
@@ -167,7 +196,11 @@ const sidebar: Chrome = ({ site, page }) => {
   const items = listOf(site.nav);
   if (items.length === 0) return null;
 
-  return h("nav", { class: "sidebar-nav", "aria-label": LABEL }, blocks(items, page.url));
+  return h(
+    "nav",
+    { class: "sidebar-nav", "aria-label": LABEL },
+    blocks(items, page.url, site.config.base),
+  );
 };
 
 export default sidebar;

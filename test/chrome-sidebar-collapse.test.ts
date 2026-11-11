@@ -4,12 +4,17 @@ import type { ChromeProps, NavTree, Page, Site, SiteConfig, SourcePos } from "@v
 import sidebar from "../chrome/sidebar/index.ts";
 import {
   activate,
+  MAX_ENTRIES,
   read,
   restore,
   save,
   STORAGE_KEY,
+  storageKey,
+  type SidebarEvents,
   type SidebarGroup,
+  type SidebarRoot,
   type SidebarStorage,
+  type StorageEventLike,
 } from "../chrome/sidebar/client.ts";
 
 const pos: SourcePos = { file: "docs/guide/install.md", line: 3, column: 1, endLine: 9, endColumn: 1 };
@@ -30,6 +35,9 @@ const config: SiteConfig = {
   redirects: {},
   outputs: {},
 };
+
+/** The base path the test navigation is published under. */
+const SITE = "/example";
 
 function pageAt(url: string): Page {
   return {
@@ -88,13 +96,26 @@ function html(node: unknown): string {
   return `<${tag}${attrs}>${html(children)}</${tag}>`;
 }
 
-/** An in-memory store that records what was written. */
-function store(saved?: string): SidebarStorage & { written: string | undefined } {
+/** An in-memory store that records what was written and removed. */
+function fakeStore(): SidebarStorage & {
+  data: Map<string, string>;
+  written: string | undefined;
+  removed: string[];
+} {
   const fake = {
+    data: new Map<string, string>(),
     written: undefined as string | undefined,
-    getItem: (key: string) => (key === STORAGE_KEY && saved !== undefined ? saved : null),
-    setItem: (key: string, value: string) => {
-      if (key === STORAGE_KEY) fake.written = value;
+    removed: [] as string[],
+    getItem(key: string): string | null {
+      return fake.data.get(key) ?? null;
+    },
+    setItem(key: string, value: string): void {
+      fake.data.set(key, value);
+      fake.written = value;
+    },
+    removeItem(key: string): void {
+      fake.data.delete(key);
+      fake.removed.push(key);
     },
   };
   return fake;
@@ -109,18 +130,25 @@ function brokenStore(): SidebarStorage {
     setItem: () => {
       throw new Error("denied");
     },
+    removeItem: () => {
+      throw new Error("denied");
+    },
   };
 }
 
-/** A group `<details>` with its key and its listeners, as the script sees it. */
+/** A group `<details>` with its keys and its listeners, as the script sees it. */
 class FakeGroup implements SidebarGroup {
   open: boolean;
   readonly attrs: Map<string, string>;
   readonly listeners: (() => void)[] = [];
 
-  constructor(key: string, open = false, current = false) {
+  constructor(key: string, open = false, current = false, legacy?: string, site = SITE) {
     this.open = open;
-    this.attrs = new Map([["data-sidebar-group", key]]);
+    this.attrs = new Map([
+      ["data-sidebar-group", key],
+      ["data-sidebar-site", site],
+    ]);
+    if (legacy !== undefined) this.attrs.set("data-sidebar-legacy", legacy);
     if (current) this.attrs.set("data-current", "true");
   }
 
@@ -139,8 +167,26 @@ class FakeGroup implements SidebarGroup {
   }
 }
 
+/** The sidebar's root: the groups as the document would list them. */
+function rootOf(groups: SidebarGroup[]): SidebarRoot {
+  return { querySelectorAll: () => groups };
+}
+
+/** A window that records storage listeners for the test to fire. */
+function eventsOf(): SidebarEvents & { listeners: ((event: StorageEventLike) => void)[] } {
+  const listeners: ((event: StorageEventLike) => void)[] = [];
+  return {
+    listeners,
+    addEventListener: (_type, listener) => {
+      listeners.push(listener);
+    },
+  };
+}
+
 test("read returns the saved states and ignores anything that is not a boolean", () => {
-  const state = read(store(JSON.stringify({ "Guide": false, "Reference": true, "Odd": "yes" })));
+  const storage = fakeStore();
+  storage.data.set(storageKey(SITE), JSON.stringify({ "Guide": false, "Reference": true, Odd: "yes" }));
+  const state = read(storage, SITE);
   assert.deepEqual([...state.entries()], [
     ["Guide", false],
     ["Reference", true],
@@ -148,20 +194,94 @@ test("read returns the saved states and ignores anything that is not a boolean",
 });
 
 test("read reads as nothing saved when storage is missing, broken, or holds bad data", () => {
-  assert.equal(read(undefined).size, 0);
-  assert.equal(read(brokenStore()).size, 0);
-  assert.equal(read(store("not json")).size, 0);
-  assert.equal(read(store("[true]")).size, 0);
-  assert.equal(read(store("null")).size, 0);
+  assert.equal(read(undefined, SITE).size, 0);
+  assert.equal(read(brokenStore(), SITE).size, 0);
+
+  for (const bad of ["not json", "[true]", "null"]) {
+    const storage = fakeStore();
+    storage.data.set(storageKey(SITE), bad);
+    assert.equal(read(storage, SITE).size, 0);
+  }
 });
 
-test("save writes the states under the sidebar key and survives broken storage", () => {
-  const storage = store();
-  save(storage, new Map([["Guide", false]]));
-  assert.equal(storage.written, '{"Guide":false}');
+test("state is namespaced by the published base path, so sites on one origin stay apart", () => {
+  const storage = fakeStore();
+  save(storage, new Map([["Guide", false]]), "/one");
+  assert.deepEqual([...read(storage, "/one").entries()], [["Guide", false]]);
+  assert.equal(read(storage, "/two").size, 0);
 
-  assert.doesNotThrow(() => save(brokenStore(), new Map([["Guide", true]])));
-  assert.doesNotThrow(() => save(undefined, new Map()));
+  const other = new FakeGroup("Guide", false, false, undefined, "/two");
+  activate({ storage, root: rootOf([other]) });
+  assert.equal(other.open, false, "state from /one does not leak into /two");
+  assert.equal(read(storage, "/one").get("Guide"), false, "activating another site leaves it alone");
+});
+
+test("save writes the states under the site's key and survives broken storage", () => {
+  const storage = fakeStore();
+  save(storage, new Map([["Guide", false]]), SITE);
+  assert.equal(storage.data.get(storageKey(SITE)), '{"Guide":false}');
+
+  assert.doesNotThrow(() => save(brokenStore(), new Map([["Guide", true]]), SITE));
+  assert.doesNotThrow(() => save(undefined, new Map(), SITE));
+});
+
+test("malformed or oversized stored data is bounded and never breaks the page", () => {
+  const entries: Record<string, unknown> = {};
+  for (let i = 0; i < MAX_ENTRIES + 50; i += 1) entries[`Guide ${i}`] = i % 2 === 0;
+  entries["x".repeat(400)] = true;
+  const storage = fakeStore();
+  storage.data.set(storageKey(SITE), JSON.stringify(entries));
+  const state = read(storage, SITE);
+  assert.equal(state.size, MAX_ENTRIES);
+  assert.equal(state.has("x".repeat(400)), false);
+
+  const group = new FakeGroup("Guide 0", false);
+  assert.doesNotThrow(() => activate({ storage, root: rootOf([group]) }));
+  assert.equal(group.open, true);
+});
+
+test("save never writes more than the entry limit", () => {
+  const storage = fakeStore();
+  const state = new Map<string, boolean>();
+  for (let i = 0; i < MAX_ENTRIES + 20; i += 1) state.set(`g${i}`, true);
+  save(storage, state, SITE);
+  const written = JSON.parse(storage.written ?? "{}") as Record<string, boolean>;
+  assert.equal(Object.keys(written).length, MAX_ENTRIES);
+});
+
+test("legacy title-keyed state is migrated once, then removed", () => {
+  const storage = fakeStore();
+  storage.data.set(
+    STORAGE_KEY,
+    JSON.stringify({ "Guide": false, "Guide/Setup": true, "Gone": false }),
+  );
+  const guide = new FakeGroup("g1", true, true, "Guide");
+  const setup = new FakeGroup("g2", false, false, "Guide/Setup");
+  const translated = new FakeGroup("g3", true, false, "Anleitung");
+
+  activate({ storage, root: rootOf([guide, setup, translated]) });
+
+  assert.equal(guide.open, true, "the page's group stays open");
+  assert.equal(setup.open, true, "a legacy state carries over to its stable key");
+  assert.equal(translated.open, true, "an unknown legacy title attaches nothing");
+
+  assert.deepEqual(storage.removed, [STORAGE_KEY]);
+  const saved = JSON.parse(storage.data.get(storageKey(SITE)) ?? "{}") as Record<string, boolean>;
+  assert.deepEqual(saved, { g1: false, g2: true });
+});
+
+test("migrated state is saved once and the legacy key is gone", () => {
+  const storage = fakeStore();
+  storage.data.set(STORAGE_KEY, JSON.stringify({ Guide: true }));
+  const group = new FakeGroup("g1", false, false, "Guide");
+
+  activate({ storage, root: rootOf([group]) });
+  assert.equal(group.open, true);
+  assert.equal(storage.data.has(STORAGE_KEY), false);
+
+  const fresh = new FakeGroup("g1", false, false, "Guide");
+  activate({ storage, root: rootOf([fresh]) });
+  assert.equal(fresh.open, true, "the migrated stable key, not the removed legacy key, decides");
 });
 
 test("restore opens the page's own group even when it was saved closed", () => {
@@ -182,33 +302,58 @@ test("restore applies saved states to the other groups and keeps the default whe
 
 test("restore does not mistake inherited object keys for saved states", () => {
   const group = new FakeGroup("constructor", false);
-  restore([group], read(store('{"other":true}')));
+  const storage = fakeStore();
+  storage.data.set(storageKey(SITE), '{"other":true}');
+  restore([group], read(storage, SITE));
   assert.equal(group.open, false);
 });
 
 test("activate restores the saved states and remembers every later toggle", () => {
-  const storage = store('{"Reference":true}');
+  const storage = fakeStore();
+  storage.data.set(storageKey(SITE), '{"Reference":true}');
   const reference = new FakeGroup("Reference", false);
   const guide = new FakeGroup("Guide", true, true);
-  const root = { querySelectorAll: () => [reference, guide] };
 
-  activate({ storage, root });
+  activate({ storage, root: rootOf([reference, guide]) });
   assert.equal(reference.open, true);
   assert.equal(guide.open, true);
 
   reference.toggle(false);
-  assert.equal(storage.written, '{"Reference":false}');
+  assert.equal(storage.data.get(storageKey(SITE)), '{"Reference":false}');
 });
 
 test("activate still opens the page's group when storage is refused", () => {
   const guide = new FakeGroup("Guide", false, true);
-  activate({ storage: brokenStore(), root: { querySelectorAll: () => [guide] } });
+  activate({ storage: brokenStore(), root: rootOf([guide]) });
   assert.equal(guide.open, true);
 
   const reference = new FakeGroup("Reference", false);
-  activate({ root: { querySelectorAll: () => [reference] } });
+  activate({ root: rootOf([reference]) });
   reference.toggle(true);
   assert.equal(reference.open, true);
+});
+
+test("a valid change from another tab updates the groups, and only that site's key is followed", () => {
+  const storage = fakeStore();
+  const events = eventsOf();
+  const guide = new FakeGroup("g1", true, true);
+  const reference = new FakeGroup("g2", false);
+
+  activate({ storage, root: rootOf([guide, reference]), events });
+  assert.equal(events.listeners.length, 1);
+
+  storage.data.set(storageKey(SITE), '{"g2":true}');
+  for (const listener of events.listeners) {
+    listener({ key: storageKey(SITE), newValue: '{"g2":true}' });
+  }
+  assert.equal(reference.open, true);
+  assert.equal(guide.open, true, "the page's own group stays open");
+
+  storage.data.set(storageKey("/other"), '{"g2":false}');
+  for (const listener of events.listeners) {
+    listener({ key: storageKey("/other"), newValue: '{"g2":false}' });
+  }
+  assert.equal(reference.open, true, "another site's change is ignored");
 });
 
 test("without JavaScript the sidebar is native disclosure: the page's group open, the rest closed", () => {
@@ -216,17 +361,20 @@ test("without JavaScript the sidebar is native disclosure: the page's group open
 
   assert.match(
     out,
-    /<details class="sidebar-group" data-sidebar-group="Guide" data-current="true" open><summary><h2 aria-current="true">Guide<\/h2><\/summary>/,
+    /<details class="sidebar-group" data-sidebar-group="[^"]+" data-sidebar-legacy="Guide" data-sidebar-site="\/example" data-current="true" open><summary><h2 aria-current="true">Guide<\/h2><\/summary>/,
   );
   assert.match(
     out,
-    /<details class="sidebar-group" data-sidebar-group="Guide\/Setup" data-current="true" open><summary><h3 aria-current="true">Setup<\/h3><\/summary>/,
+    /<details class="sidebar-group" data-sidebar-group="[^"]+" data-sidebar-legacy="Guide\/Setup" data-sidebar-site="\/example" data-current="true" open><summary><h3 aria-current="true">Setup<\/h3><\/summary>/,
   );
-  assert.match(out, /<details class="sidebar-group" data-sidebar-group="Reference"><summary><h2>Reference<\/h2><\/summary>/);
-  assert.doesNotMatch(out, /data-sidebar-group="Reference"[^>]* open/);
+  assert.match(
+    out,
+    /<details class="sidebar-group" data-sidebar-group="[^"]+" data-sidebar-legacy="Reference" data-sidebar-site="\/example"><summary><h2>Reference<\/h2><\/summary>/,
+  );
+  assert.doesNotMatch(out, /data-sidebar-legacy="Reference"[^>]* open/);
 });
 
-test("the state key of a nested group includes its parent, so equal titles stay apart", () => {
+test("the stable keys of equal titles stay apart, so one group cannot overwrite the other", () => {
   const nested: NavTree = {
     main: [
       { title: "A", children: [{ title: "Notes", children: [{ title: "x", url: "/a/x/" }] }] },
@@ -234,7 +382,36 @@ test("the state key of a nested group includes its parent, so equal titles stay 
     ],
   };
   const out = html(sidebar(propsAt(nested, "/a/x/")));
-  assert.match(out, /data-sidebar-group="A\/Notes" data-current="true" open/);
-  assert.match(out, /data-sidebar-group="B\/Notes"><summary>/);
-  assert.doesNotMatch(out, /data-sidebar-group="B\/Notes"[^>]* open/);
+  const keys = [...out.matchAll(/data-sidebar-group="([^"]+)"/g)].map((match) => match[1]!);
+  assert.equal(new Set(keys).size, keys.length);
+  assert.match(out, /data-sidebar-group="[^"]+" data-sidebar-legacy="A\/Notes" data-sidebar-site="\/example" data-current="true" open/);
+  assert.match(out, /data-sidebar-group="[^"]+" data-sidebar-legacy="B\/Notes" data-sidebar-site="\/example"><summary>/);
+  assert.doesNotMatch(out, /data-sidebar-legacy="B\/Notes"[^>]* open/);
+});
+
+test("equal titles and descendant urls get distinct keys and independent state", () => {
+  const same: NavTree = {
+    main: [
+      { title: "Notes", children: [{ title: "A", url: "/notes/same/" }] },
+      { title: "Notes", children: [{ title: "A", url: "/notes/same/" }] },
+    ],
+  };
+  const out = html(sidebar(propsAt(same, "/notes/same/")));
+  const keys = [...out.matchAll(/data-sidebar-group="([^"]+)"/g)].map((match) => match[1]!);
+  assert.equal(keys.length, 2);
+  assert.notEqual(keys[0], keys[1]);
+
+  const storage = fakeStore();
+  const first = new FakeGroup(keys[0]!, true);
+  const second = new FakeGroup(keys[1]!, true);
+  activate({ storage, root: rootOf([first, second]) });
+  first.toggle(false);
+  assert.equal(first.open, false);
+  assert.equal(second.open, true);
+
+  const firstAgain = new FakeGroup(keys[0]!, true);
+  const secondAgain = new FakeGroup(keys[1]!, true);
+  activate({ storage, root: rootOf([firstAgain, secondAgain]) });
+  assert.equal(firstAgain.open, false);
+  assert.equal(secondAgain.open, true, "the first group's state must not overwrite the second's");
 });

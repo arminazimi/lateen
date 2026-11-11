@@ -71,6 +71,11 @@ function page(n: number): { title: string; url: string } {
   return { title: `Rule ${n}`, url: `/generated/rule-${String(n).padStart(2, "0")}/` };
 }
 
+/** The stable group keys, in render order. */
+function groupKeys(out: string): string[] {
+  return [...out.matchAll(/data-sidebar-group="([^"]+)"/g)].map((match) => match[1]!);
+}
+
 const tree: NavTree = {
   main: [
     { title: "Home", url: "/home/" },
@@ -100,11 +105,11 @@ test("renders the main list: leading links, groups as headings, nested groups ne
   assert.match(out, /<ul><li><a href="\/home\/" aria-current="page">Home<\/a><\/li><\/ul>/);
   assert.match(
     out,
-    /<details class="sidebar-group" data-sidebar-group="Guide"><summary><h2>Guide<\/h2><\/summary><ul>/,
+    /<details class="sidebar-group" data-sidebar-group="[^"]+" data-sidebar-legacy="Guide" data-sidebar-site="\/example"><summary><h2>Guide<\/h2><\/summary><ul>/,
   );
   assert.match(
     out,
-    /<li><details class="sidebar-group" data-sidebar-group="Guide\/Setup"><summary><h3>Setup<\/h3><\/summary><ul><li><a href="\/guide\/setup\/config\/">Config<\/a><\/li><\/ul><\/details><\/li>/,
+    /<li><details class="sidebar-group" data-sidebar-group="[^"]+" data-sidebar-legacy="Guide\/Setup" data-sidebar-site="\/example"><summary><h3>Setup<\/h3><\/summary><ul><li><a href="\/guide\/setup\/config\/">Config<\/a><\/li><\/ul><\/details><\/li>/,
   );
   assert.match(out, /<a href="\/rules\/">Rules<\/a>/);
   assert.doesNotMatch(out, /Docs home/);
@@ -194,6 +199,58 @@ test("groups are native disclosures: no control opts out of the tab order, and a
   const closed = groups.find((group) => group.open !== true);
   assert.ok(closed, "a group the reader is not in starts closed");
   assert.ok(closed.querySelector("a[href]"), "its links are still inside, hidden by the closed disclosure");
+});
+
+test("identical group titles at one level get distinct stable keys", () => {
+  const duplicated: NavTree = {
+    main: [
+      { title: "Notes", children: [{ title: "A", url: "/a/" }] },
+      { title: "Notes", children: [{ title: "B", url: "/b/" }] },
+    ],
+  };
+  const keys = groupKeys(html(sidebar(props(duplicated, "/a/"))));
+  assert.equal(keys.length, 2);
+  assert.notEqual(keys[0], keys[1]);
+
+  // The same title nested under different parents stays apart too.
+  const nested: NavTree = {
+    main: [
+      { title: "One", children: [{ title: "Notes", children: [{ title: "X", url: "/one/x/" }] }] },
+      { title: "Two", children: [{ title: "Notes", children: [{ title: "Y", url: "/two/y/" }] }] },
+    ],
+  };
+  const nestedKeys = groupKeys(html(sidebar(props(nested, "/one/x/"))));
+  assert.equal(new Set(nestedKeys).size, nestedKeys.length);
+});
+
+test("groups with identical titles and descendant urls still get distinct keys", () => {
+  const duplicated: NavTree = {
+    main: [
+      { title: "Notes", children: [{ title: "A", url: "/notes/same/" }] },
+      { title: "Notes", children: [{ title: "A", url: "/notes/same/" }] },
+    ],
+  };
+  const keys = groupKeys(html(sidebar(props(duplicated, "/notes/same/"))));
+  assert.equal(keys.length, 2);
+  assert.notEqual(keys[0], keys[1]);
+});
+
+test("the same navigation structure keeps its keys when titles are translated", () => {
+  const english: NavTree = {
+    main: [{ title: "Guide", children: [{ title: "Install", url: "/guide/install/" }] }],
+  };
+  const translated: NavTree = {
+    main: [{ title: "Anleitung", children: [{ title: "Installation", url: "/guide/install/" }] }],
+  };
+  assert.deepEqual(
+    groupKeys(html(sidebar(props(translated, "/guide/install/")))),
+    groupKeys(html(sidebar(props(english, "/guide/install/")))),
+  );
+});
+
+test("groups without pages are left out", () => {
+  const out = html(sidebar(props({ main: [{ title: "Empty", children: [] }] }, "/home/")));
+  assert.doesNotMatch(out, /data-sidebar-legacy="Empty"/);
 });
 
 test("style.css uses only token names from tokens/names.json for var(--*) references", () => {
