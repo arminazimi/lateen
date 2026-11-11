@@ -76,3 +76,31 @@
   outline: 2px solid var(--state-focus-ring);
   outline-offset: 2px;
 }
+
+/* A value the declared type rejects: the island keeps it out of the examples until it is fixed. */
+.variables-form-input:invalid {
+  border-color: var(--color-danger);
+}
+
+.variables-form-reset {
+  margin-block-start: var(--space-3);
+  padding-block: var(--space-1);
+  padding-inline: var(--space-3);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-sm);
+  line-height: var(--type-leading-tight);
+  color: var(--color-text);
+  background-color: var(--color-canvas);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-ctl);
+  cursor: pointer;
+}
+
+.variables-form-reset:hover {
+  border-color: var(--color-border-strong);
+}
+
+.variables-form-reset:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: 2px;
+}
