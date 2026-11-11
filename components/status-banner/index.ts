@@ -17,6 +17,20 @@ export const LABEL_KEYS: Readonly<Record<StatusBannerStatus, string>> = {
   "old-version": "status_old_version",
 };
 
+/** How serious each status is, so the banner's hierarchy is explicit rather than colour alone. */
+export const SEVERITIES: Readonly<Record<StatusBannerStatus, "critical" | "warning" | "info">> = {
+  deprecated: "critical",
+  experimental: "info",
+  "old-version": "warning",
+};
+
+/** The i18n key with each status's guidance: what it means and what the reader should do next. */
+export const HINT_KEYS: Readonly<Record<StatusBannerStatus, string>> = {
+  deprecated: "status_deprecated_hint",
+  experimental: "status_experimental_hint",
+  "old-version": "status_old_version_hint",
+};
+
 /** Props from the directive: `::status-banner{status=deprecated replacement="/new/" version="0.2.0"}`. */
 export type StatusBannerProps = {
   /** `deprecated`, `experimental`, or `old-version`; any other value, or none, renders nothing. */
@@ -93,9 +107,9 @@ function icon(status: StatusBannerStatus) {
 
 /**
  * A page-level banner for a deprecated, experimental, or old-version page: an icon, the status as
- * visible text, the version when given, and a link to the replacement when given. The colours come
- * from the status, but the icon and label carry the meaning on their own. Renders nothing for an
- * unknown status.
+ * visible text, one line of guidance, the version when given, and a link to the replacement when
+ * given. The severity is on the element, and the icon and label carry the meaning on their own, so
+ * colour is never the only signal. Renders nothing for an unknown status.
  */
 const statusBanner: Component<StatusBannerProps> = ({ props, page }) => {
   const status = statusOf(props.status);
@@ -111,6 +125,7 @@ const statusBanner: Component<StatusBannerProps> = ({ props, page }) => {
       id: `status-banner-${status}`,
       role: "note",
       "aria-labelledby": `status-banner-${status}-label`,
+      "data-severity": SEVERITIES[status],
     },
     icon(status),
     h(
@@ -118,6 +133,7 @@ const statusBanner: Component<StatusBannerProps> = ({ props, page }) => {
       { class: "status-banner-label", id: `status-banner-${status}-label` },
       t(page.lang, LABEL_KEYS[status]),
     ),
+    h("span", { class: "status-banner-hint" }, t(page.lang, HINT_KEYS[status])),
     version === undefined
       ? null
       : h(

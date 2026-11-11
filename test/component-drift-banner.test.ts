@@ -7,10 +7,17 @@ import { stringsOf } from "../i18n/index.ts";
 import driftBanner, {
   CLASS,
   DETAILS_CLASS,
+  ICONS,
+  SEVERITIES,
+  STATES,
+  STATE_KEYS,
+  WHAT_KEYS,
   detailsHrefOf,
+  evidenceOf,
   findingsOf,
   messageOf,
   pagesOf,
+  whatOf,
 } from "../components/drift-banner/index.ts";
 
 /** A site with the data, theme options, and base the component reads. */
@@ -52,6 +59,8 @@ test("default export is the drift banner component", () => {
   assert.equal(typeof driftBanner, "function");
   assert.equal(CLASS, "drift-banner");
   assert.equal(DETAILS_CLASS, "drift-banner-details");
+  assert.deepEqual([...STATES], ["drifting", "stale", "unavailable"]);
+  assert.deepEqual([...SEVERITIES], ["error", "warning", "info", "unknown"]);
 });
 
 test("renders nothing when the site has no drift data", () => {
@@ -62,19 +71,73 @@ test("renders nothing when the site has no drift data", () => {
   assert.equal(render({ drift: [] }), null);
 });
 
-test("renders nothing when the page has no findings, an empty list, or a non-list", () => {
+test("renders nothing when the page is clean, missing, or has a value that is not a list", () => {
   assert.equal(render({ drift: {} }), null);
   assert.equal(render({ drift: { "/other/": [{}] } }), null);
   assert.equal(render({ drift: { "/guide/": [] } }), null);
   assert.equal(render({ drift: { "/guide/": "not a list" } }), null);
-  assert.equal(render({ drift: { "/guide/": null } }), null);
+  assert.equal(render({ drift: { "/guide/": { findings: 0 } } }), null);
 });
 
-test("one finding uses the singular message", () => {
-  const out = render({ drift: { "/guide/": [{ message: "Renamed." }] } });
+test("a finding that names code is drifting, with the count and the next step", () => {
+  const out = render({ drift: { "/guide/": [{ kind: "drift.missing-symbol", severity: "error" }] } });
   assert.ok(out);
-  assert.match(out, new RegExp(`<aside class="${CLASS}" role="note">`));
+  assert.match(out, new RegExp(`<aside class="${CLASS} ${CLASS}-drifting"`));
+  assert.match(out, /role="note"/);
+  assert.match(out, /aria-label="Drift"/);
+  assert.match(out, /data-drift-state="drifting"/);
+  assert.match(out, /data-drift-severity="error"/);
+  assert.match(out, /<svg class="drift-banner-icon"[^>]*aria-hidden="true"[^>]*focusable="false"/);
+  assert.match(out, /<strong class="drift-banner-label">Drift<\/strong>/);
   assert.match(out, /<span class="drift-banner-message">1 drift finding<\/span>/);
+  assert.match(out, /<span class="drift-banner-what">This page cites code that has changed\.<\/span>/);
+  assert.doesNotMatch(out, /role="alert"|<h[1-6]/, "the banner is a note, not an alert or a heading");
+});
+
+test("findings that only describe the page are stale, not drifting", () => {
+  const out = render({ drift: { "/guide/": [{ message: "The option was renamed.", line: 42 }] } });
+  assert.ok(out);
+  assert.match(out, new RegExp(`class="${CLASS} ${CLASS}-stale"`));
+  assert.match(out, /aria-label="Stale"/);
+  assert.match(out, /data-drift-state="stale"/);
+  assert.match(out, /data-drift-severity="warning"/);
+  assert.match(out, /<strong class="drift-banner-label">Stale<\/strong>/);
+  assert.match(out, /<span class="drift-banner-what">This page may be out of date\.<\/span>/);
+});
+
+test("the severity is the worst finding's, and a missing or unknown one reads as warning", () => {
+  const severity = (findings: unknown[]) => evidenceOf(siteOf({ drift: { "/guide/": findings } }), "/guide/")!.severity;
+  assert.equal(severity([{ kind: "drift.missing-file", severity: "info" }]), "info");
+  assert.equal(severity([{ kind: "drift.missing-file", severity: "info" }, { kind: "drift.moved-symbol", severity: "warning" }]), "warning");
+  assert.equal(severity([{ kind: "drift.missing-file", severity: "warning" }, { kind: "drift.moved-symbol", severity: "error" }]), "error");
+  assert.equal(severity([{ kind: "drift.missing-file", severity: "fatal" }]), "warning");
+  assert.equal(severity([{ kind: "drift.missing-file" }]), "warning");
+});
+
+test("an explicit unavailable marker is its own state, never healthy", () => {
+  for (const marker of [null, { unavailable: true }]) {
+    const out = render({ drift: { "/guide/": marker } });
+    assert.ok(out, `${JSON.stringify(marker)} renders`);
+    assert.match(out, new RegExp(`class="${CLASS} ${CLASS}-unavailable"`));
+    assert.match(out, /aria-label="Not checked"/);
+    assert.match(out, /data-drift-state="unavailable"/);
+    assert.match(out, /data-drift-severity="unknown"/);
+    assert.match(out, /<strong class="drift-banner-label">Not checked<\/strong>/);
+    assert.doesNotMatch(out, /drift-banner-message/, "an unchecked page has no finding count");
+    assert.match(out, /<span class="drift-banner-what">Drift has not been checked for this page\.<\/span>/);
+  }
+});
+
+test("each state has its own icon, so shape carries the meaning too", () => {
+  const shapes = new Set<string>();
+  for (const state of STATES) {
+    const shape = ICONS[state].join("|");
+    assert.ok(!shapes.has(shape), `${state} has its own icon shape`);
+    shapes.add(shape);
+  }
+  assert.ok(render({ drift: { "/guide/": [{ kind: "drift.missing-file" }] } })!.includes("<svg"));
+  assert.ok(render({ drift: { "/guide/": [{ message: "x" }] } })!.includes("<svg"));
+  assert.ok(render({ drift: { "/guide/": null } })!.includes("<svg"));
 });
 
 test("many findings use the plural message with the count", () => {
@@ -112,6 +175,12 @@ test("the details link comes from theme.options.drift.detailsUrl, under the site
   assert.match(out, /<a class="drift-banner-details" href="\/evergreen\/drift\/">View drift details<\/a>/);
 });
 
+test("the unavailable state offers the same details link as a finding does", () => {
+  const out = render({ drift: { "/guide/": null } }, { options: { drift: { detailsUrl: "/drift/" } } });
+  assert.ok(out);
+  assert.match(out, /<a class="drift-banner-details" href="\/drift\/">View drift details<\/a>/);
+});
+
 test("an https details link is kept as written and no link is shown without one", () => {
   assert.match(
     render({ drift: { "/guide/": [{}] } }, { options: { drift: { detailsUrl: "https://example.com/drift" } } })!,
@@ -134,32 +203,55 @@ test("the details link is escaped, never parsed as markup", () => {
   assert.doesNotMatch(out, /<script>/);
 });
 
-test("the text follows the page language for one and many findings", () => {
+test("the state label, count, and next step follow the page language", () => {
+  const cases: ReadonlyArray<readonly [unknown, (typeof STATES)[number]]> = [
+    [[{ kind: "drift.missing-file" }], "drifting"],
+    [[{ message: "x" }], "stale"],
+    [null, "unavailable"],
+  ];
   for (const lang of ["en", "fa", "ar"] as const) {
-    const one = stringsOf(lang)[messageKey(1)]!.replace("{n}", "1");
-    const many = stringsOf(lang)[messageKey(2)]!.replace("{n}", "2");
-    assert.equal(messageOf(lang, 1), one, `${lang} singular`);
-    assert.equal(messageOf(lang, 2), many, `${lang} plural`);
-    assert.ok(render({ drift: { "/guide/": [{}] } }, { lang })!.includes(one), `${lang} says "${one}"`);
-    assert.ok(render({ drift: { "/guide/": [{}, {}] } }, { lang })!.includes(many), `${lang} says "${many}"`);
+    const strings = stringsOf(lang);
+    for (const state of STATES) {
+      assert.equal(whatOf(lang, state), strings[WHAT_KEYS[state]]!, `${lang} ${state} says what changed`);
+    }
+    for (const [entry, state] of cases) {
+      const out = render({ drift: { "/guide/": entry } }, { lang });
+      assert.ok(out, `${lang} ${state} renders`);
+      const label = strings[STATE_KEYS[state]]!;
+      assert.ok(out.includes(`<strong class="drift-banner-label">${label}</strong>`), `${lang} ${state} says "${label}"`);
+      assert.ok(out.includes(`aria-label="${label}"`), `${lang} ${state} is named "${label}"`);
+      assert.ok(out.includes(strings[WHAT_KEYS[state]]!), `${lang} ${state} says what happens next`);
+    }
+    const one = render({ drift: { "/guide/": [{ message: "x" }] } }, { lang })!;
+    const many = render({ drift: { "/guide/": [{ message: "x" }, { message: "y" }] } }, { lang })!;
+    assert.equal(messageOf(lang, 1), strings.drift_finding!.replace("{n}", "1"));
+    assert.equal(messageOf(lang, 2), strings.drift_findings!.replace("{n}", "2"));
+    assert.ok(one.includes(strings.drift_finding!.replace("{n}", "1")), `${lang} counts one`);
+    assert.ok(many.includes(strings.drift_findings!.replace("{n}", "2")), `${lang} counts many`);
     assert.ok(
       render({ drift: { "/guide/": [{}] } }, { lang, options: { drift: { detailsUrl: "/drift/" } } })!.includes(
-        stringsOf(lang).drift_details!,
+        strings.drift_details!,
       ),
       `${lang} localises the details link`,
     );
   }
 });
 
-/** The i18n key the banner uses for a count. */
-function messageKey(n: number): "drift_finding" | "drift_findings" {
-  return n === 1 ? "drift_finding" : "drift_findings";
-}
-
-test("style.css uses the warning accent on the inline start edge, so it moves under RTL", () => {
-  assert.match(css, /\.drift-banner\s*\{[^}]*border-inline-start:\s*4px solid var\(--color-warning\)/);
-  assert.match(css, /\.drift-banner\s*\{[^}]*padding-inline:\s*var\(--space-4\)/);
-  assert.match(css, /\.drift-banner\s*\{[^}]*margin-block:/);
+test("style.css colours each severity from a token, and keeps unavailable apart with a dashed edge", () => {
+  const expected: Record<string, string> = {
+    error: "--color-danger",
+    warning: "--color-warning",
+    info: "--color-info",
+  };
+  for (const [severity, token] of Object.entries(expected)) {
+    assert.match(
+      css,
+      new RegExp(`\\.drift-banner\\[data-drift-severity="${severity}"\\]\\s*\\{[^}]*border-inline-start-color:\\s*var\\(${token}\\)`),
+      `${severity} uses var(${token})`,
+    );
+    assert.ok(tokenNames.has(token.slice(2)), `${token} is a token`);
+  }
+  assert.match(css, /\.drift-banner\[data-drift-severity="unknown"\]\s*\{[^}]*border-inline-start-style:\s*dashed/);
 });
 
 test("style.css uses logical properties only", () => {

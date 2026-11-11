@@ -19,6 +19,35 @@
   display: none;
 }
 
+/* A warning or an outage is not a release note: it keeps the label and icon, and swaps the accent fill. */
+.announcement-warning {
+  background: color-mix(in srgb, var(--color-warning) 20%, var(--color-canvas));
+  color: var(--color-text);
+}
+
+.announcement-danger {
+  background: color-mix(in srgb, var(--color-danger) 20%, var(--color-canvas));
+  color: var(--color-text);
+}
+
+.announcement-icon {
+  flex: none;
+  inline-size: var(--space-4);
+  block-size: var(--space-4);
+}
+
+.announcement-warning .announcement-icon {
+  color: var(--color-warning);
+}
+
+.announcement-danger .announcement-icon {
+  color: var(--color-danger);
+}
+
+.announcement-tone {
+  font-weight: var(--type-weight-bold);
+}
+
 .announcement-text {
   margin: 0;
   text-align: center;
@@ -30,8 +59,18 @@
   text-underline-offset: var(--space-1);
 }
 
+.announcement-warning .announcement-link,
+.announcement-danger .announcement-link {
+  color: var(--color-link);
+}
+
 .announcement-link:hover {
   color: var(--color-on-accent);
+}
+
+.announcement-warning .announcement-link:hover,
+.announcement-danger .announcement-link:hover {
+  color: var(--color-link-hover);
 }
 
 .announcement-link:focus-visible {
