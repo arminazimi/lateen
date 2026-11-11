@@ -12,8 +12,6 @@
     { "case": "fixture versions", "theme": "light", "rule": "color-contrast", "target": ".versions-status-latest > .versions-status-label" },
     { "case": "docs variables form", "theme": "light", "rule": "scrollable-region-focusable", "target": "table" },
     { "case": "docs variables form", "theme": "dark", "rule": "scrollable-region-focusable", "target": "table" },
-    { "case": "fixture api", "theme": "light", "rule": "scrollable-region-focusable", "target": ".api-examples" },
-    { "case": "fixture api", "theme": "dark", "rule": "scrollable-region-focusable", "target": ".api-examples" },
     { "case": "docs search open", "theme": "light", "rule": "aria-required-children", "target": ".search-results" },
     { "case": "docs search open", "theme": "dark", "rule": "aria-required-children", "target": ".search-results" },
     { "case": "docs search open", "theme": "dark", "rule": "color-contrast", "target": ".search-group-title" },
