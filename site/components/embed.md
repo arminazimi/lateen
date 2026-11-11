@@ -28,6 +28,10 @@ Only `https` addresses are embedded. An empty or unsafe `src` renders nothing.
 
 ::embed{src="https://www.youtube.com/watch?v=aqz-KE-bpKQ" title="Big Buck Bunny"}
 
+## Loading and failures
+
+The button requests the frame only after a click. While the frame loads, the box keeps the title and a live status line, so the reader is never left with an unexplained empty frame. If the provider is blocked, reports an error, or does not answer within 15 seconds, the box says so, the same button becomes **Retry embed**, and the link to the provider stays visible. Nothing about the choice is stored: a reload starts from the button again.
+
 ## Notes
 
 - Always give a title that names the content, not the provider: "Big Buck Bunny", not "YouTube video".
