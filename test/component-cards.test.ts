@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import cards, { card, CARD_CLASS, GRID_CLASS } from "../components/cards/index.ts";
+import cards, { card, CARD_CLASS, GRID_CLASS, hrefOf } from "../components/cards/index.ts";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const stylePath = join(root, "components/cards/style.css");
@@ -87,6 +87,71 @@ test("title and description are escaped, never parsed as markup", () => {
   const out = html(card({ href: "/x/", title: "<b>Bold</b>", description: "a & b" }));
   assert.match(out, /&lt;b&gt;Bold&lt;\/b&gt;/);
   assert.match(out, /a &amp; b/);
+});
+
+test("unsafe, protocol-relative, malformed, and blank hrefs never become anchors", () => {
+  const bad = [
+    "javascript:alert(1)",
+    "JaVaScRiPt:alert(1)",
+    "data:text/html,<script>alert(1)</script>",
+    "file:///etc/passwd",
+    "//evil.example/phish",
+    "/\\evil.example",
+    "",
+    "   ",
+    "/ok path with space",
+  ];
+  for (const href of bad) {
+    const out = html(card({ href, title: "Click", description: "Body." }));
+    assert.doesNotMatch(out, /<a\b/, `href ${JSON.stringify(href)} must not render an anchor`);
+    assert.match(out, new RegExp(`^<div class="${CARD_CLASS}">`));
+    assert.match(out, /<span class="card-title">Click<\/span>/);
+    assert.match(out, /<span class="card-description">Body\.<\/span>/);
+  }
+});
+
+test("valid internal and web links keep their destination, trimmed", () => {
+  assert.equal(hrefOf("/guide/install/"), "/guide/install/");
+  assert.equal(hrefOf("  https://example.com/a  "), "https://example.com/a");
+  assert.equal(hrefOf("http://example.com"), "http://example.com");
+  assert.equal(hrefOf("javascript:alert(1)"), undefined);
+  assert.equal(hrefOf("//evil.example"), undefined);
+  assert.equal(hrefOf(undefined), undefined);
+
+  const out = html(card({ href: " https://example.com/x ", title: "Ext" }));
+  assert.match(out, /^<a class="card" href="https:\/\/example.com\/x">/);
+});
+
+test("blank or whitespace-only titles never produce an unnamed control", () => {
+  for (const title of ["", "   ", "\n\t"]) {
+    const out = html(card({ href: "/ok/", title, description: "Still readable." }));
+    assert.doesNotMatch(out, /<a\b/);
+    assert.match(out, /^<div class="card">/);
+    assert.match(out, /<span class="card-description">Still readable\.<\/span>/);
+  }
+});
+
+test("a valid card keeps exactly one link and no nested interactive content", () => {
+  const out = html(card({ href: "/ok/", title: "Safe", description: "Desc", icon: "svg-icon" }));
+  assert.equal((out.match(/<a\b/g) ?? []).length, 1);
+  assert.doesNotMatch(out, /<(?:button|input|select|textarea)\b/);
+  assert.match(out, /aria-hidden="true"/);
+  // Only href/title/description/icon are read: extra children-like props are never rendered.
+  const extra = card({ href: "/ok/", title: "Safe", children: "nested" } as Parameters<typeof card>[0]);
+  assert.doesNotMatch(html(extra), /nested/);
+});
+
+test("malformed cards render as static text without JavaScript", () => {
+  const out = html(card({ href: "javascript:void(0)", title: "Docs", description: "Read this." }));
+  assert.doesNotMatch(out, /<a\b|href=|onclick=|tabindex=/);
+  assert.match(out, /Docs/);
+  assert.match(out, /Read this\./);
+});
+
+test("unicode titles are kept and escaped as text, never markup", () => {
+  const out = html(card({ href: "/café/", title: "Досье ☕ <em>é</em>", description: "日本語 & ©" }));
+  assert.match(out, /Досье ☕ &lt;em&gt;é&lt;\/em&gt;/);
+  assert.match(out, /日本語 &amp; ©/);
 });
 
 test("style.css uses only token custom properties from names.json", () => {

@@ -32,8 +32,8 @@ The `card` helper in `components/cards/` takes:
 
 | Name | Type | Required | What it does |
 | --- | --- | --- | --- |
-| `href` | string | yes | Where the whole card goes. The card is one link. |
-| `title` | string | yes | The card's heading. |
+| `href` | string | yes | Where the whole card goes. The card is one link — but only when the destination is safe (see Notes). |
+| `title` | string | yes | The card's heading. Blank or whitespace-only titles never produce a link. |
 | `description` | string | no | Plain text under the heading. It cannot hold a link of its own. |
 | `icon` | HTML | no | A decorative icon, hidden from assistive technology. |
 
