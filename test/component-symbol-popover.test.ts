@@ -2,25 +2,27 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import type { ComponentProps } from "@velella/mizzen/contracts";
+import { JSDOM } from "jsdom";
 import { renderToString } from "preact-render-to-string";
 import symbolPopover, {
-  chipIdOf,
+  CHIP_CLASS,
   copyValueOf,
   directive,
   LINK_CLASS,
+  PANEL_CLASS,
   referenceHref,
   SIGNATURE_CLASS,
   SYMBOL_CLASS,
   textOf,
-  TOOLTIP_CLASS,
   type SymbolPopoverProps,
 } from "../components/symbol-popover/index.ts";
 import {
-  DISMISSED_ATTRIBUTE,
-  dismiss,
-  enhance,
-  reset,
-  SYMBOL_SELECTOR,
+  activate,
+  closeOnEscape,
+  closeOutside,
+  PANEL_SELECTOR,
+  SUMMARY_SELECTOR,
+  type SymbolChip,
   type SymbolEvent,
   type SymbolNode,
 } from "../components/symbol-popover/client.ts";
@@ -32,26 +34,43 @@ function render(props: SymbolPopoverProps, lang = "en"): string | null {
   return node === null ? null : renderToString(node as never);
 }
 
-/** A chip as the island touches it: attributes, listeners, and a way to fire an event. */
+/** Parse rendered markup as a browser would, for the semantics assertions. */
+function domOf(html: string) {
+  return new JSDOM(`<!DOCTYPE html><html lang="en"><body>${html}</body></html>`).window.document;
+}
+
+/** A chip as the island touches it: an open flag, its summary, and a way to fire an event. */
+class FakeChip implements SymbolChip {
+  focused = false;
+  focus(): void {
+    this.focused = true;
+  }
+}
+
 class FakeNode implements SymbolNode {
-  readonly attrs = new Map<string, string>();
+  open: boolean;
+  readonly chip = new FakeChip();
+  readonly children = new Set<unknown>();
   readonly listeners = new Map<string, Array<(event: SymbolEvent) => void>>();
 
-  setAttribute(name: string, value: string): void {
-    this.attrs.set(name, value);
+  constructor(open = true) {
+    this.open = open;
   }
 
-  removeAttribute(name: string): void {
-    this.attrs.delete(name);
+  querySelector(selector: string): SymbolChip | null {
+    assert.equal(selector, SUMMARY_SELECTOR);
+    return this.chip;
+  }
+
+  contains(target: unknown): boolean {
+    return this.children.has(target);
   }
 
   addEventListener(type: string, listener: (event: SymbolEvent) => void): void {
-    const list = this.listeners.get(type) ?? [];
-    list.push(listener);
-    this.listeners.set(type, list);
+    this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
   }
 
-  fire(type: string, event: SymbolEvent = {}): void {
+  fire(type: string, event: SymbolEvent = { preventDefault: () => {} }): void {
     for (const listener of this.listeners.get(type) ?? []) listener(event);
   }
 }
@@ -70,15 +89,26 @@ test("default export is the component and the directive is symbol-popover", () =
   assert.equal(typeof symbolPopover, "function");
   assert.equal(directive, "symbol-popover");
   assert.equal(SYMBOL_CLASS, "symbol-popover");
-  assert.equal(TOOLTIP_CLASS, "symbol-popover-tooltip");
+  assert.equal(CHIP_CLASS, "symbol-popover-chip");
+  assert.equal(PANEL_CLASS, "symbol-popover-panel");
 });
 
-test("renders an inline focusable chip with the name and a tooltip", () => {
+test("renders a native disclosure with the summary as its first child", () => {
   const out = render({ name: "runExample", signature: "runExample(input: Input): Promise<Result>" });
   assert.ok(out);
-  assert.match(out, /<span class="symbol-popover" id="symbol-runexample" tabindex="0" data-symbol="runExample"/);
-  assert.match(out, /aria-describedby="symbol-runexample-tooltip">runExample/);
-  assert.match(out, new RegExp(`<span class="${TOOLTIP_CLASS}" role="tooltip" id="symbol-runexample-tooltip">`));
+  assert.match(out, /^<details class="symbol-popover" data-symbol="runExample">/);
+  assert.match(out, /^<details[^>]*><summary class="symbol-popover-chip"/);
+  assert.match(out, /<\/summary><div class="symbol-popover-panel">/);
+  assert.match(out, /runExample<\/summary>/);
+});
+
+test("the tooltip role and its aria relationship are gone", () => {
+  const out = render({ name: "runExample", signature: "runExample(): void", href: "/reference/runner/" });
+  assert.ok(out);
+  assert.doesNotMatch(out, /role="tooltip"/);
+  assert.doesNotMatch(out, /aria-describedby/);
+  assert.doesNotMatch(out, /aria-controls/);
+  assert.doesNotMatch(out, /tabindex/);
 });
 
 test("shows the signature as code text and links to the reference", () => {
@@ -98,26 +128,11 @@ test("the link text follows the page language", () => {
   assert.match(out, />مرجع<\/a>/);
 });
 
-test("renders no tooltip when there is neither a signature nor a link", () => {
+test("a chip with neither signature nor link stays a static, non-interactive label", () => {
   const out = render({ name: "runExample" });
   assert.ok(out);
-  assert.doesNotMatch(out, /role="tooltip"/);
-});
-
-test("the chip and its tooltip have deterministic ids that describe the relationship", () => {
-  assert.equal(chipIdOf(undefined, "runExample"), "symbol-runexample");
-  assert.equal(chipIdOf("Result", "runExample"), "result");
-  const out = render({ name: "runExample", signature: "runExample(): void" });
-  assert.ok(out);
-  assert.match(out, /<span class="symbol-popover" id="symbol-runexample"[^>]*aria-describedby="symbol-runexample-tooltip">/);
-  assert.match(out, /<span class="symbol-popover-tooltip" role="tooltip" id="symbol-runexample-tooltip">/);
-});
-
-test("a chip without a tooltip has no aria-describedby", () => {
-  const out = render({ name: "runExample" });
-  assert.ok(out);
-  assert.doesNotMatch(out, /aria-describedby/);
-  assert.match(out, /id="symbol-runexample"/);
+  assert.equal(out, '<span class="symbol-popover symbol-popover-chip" data-symbol="runExample" data-copy-value="runExample">runExample</span>');
+  assert.doesNotMatch(out, /<details|<summary|aria-/);
 });
 
 test("the copy value is the signature, or the name when there is no signature", () => {
@@ -125,7 +140,7 @@ test("the copy value is the signature, or the name when there is no signature", 
   assert.equal(copyValueOf("run", ""), "run");
   const out = render({ name: "runExample", signature: "runExample(): void", href: "/reference/" });
   assert.ok(out);
-  assert.match(out, /data-copy-value="runExample\(\): void"/);
+  assert.match(out, /^<details[^>]*><summary class="symbol-popover-chip" data-copy-value="runExample\(\): void">/);
   assert.doesNotMatch(out, /data-copy-value="[^"]*Reference/);
 });
 
@@ -162,24 +177,139 @@ test("textOf trims strings and ignores every other value", () => {
   assert.equal(textOf(undefined), "");
 });
 
-test("style.css hides the tooltip by default and shows it on hover and focus-within", () => {
-  assert.match(css, new RegExp(`\\.${TOOLTIP_CLASS}\\s*\\{[^}]*display:\\s*none`, "s"));
-  assert.match(
-    css,
-    new RegExp(
-      `\\.${SYMBOL_CLASS}:hover \\.${TOOLTIP_CLASS},\\s*\\.${SYMBOL_CLASS}:focus-within \\.${TOOLTIP_CLASS}\\s*\\{[^}]*display:\\s*block`,
-      "s",
-    ),
-  );
-  assert.ok(css.indexOf("[data-dismissed]") > css.indexOf(":focus-within"), "the dismissed rule comes after the open rules");
-  assert.match(css, /\.symbol-popover\[data-dismissed\] \.symbol-popover-tooltip\s*\{[^}]*display:\s*none/s);
+test("repeated names and explicit ids cannot duplicate ids or relationships", () => {
+  const props = { name: "Result", signature: "type Result = string", href: "/reference/", id: "result" };
+  const out = [render(props as SymbolPopoverProps), render(props as SymbolPopoverProps)].join("");
+  assert.equal(out.match(/<details\b/g)?.length, 2);
+  assert.doesNotMatch(out, /\bid="/);
+  assert.doesNotMatch(out, /aria-describedby|aria-controls|role="tooltip"/);
 });
 
-test("style.css keeps a visible focus ring and left-to-right signatures", () => {
-  assert.match(css, /\.symbol-popover:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--state-focus-ring\)/s);
+test("the disclosure is closed and complete before any JavaScript runs", () => {
+  const doc = domOf(render({ name: "runExample", signature: "runExample(): void", href: "/reference/runner/" })!);
+  const details = doc.querySelector("details.symbol-popover");
+  assert.ok(details);
+  assert.equal(details.hasAttribute("open"), false);
+  assert.equal(details.firstElementChild?.tagName, "SUMMARY");
+  assert.equal(doc.querySelectorAll('[role="tooltip"]').length, 0);
+  assert.equal(doc.querySelectorAll("[aria-describedby], [aria-controls]").length, 0);
+
+  const panel = details.querySelector(".symbol-popover-panel");
+  assert.ok(panel);
+  assert.equal(panel.hasAttribute("hidden"), false);
+  assert.ok(details.querySelector("a[href='/reference/runner/']"), "the link is ordinary content inside the details");
+});
+
+test("the native summary is the only control, so tap, click, Enter, and Space need no island", () => {
+  const doc = domOf(render({ name: "runExample", signature: "runExample(): void", href: "/reference/" })!);
+  const details = doc.querySelector("details.symbol-popover");
+  assert.ok(details);
+  assert.equal(details.querySelectorAll("summary").length, 1);
+  assert.equal(details.hasAttribute("tabindex"), false);
+  assert.equal(details.querySelector("summary")?.hasAttribute("tabindex"), false);
+
+  const node = new FakeNode(false);
+  activate(node);
+  assert.deepEqual([...node.listeners.keys()], ["keydown"], "the island adds no pointer or touch handler");
+  assert.equal(node.open, false, "the island does not open the disclosure itself");
+  assert.equal(node.chip.focused, false);
+});
+
+test("Escape closes an open disclosure and returns focus to its summarised chip", () => {
+  const node = new FakeNode();
+  activate(node);
+  let prevented = false;
+  node.fire("keydown", { key: "Escape", preventDefault: () => (prevented = true) });
+
+  assert.equal(node.open, false);
+  assert.equal(node.chip.focused, true);
+  assert.equal(prevented, true);
+});
+
+test("Escape on a closed disclosure is left to the browser and does not move focus", () => {
+  const node = new FakeNode(false);
+  activate(node);
+  let prevented = false;
+  node.fire("keydown", { key: "Escape", preventDefault: () => (prevented = true) });
+
+  assert.equal(node.open, false);
+  assert.equal(node.chip.focused, false);
+  assert.equal(prevented, false);
+});
+
+test("keys other than Escape are left alone", () => {
+  const node = new FakeNode();
+  activate(node);
+  for (const key of ["Tab", "Enter", " ", "ArrowDown", "Shift"]) {
+    let prevented = false;
+    node.fire("keydown", { key, preventDefault: () => (prevented = true) });
+    assert.equal(node.open, true, key);
+    assert.equal(prevented, false, key);
+  }
+  assert.equal(node.chip.focused, false);
+});
+
+test("a click outside closes the disclosure without moving focus", () => {
+  const node = new FakeNode();
+  const outside = {};
+  const inside = {};
+  node.children.add(inside);
+
+  closeOutside(node, outside);
+  assert.equal(node.open, false);
+  assert.equal(node.chip.focused, false, "the clicked element keeps focus");
+
+  const open = new FakeNode();
+  open.children.add(inside);
+  closeOutside(open, inside);
+  assert.equal(open.open, true, "a click inside the panel leaves it open");
+
+  const closed = new FakeNode(false);
+  closeOutside(closed, outside);
+  assert.equal(closed.open, false);
+});
+
+test("the island never traps focus or changes the tab order", () => {
+  const node = new FakeNode(false);
+  const before = node.open;
+  activate(node);
+  for (const key of ["Tab", "Shift", "ArrowLeft", "ArrowRight", "Escape"]) {
+    node.fire("keydown", { key, preventDefault: () => {} });
+  }
+  assert.equal(node.open, before);
+  assert.deepEqual([...node.listeners.keys()], ["keydown"]);
+  assert.equal(PANEL_SELECTOR, "details[data-symbol]");
+});
+
+test("closeOnEscape is the same behaviour without activate", () => {
+  const node = new FakeNode();
+  closeOnEscape(node, { key: "Tab", preventDefault: () => {} });
+  assert.equal(node.open, true);
+
+  closeOnEscape(node, { key: "Escape", preventDefault: () => {} });
+  assert.equal(node.open, false);
+  assert.equal(node.chip.focused, true);
+});
+
+test("style.css leaves the panel to the native details instead of hiding it", () => {
+  assert.doesNotMatch(css, new RegExp(`\\.${PANEL_CLASS}\\s*\\{[^}]*display:\\s*none`, "s"));
+  assert.doesNotMatch(css, new RegExp(`:hover\\s+\\.${PANEL_CLASS}|\\[data-dismissed\\]`));
+  assert.match(css, new RegExp(`\\.${PANEL_CLASS}\\s*\\{[^}]*position:\\s*absolute`, "s"));
+  assert.match(css, /\.symbol-popover-chip::-webkit-details-marker\s*\{[^}]*display:\s*none/s);
+  assert.match(css, /\.symbol-popover-chip::marker\s*\{[^}]*content:\s*""/s);
+});
+
+test("style.css keeps visible focus rings and left-to-right signatures", () => {
+  assert.match(css, /\.symbol-popover-chip:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--state-focus-ring\)/s);
   assert.match(css, /\.symbol-popover-link:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--state-focus-ring\)/s);
   assert.match(css, /\.symbol-popover-signature\s*\{[^}]*direction:\s*ltr/s);
   assert.match(css, /\.symbol-popover-signature\s*\{[^}]*unicode-bidi:\s*isolate/s);
+});
+
+test("style.css gives touch screens an in-flow panel", () => {
+  assert.match(css, /@media \(max-width: 40rem\)/);
+  assert.match(css, /details\.symbol-popover\s*\{[^}]*display:\s*block/s);
+  assert.match(css, new RegExp(`\\.${PANEL_CLASS}\\s*\\{[^}]*position:\\s*static`, "s"));
 });
 
 test("style.css uses only token names from tokens/names.json", () => {
@@ -194,55 +324,4 @@ test("style.css uses logical properties only", () => {
   assert.doesNotMatch(css, /(^|[;{\s])(left|right|top|bottom)\s*:/m);
   assert.match(css, /inset-inline-start:/);
   assert.match(css, /margin-block-start:/);
-});
-
-test("the island finds chips by data-symbol", () => {
-  assert.equal(SYMBOL_SELECTOR, "[data-symbol]");
-});
-
-test("Escape dismisses the tooltip and leaves other keys alone", () => {
-  const node = new FakeNode();
-  let prevented = false;
-  enhance(node);
-  node.fire("keydown", { key: "Tab", preventDefault: () => (prevented = true) } as SymbolEvent);
-  node.fire("keydown", { key: "Enter" });
-  assert.equal(node.attrs.has(DISMISSED_ATTRIBUTE), false);
-  assert.equal(prevented, false);
-
-  node.fire("keydown", { key: "Escape" });
-  assert.equal(node.attrs.get(DISMISSED_ATTRIBUTE), "");
-});
-
-test("leaving the chip resets the dismissal so the next focus shows the tooltip", () => {
-  const node = new FakeNode();
-  enhance(node);
-  node.fire("keydown", { key: "Escape" });
-  assert.equal(node.attrs.has(DISMISSED_ATTRIBUTE), true);
-
-  node.fire("blur");
-  assert.equal(node.attrs.has(DISMISSED_ATTRIBUTE), false);
-
-  node.fire("keydown", { key: "Escape" });
-  node.fire("mouseleave");
-  assert.equal(node.attrs.has(DISMISSED_ATTRIBUTE), false);
-});
-
-test("the island never traps focus or changes the tab order", () => {
-  const node = new FakeNode();
-  enhance(node);
-  for (const key of ["Tab", "Shift", "ArrowDown", "Escape"]) node.fire("keydown", { key });
-  assert.deepEqual([...node.attrs.keys()], [DISMISSED_ATTRIBUTE]);
-  assert.deepEqual([...node.listeners.keys()].sort(), ["blur", "keydown", "mouseleave"]);
-  reset(node);
-  assert.equal(node.attrs.size, 0);
-});
-
-test("dismiss is a no-op for a non-Escape key even without enhance", () => {
-  const node = new FakeNode();
-  dismiss(node, { key: "Tab" });
-  assert.equal(node.attrs.size, 0);
-  dismiss(node, { key: "Escape" });
-  assert.equal(node.attrs.get(DISMISSED_ATTRIBUTE), "");
-  reset(node);
-  assert.equal(node.attrs.size, 0);
 });
