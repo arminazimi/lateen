@@ -1,6 +1,6 @@
 import { h } from "preact";
 import type { Component } from "@velella/mizzen/contracts";
-import { t } from "../../i18n/index.ts";
+import { patternOf, t } from "../../i18n/index.ts";
 
 /** The Markdown directive this component handles: `::version-diff{from=v1 to=v2 changes='[...]'}`. */
 export const directive = "version-diff";
@@ -378,7 +378,7 @@ const versionDiff: Component<VersionDiffProps> = ({ props, page }) => {
           {
             class: "version-diff-count",
             "data-version-diff-count": "",
-            "data-template": t(page.lang, "version_diff_count"),
+            "data-template": patternOf(page.lang, "version_diff_count"),
             "data-total": String(total),
             "aria-live": "polite",
             "aria-atomic": "true",

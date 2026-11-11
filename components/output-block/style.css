@@ -54,6 +54,16 @@
   outline-offset: 2px;
 }
 
+/* The recorded output names a value the reader has changed: the note says why the text did not follow. */
+.output-block-stale {
+  margin-inline-end: auto;
+  color: var(--color-warning);
+}
+
+.output-block[data-output-stale] {
+  border-color: var(--color-warning);
+}
+
 /* Scroll inside the block, never the page. Output stays left to right inside right-to-left text. */
 .output-block-body {
   margin: 0;

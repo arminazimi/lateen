@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://velella.sh/lateen/schema/i18n.schema.json",
+  "title": "Lateen message catalog",
+  "description": "One file in `i18n/`: a flat object from snake_case message key to the text the reader sees. Every catalog must carry exactly the keys of `i18n/en.json` and the same `{name}` placeholders; `test/i18n-catalogs.test.ts` proves that, while this schema covers the shape each file must have on its own. Values are plain text, not HTML: the theme renders them as text and escapes any markup in them. Keys are sorted by code point, and `en.json` is the source of truth for the key set.",
+  "type": "object",
+  "minProperties": 1,
+  "propertyNames": {
+    "pattern": "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"
+  },
+  "additionalProperties": {
+    "description": "The message text. Non-empty after trimming, and every `{name}` placeholder is well formed.",
+    "type": "string",
+    "minLength": 1,
+    "pattern": "^\\s*\\S"
+  }
+}

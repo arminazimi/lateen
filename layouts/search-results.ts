@@ -2,7 +2,7 @@ import { h } from "preact";
 import type { ComponentChildren } from "preact";
 import type { Layout, LayoutProps } from "@velella/mizzen/contracts";
 import base from "./base.ts";
-import { t } from "../i18n/index.ts";
+import { patternOf, t } from "../i18n/index.ts";
 
 /** Id of the query field, which its label points to. */
 export const SEARCH_RESULTS_INPUT_ID = "search-results-input";
@@ -24,10 +24,10 @@ export function scriptValue(value: unknown): string {
 function clientScript(props: LayoutProps): string {
   const lang = props.page.lang;
   const messages = {
-    empty: t(lang, "search_results_empty"),
+    empty: patternOf(lang, "search_results_empty"),
     failed: t(lang, "search_results_failed"),
     loading: t(lang, "search_results_loading"),
-    many: t(lang, "search_count"),
+    many: patternOf(lang, "search_count"),
     one: t(lang, "search_results_one"),
   };
   return `const base = ${scriptValue(props.site.config.base)};

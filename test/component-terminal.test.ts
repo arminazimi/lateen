@@ -3,8 +3,21 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { renderToString } from "preact-render-to-string";
 import type { ComponentProps } from "@velella/mizzen/contracts";
-import terminal, { bodyText, commandsOf, directive, parseLines } from "../components/terminal/index.ts";
-import { activate, copy, RESET_MS, type Clipboard, type CopyButton, type CopyEnv } from "../components/terminal/client.ts";
+import terminal, { bodyText, commandsOf, directive, parseLines, variableNamesOf } from "../components/terminal/index.ts";
+import {
+  activate,
+  activateAll,
+  BUTTON_SELECTOR,
+  COMMAND_SELECTOR,
+  commandsOf as commandsInFrame,
+  copy,
+  RESET_MS,
+  type Clipboard,
+  type CopyButton,
+  type CopyDocument,
+  type CopyEnv,
+  type TerminalFrame,
+} from "../components/terminal/client.ts";
 
 function render(html: string, lang = "en"): string {
   const input = { props: {}, html, page: { lang }, site: {} } as unknown as ComponentProps;
@@ -52,6 +65,74 @@ test("commandsOf joins only the commands, one per line", () => {
   const lines = parseLines("$ npm ci\nadded 200 packages\n$ npm run check\nall gates passed");
   assert.equal(commandsOf(lines), "npm ci\nnpm run check");
 });
+
+test("variableNamesOf reads the variables a plain-text session names, once each", () => {
+  assert.deepEqual(variableNamesOf("$ curl {{host}}/v1\n$ curl -H 'Bearer {{ api_key }}' {{host}}"), ["host", "api_key"]);
+  assert.deepEqual(variableNamesOf("no variables here"), []);
+  assert.deepEqual(variableNamesOf("{{name.with-dots}}"), ["name.with-dots"]);
+  assert.deepEqual(variableNamesOf("\\{{escaped}}"), [], "an escaped placeholder stays literal");
+  assert.deepEqual(variableNamesOf("\\\\{{real}}"), ["real"], "an even run of backslashes leaves a variable");
+  assert.deepEqual(variableNamesOf("{{not a name}}"), []);
+});
+
+test("a session records the variables it names, so the form island can follow them", () => {
+  const out = render("<p>$ curl {{host}}/v1/status\n200 OK</p>");
+
+  assert.match(out, /<code data-placeholders="\[\{&quot;name&quot;:&quot;host&quot;\}\]">/);
+});
+
+test("a session with no variable leaves the code element plain", () => {
+  const out = render(SESSION);
+
+  assert.doesNotMatch(out, /data-placeholders/);
+  assert.match(out, /<pre class="terminal-body" tabindex="0"><code>/);
+});
+
+test("the island reads the commands from the session, not from a stale attribute", () => {
+  const text = (value: string) => ({ textContent: value });
+  const frame: TerminalFrame = {
+    querySelectorAll(selector) {
+      assert.equal(selector, COMMAND_SELECTOR);
+      return [text("curl https://api.example.com"), text("npm run check")];
+    },
+  };
+  assert.equal(COMMAND_SELECTOR, ".terminal-command .terminal-text");
+  assert.equal(commandsInFrame(frame), "curl https://api.example.com\nnpm run check");
+});
+
+test("a click copies the command text the page shows now", async () => {
+  const button = fakeButton();
+  const env = fakeEnv({
+    writeText(text) {
+      env.written.push(text);
+      return Promise.resolve();
+    },
+  });
+  const lines = [text("curl {{host}}")];
+  const frame: TerminalFrame = { querySelectorAll: () => lines };
+
+  activateAll({ querySelectorAll: () => [Object.assign(button, { parentElement: { parentElement: frame } })] }, env);
+  lines[0] = text("curl https://sandbox.example.com");
+  button.click();
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(env.written, ["curl https://sandbox.example.com"]);
+});
+
+test("without a frame the button still copies the commands it was rendered with", async () => {
+  const button = fakeButton();
+  const env = fakeEnv({ writeText: (text) => (env.written.push(text), Promise.resolve()) });
+  activate(button, env);
+  button.click();
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(env.written, ["npm ci\nnpm run check"]);
+});
+
+/** A text node with just what the island reads. */
+function text(value: string): { readonly textContent: string } {
+  return { textContent: value };
+}
 
 test("each command shows its prompt, hidden from assistive tech; output has none", () => {
   const out = render(SESSION);
@@ -198,4 +279,10 @@ test("style.css states the block in logical properties and keeps the hidden butt
 
 test("style.css scrolls the session inside the block, never the page", () => {
   assert.match(css, /\.terminal-body \{[^}]*overflow-x: auto;/);
+});
+
+test("the island never runs a command or reaches the network", () => {
+  const client = readFileSync(new URL("../components/terminal/client.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(client, /\bfetch\s*\(|\beval\s*\(|\bnew Function\b|XMLHttpRequest|sendBeacon|child_process/);
+  assert.match(client, /BUTTON_SELECTOR = "\[data-terminal-copy\]"/);
 });
