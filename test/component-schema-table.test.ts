@@ -29,8 +29,8 @@ function nodes(value: unknown): Tree[] {
   return [];
 }
 
-function render(props: SchemaTableProps, data: Record<string, unknown>): Tree {
-  const input = { props, page: {}, site: { data }, html: "" } as unknown as ComponentProps<SchemaTableProps>;
+function render(props: SchemaTableProps, data: Record<string, unknown>, lang = "en"): Tree {
+  const input = { props, page: { lang }, site: { data }, html: "" } as unknown as ComponentProps<SchemaTableProps>;
   return (schemaTable as unknown as (input: ComponentProps<SchemaTableProps>) => Tree)(input);
 }
 
@@ -236,6 +236,28 @@ test("the component writes a header row with the five columns", () => {
 test("the component uses the label prop as the accessible name", () => {
   const tree = render({ data: "widget", label: "Config keys" }, { widget });
   assert.equal(tree.props["aria-label"], "Config keys");
+});
+
+test("the headers, default name, status cell, and messages follow the page language", () => {
+  const fa = render({ data: "widget" }, { widget }, "fa");
+  assert.equal(fa.props["aria-label"], "ویژگی‌ها");
+  const headers = nodes(fa)
+    .filter((node) => node.type === "th" && node.props.scope === "col")
+    .map((node) => textOf(node.props.children));
+  assert.deepEqual(headers, ["نام", "نوع", "الزامی", "پیش‌فرض", "توضیحات"]);
+
+  const required = nodes(fa).filter((node) => node.type === "td" && node.props.class === "schema-required");
+  assert.ok(required.some((cell) => textOf(cell) === "الزامی"));
+
+  const ar = render({ data: "widget" }, { widget }, "ar");
+  const arHeaders = nodes(ar)
+    .filter((node) => node.type === "th" && node.props.scope === "col")
+    .map((node) => textOf(node.props.children));
+  assert.deepEqual(arHeaders, ["الاسم", "النوع", "مطلوب", "الافتراضي", "الوصف"]);
+
+  assert.match(textOf(render({ data: "missing" }, { widget }, "fa").props.children), /هیچ طرح‌واره‌ای در _data/);
+  assert.match(textOf(render({ data: "empty" }, { empty: { type: "object" } }, "ar").props.children), /لا يحتوي المخطط/);
+  assert.match(textOf(render({}, { widget }, "fa").props.children), /schema-table به data=/);
 });
 
 test("the table has a deterministic id from its data path, and an explicit id wins", () => {

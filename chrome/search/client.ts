@@ -27,14 +27,46 @@ export const OTHER_SECTION = "Other";
 /** Most results shown for one query; Pagefind ranks them, and the top of the list is what a reader wants. */
 export const RESULT_LIMIT = 20;
 
-/** The status and empty-result text. The theme's other chrome labels are English too. */
-export const MESSAGES = {
+/** The CLDR plural categories a count message can have, matching `i18n/*.json`. */
+export const PLURAL_CATEGORIES = ["zero", "one", "two", "few", "many", "other"] as const;
+
+export type PluralCategory = (typeof PLURAL_CATEGORIES)[number];
+
+/**
+ * Every message the dialog shows, in the page language. `chrome/search/index.ts` writes them into
+ * `data-search-*` attributes; these English values are the fallback when a page carries none. The
+ * empty message takes `{query}` and each count takes `{n}`.
+ */
+export interface SearchMessages {
+  readonly loading: string;
+  readonly searching: string;
+  readonly failed: string;
+  readonly copied: string;
+  readonly copyFailed: string;
+  readonly empty: string;
+  readonly counts: Readonly<Record<PluralCategory, string>>;
+  readonly otherSection: string;
+  readonly actions: string;
+}
+
+export const MESSAGES: SearchMessages = {
   loading: "Loading search…",
   searching: "Searching…",
   failed: "Search is unavailable right now.",
-  copied: "Copied.",
+  copied: "Copied",
   copyFailed: "Copy failed.",
-} as const;
+  empty: "No results for “{query}”.",
+  counts: {
+    zero: "{n} results.",
+    one: "{n} result.",
+    two: "{n} results.",
+    few: "{n} results.",
+    many: "{n} results.",
+    other: "{n} results.",
+  },
+  otherSection: "Other",
+  actions: "Actions",
+};
 
 /** One result Pagefind returns, as `data()` gives it. */
 export interface SearchRecord {
@@ -180,6 +212,10 @@ export interface SearchEnv {
   palette?: PalettePayload | undefined;
   /** How actions run; the island uses `liveHandlers()`, tests inject spies. */
   handlers?: PaletteHandlers | undefined;
+  /** The page language, which chooses the count's plural category. */
+  lang?: string | undefined;
+  /** The page language's messages; the island reads them from the dialog's attributes. */
+  messages?: SearchMessages | undefined;
 }
 
 /** What can take keyboard focus inside the dialog. */
@@ -293,11 +329,15 @@ function resultNode(record: SearchRecord, doc: SearchDocument): SearchNode {
 }
 
 /** The result list: one section per group, in rank order, built only from elements and text nodes. */
-export function resultNodes(records: readonly SearchRecord[], doc: SearchDocument): readonly SearchNode[] {
+export function resultNodes(
+  records: readonly SearchRecord[],
+  doc: SearchDocument,
+  otherSection: string = OTHER_SECTION,
+): readonly SearchNode[] {
   return groupBySection(records).map((group) => {
     const heading = doc.createElement("h2");
     heading.setAttribute("class", "search-group-title");
-    heading.append(doc.createTextNode(group.section));
+    heading.append(doc.createTextNode(group.section === OTHER_SECTION ? otherSection : group.section));
 
     const list = doc.createElement("ul");
     list.setAttribute("class", "search-list");
@@ -321,6 +361,8 @@ export interface PaletteRender {
   readonly label: string;
   readonly records: readonly SearchRecord[];
   readonly doc: SearchDocument;
+  /** The page language's name for a result without a section. */
+  readonly otherSection?: string | undefined;
   readonly run: (run: PaletteRun) => void;
 }
 
@@ -384,7 +426,7 @@ export function actionNodes(
  */
 export function renderPalette(results: SearchResults, render: PaletteRender): void {
   const nodes = [
-    ...resultNodes(render.records, render.doc),
+    ...resultNodes(render.records, render.doc, render.otherSection),
     ...actionNodes(render.actions, render.label, render.doc, render.run),
   ];
   results.replaceChildren(...nodes);
@@ -438,17 +480,17 @@ function isPaletteAction(value: unknown): value is PaletteAction {
  * Reads the server's JSON. Anything missing, malformed, or shaped differently yields an empty
  * palette, so a bad build cannot stop search from working.
  */
-export function parsePalette(text: string | null): PalettePayload {
-  if (text === null || text.trim() === "") return { label: ACTIONS_LABEL, actions: [] };
+export function parsePalette(text: string | null, fallbackLabel: string = ACTIONS_LABEL): PalettePayload {
+  if (text === null || text.trim() === "") return { label: fallbackLabel, actions: [] };
   try {
     const value = JSON.parse(text) as unknown;
-    if (value === null || typeof value !== "object") return { label: ACTIONS_LABEL, actions: [] };
+    if (value === null || typeof value !== "object") return { label: fallbackLabel, actions: [] };
     const payload = value as { label?: unknown; actions?: unknown };
-    const label = typeof payload.label === "string" && payload.label !== "" ? payload.label : ACTIONS_LABEL;
+    const label = typeof payload.label === "string" && payload.label !== "" ? payload.label : fallbackLabel;
     const actions = Array.isArray(payload.actions) ? payload.actions.filter(isPaletteAction) : [];
     return { label, actions };
   } catch {
-    return { label: ACTIONS_LABEL, actions: [] };
+    return { label: fallbackLabel, actions: [] };
   }
 }
 
@@ -458,14 +500,39 @@ export function indexUrl(base: string): string {
   return `${root}/pagefind/pagefind.js`;
 }
 
-/** The text announced when a query finds nothing. */
-export function emptyMessage(query: string): string {
-  return `No results for “${query}”.`;
+/** Fills one message's placeholders from already-escaped text values. */
+function fill(pattern: string, values: Readonly<Record<string, string | number>>): string {
+  return pattern.replace(/\{(\w+)\}/g, (_placeholder, name: string) =>
+    Object.hasOwn(values, name) ? String(values[name]) : "",
+  );
 }
 
-/** The text announced for a result count. */
-export function countMessage(count: number): string {
-  return count === 1 ? "1 result." : `${count} results.`;
+/**
+ * The plural category of `count` in `lang`, chosen by the browser's CLDR rules. A language tag the
+ * runtime does not know reads as English, and an unknown category falls back to `other`.
+ *
+ * shortcut: this repeats `components/reading-time`'s rules because that module imports the
+ * server-only catalog; move both into a client-safe module when a third caller needs them.
+ */
+export function pluralCategory(lang: string, count: number): PluralCategory {
+  let category: string;
+  try {
+    category = new Intl.PluralRules(lang).select(Math.abs(Math.trunc(count)));
+  } catch {
+    return "other";
+  }
+  return (PLURAL_CATEGORIES as readonly string[]).includes(category) ? (category as PluralCategory) : "other";
+}
+
+/** The text announced when a query finds nothing. */
+export function emptyMessage(query: string, messages: SearchMessages = MESSAGES): string {
+  return fill(messages.empty, { query });
+}
+
+/** The text announced for a result count, in the page language's plural form. */
+export function countMessage(count: number, lang = "en", messages: SearchMessages = MESSAGES): string {
+  const pattern = messages.counts[pluralCategory(lang, count)] ?? messages.counts.other;
+  return fill(pattern, { n: count });
 }
 
 /**
@@ -499,7 +566,9 @@ export function trap(dialog: SearchDialog, event: SearchEvent): void {
  */
 export function activate(parts: SearchParts, env: SearchEnv): void {
   const { dialog, button, close, input, results, status } = parts;
-  const palette = env.palette ?? parsePalette(parts.palette?.textContent ?? null);
+  const messages = env.messages ?? MESSAGES;
+  const lang = env.lang ?? "en";
+  const palette = env.palette ?? parsePalette(parts.palette?.textContent ?? null, messages.actions);
   const actions = palette.actions;
   const handlers = env.handlers ?? liveHandlers();
   let api: PagefindApi | undefined;
@@ -523,10 +592,10 @@ export function activate(parts: SearchParts, env: SearchEnv): void {
       if (copied !== undefined && typeof copied.then === "function") {
         copied.then(
           () => {
-            status.textContent = MESSAGES.copied;
+            status.textContent = messages.copied;
           },
           () => {
-            status.textContent = MESSAGES.copyFailed;
+            status.textContent = messages.copyFailed;
           },
         );
       }
@@ -576,6 +645,7 @@ export function activate(parts: SearchParts, env: SearchEnv): void {
         label: palette.label,
         records,
         doc: env.document,
+        otherSection: messages.otherSection,
         run: execute,
       });
     }
@@ -597,7 +667,7 @@ export function activate(parts: SearchParts, env: SearchEnv): void {
       draw(query, [], matched);
       return;
     }
-    status.textContent = matched.length === 0 ? MESSAGES.searching : "";
+    status.textContent = matched.length === 0 ? messages.searching : "";
     api
       .search(query)
       .then((page) => Promise.all(page.results.slice(0, RESULT_LIMIT).map((hit) => hit.data())))
@@ -606,10 +676,14 @@ export function activate(parts: SearchParts, env: SearchEnv): void {
           if (current !== sequence) return;
           draw(query, records, matched);
           status.textContent =
-            records.length === 0 ? (matched.length === 0 ? emptyMessage(query) : "") : countMessage(records.length);
+            records.length === 0
+              ? matched.length === 0
+                ? emptyMessage(query, messages)
+                : ""
+              : countMessage(records.length, lang, messages);
         },
         () => {
-          if (current === sequence) status.textContent = MESSAGES.failed;
+          if (current === sequence) status.textContent = messages.failed;
         },
       );
   };
@@ -626,7 +700,7 @@ export function activate(parts: SearchParts, env: SearchEnv): void {
       return;
     }
     loading = true;
-    if (input.value.trim() !== "") status.textContent = MESSAGES.loading;
+    if (input.value.trim() !== "") status.textContent = messages.loading;
     env.load(indexUrl(dialog.getAttribute("data-base") ?? "")).then(
       (loaded) => {
         api = loaded;
@@ -636,7 +710,7 @@ export function activate(parts: SearchParts, env: SearchEnv): void {
       },
       () => {
         loading = false;
-        status.textContent = MESSAGES.failed;
+        status.textContent = messages.failed;
       },
     );
   };
@@ -758,6 +832,44 @@ declare const document: {
 };
 declare const navigator: { readonly platform: string };
 
+/** The dialog as the island reads its translated messages from. */
+export interface MessageSource {
+  getAttribute(name: string): string | null;
+}
+
+/** One data attribute's non-empty value, or undefined when the page does not carry it. */
+function attributeOf(element: MessageSource, name: string): string | undefined {
+  const value = element.getAttribute(name);
+  return value === null || value === "" ? undefined : value;
+}
+
+/** The dialog's messages in the page language, with the English defaults for anything missing. */
+export function messagesFrom(element: MessageSource): SearchMessages {
+  return {
+    loading: attributeOf(element, "data-search-loading") ?? MESSAGES.loading,
+    searching: attributeOf(element, "data-search-searching") ?? MESSAGES.searching,
+    failed: attributeOf(element, "data-search-failed") ?? MESSAGES.failed,
+    copied: attributeOf(element, "data-search-copied") ?? MESSAGES.copied,
+    copyFailed: attributeOf(element, "data-search-copy-failed") ?? MESSAGES.copyFailed,
+    empty: attributeOf(element, "data-search-empty") ?? MESSAGES.empty,
+    otherSection: attributeOf(element, "data-search-other-section") ?? MESSAGES.otherSection,
+    actions: attributeOf(element, "data-search-actions") ?? MESSAGES.actions,
+    counts: {
+      zero: attributeOf(element, "data-search-count-zero") ?? MESSAGES.counts.zero,
+      one: attributeOf(element, "data-search-count-one") ?? MESSAGES.counts.one,
+      two: attributeOf(element, "data-search-count-two") ?? MESSAGES.counts.two,
+      few: attributeOf(element, "data-search-count-few") ?? MESSAGES.counts.few,
+      many: attributeOf(element, "data-search-count-many") ?? MESSAGES.counts.many,
+      other: attributeOf(element, "data-search-count-other") ?? MESSAGES.counts.other,
+    },
+  };
+}
+
+/** The page language the dialog carries, which picks the plural rules. */
+export function langFrom(element: MessageSource): string {
+  return attributeOf(element, "data-search-lang") ?? "en";
+}
+
 /** Imports the Pagefind module from the built index. */
 function loadIndex(url: string): Promise<PagefindApi> {
   return import(url) as Promise<PagefindApi>;
@@ -773,6 +885,8 @@ if (typeof document !== "undefined") {
   const status = document.querySelector("[data-search-status]");
   const palette = document.querySelector("[data-palette-actions]") as SearchPaletteSource | null;
   if (dialog && button && close && input && results && status) {
+    const source = dialog as unknown as MessageSource;
+    const messages = messagesFrom(source);
     activate(
       {
         dialog: dialog as SearchDialog,
@@ -783,7 +897,13 @@ if (typeof document !== "undefined") {
         status: status as SearchStatus,
         ...(palette === null ? {} : { palette }),
       },
-      { document, load: loadIndex, palette: parsePalette(palette?.textContent ?? null) },
+      {
+        document,
+        load: loadIndex,
+        palette: parsePalette(palette?.textContent ?? null, messages.actions),
+        lang: langFrom(source),
+        messages,
+      },
     );
     // ⌘K/Ctrl+K and `/` press this button from anywhere, exactly as a pointer would.
     activateShortcuts(

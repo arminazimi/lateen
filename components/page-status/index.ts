@@ -1,5 +1,6 @@
 import { h } from "preact";
 import type { Component } from "@velella/mizzen/contracts";
+import { t } from "../../i18n/index.ts";
 
 /** The statuses that get a banner. */
 export const STATUSES = ["experimental", "beta", "deprecated"] as const;
@@ -16,19 +17,19 @@ export type PageStatusProps = {
   replaced_by?: string;
 };
 
-const LABELS: Readonly<Record<BannerStatus, string>> = {
-  experimental: "Experimental",
-  beta: "Beta",
-  deprecated: "Deprecated",
+/** The i18n key with the banner's short status name. */
+const LABEL_KEYS: Readonly<Record<BannerStatus, string>> = {
+  experimental: "status_experimental",
+  beta: "status_beta",
+  deprecated: "status_deprecated",
 };
 
-const MESSAGES: Readonly<Record<BannerStatus, string>> = {
-  experimental: "This page describes an experimental feature. It may change or be removed.",
-  beta: "This page describes a beta feature. It may change before it is final.",
-  deprecated: "This page describes something that is no longer recommended.",
+/** The i18n key with the sentence that explains the status. */
+const MESSAGE_KEYS: Readonly<Record<BannerStatus, string>> = {
+  experimental: "status_experimental_hint",
+  beta: "status_beta_hint",
+  deprecated: "status_deprecated_hint",
 };
-
-const REPLACEMENT_LABEL = "Go to the replacement";
 
 /** A path on this site (not protocol-relative `//host`) or an https link. Anything else is not a link. */
 const SAFE_URL = /^(?:\/(?![/\\])|https:\/\/)[^\s"<>]*$/;
@@ -62,24 +63,25 @@ export function replacementOf(value: unknown): string | undefined {
 /**
  * A banner above the title for an experimental, beta, or deprecated page. It names the status and, when
  * the status was set in a version, that version. A deprecated page with a `replaced_by` also links to its
- * replacement. Renders nothing for any other status.
+ * replacement. Renders nothing for any other status. Every label is read in the page language.
  */
-const pageStatus: Component<PageStatusProps> = ({ props }) => {
+const pageStatus: Component<PageStatusProps> = ({ props, page }) => {
   const status = statusOf(props.status);
   if (status === undefined) return null;
 
+  const lang = page.lang;
   const since = sinceOf(props.since);
   const replacement = status === "deprecated" ? replacementOf(props.replaced_by) : undefined;
 
   return h(
     "div",
     { class: classNameOf(status), role: "note" },
-    h("strong", { class: "page-status-label" }, LABELS[status]),
-    h("span", { class: "page-status-message" }, MESSAGES[status]),
-    since === undefined ? null : h("span", { class: "page-status-since" }, `Since ${since}`),
+    h("strong", { class: "page-status-label" }, t(lang, LABEL_KEYS[status])),
+    h("span", { class: "page-status-message" }, t(lang, MESSAGE_KEYS[status])),
+    since === undefined ? null : h("span", { class: "page-status-since" }, `${t(lang, "status_since")} ${since}`),
     replacement === undefined
       ? null
-      : h("a", { class: "page-status-replacement", href: replacement }, REPLACEMENT_LABEL),
+      : h("a", { class: "page-status-replacement", href: replacement }, t(lang, "status_replacement_label")),
   );
 };
 

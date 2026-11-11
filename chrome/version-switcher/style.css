@@ -115,6 +115,12 @@
   font-size: var(--type-size-xs);
 }
 
+.version-switcher-home {
+  color: var(--color-muted);
+  font-size: var(--type-size-xs);
+  font-style: italic;
+}
+
 /* Narrow screens: the label shrinks to the current version, which is what a visitor needs to read. */
 @media (max-width: 40rem) {
   .version-switcher-label {

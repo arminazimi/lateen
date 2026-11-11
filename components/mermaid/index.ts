@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { h } from "preact";
 import type { ComponentProps } from "@velella/mizzen/contracts";
 import type { MermaidConfig } from "mermaid";
+import { t } from "../../i18n/index.ts";
 
 /** Class on the outer `<figure>`; `style.css` styles it. */
 export const MERMAID_CLASS = "mermaid";
@@ -181,7 +182,7 @@ function runRenderer(source: string, options: RenderOptions): RenderResult {
 }
 
 /** The diagram and its source. The SVG is rendered at build time; the page never loads Mermaid. */
-export default function mermaid({ props }: ComponentProps<MermaidProps>) {
+export default function mermaid({ props, page }: ComponentProps<MermaidProps>) {
   const source = normalizeSource(text(props.source));
   if (source === "") return null;
 
@@ -198,7 +199,7 @@ export default function mermaid({ props }: ComponentProps<MermaidProps>) {
       : h(
           "div",
           { class: FALLBACK_CLASS, role: "note" },
-          h("p", null, "This diagram could not be rendered. The source below is complete."),
+          h("p", null, t(page.lang, "mermaid_failed")),
         );
 
   return h(
@@ -208,7 +209,7 @@ export default function mermaid({ props }: ComponentProps<MermaidProps>) {
     h(
       "details",
       { class: SOURCE_CLASS },
-      h("summary", null, "Diagram source"),
+      h("summary", null, t(page.lang, "mermaid_source")),
       h("pre", null, h("code", { class: "language-mermaid" }, source)),
     ),
   );

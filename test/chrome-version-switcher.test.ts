@@ -77,8 +77,8 @@ test("lists versions from the N17 versions.json shape and marks the current one"
   assert.match(out, /<summary class="version-switcher-summary">/);
   assert.match(out, /<span class="version-switcher-label">Versions<\/span>/);
   assert.match(out, /<span class="version-switcher-value" dir="ltr">v2<\/span>/);
-  assert.match(out, /<a class="version-switcher-link" href="\/example\/v1\/guide\/install\/">/);
-  assert.match(out, /<a class="version-switcher-link" href="\/example\/v2\/guide\/install\/" aria-current="true">/);
+  assert.match(out, /<a class="version-switcher-link" href="\/example\/v1\/guide\/install\/" data-version-target="page">/);
+  assert.match(out, /<a class="version-switcher-link" href="\/example\/v2\/guide\/install\/" data-version-target="page" aria-current="true">/);
   assert.match(out, /<span class="version-switcher-current">Current version<\/span>/);
   assert.equal(out.match(/aria-current="true"/g)?.length, 1);
 });
@@ -104,12 +104,12 @@ test("accepts a simple page-to-versions map keyed by URL, and a terse version-to
   };
   const out = render(props({ versions: map }));
   assert.match(out, /href="\/example\/v1\/guide\/install\/"/);
-  assert.match(out, /href="\/example\/v2\/guide\/install\/" aria-current="true"/);
+  assert.match(out, /href="\/example\/v2\/guide\/install\/" data-version-target="page" aria-current="true"/);
 
   const terse = { "/guide/install/": { v1: "/v1/guide/install/", v2: "/v2/guide/install/" } };
   const terseOut = render(props({ versions: terse }));
   assert.match(terseOut, /<span class="version-switcher-version" dir="ltr">v1<\/span>/);
-  assert.match(terseOut, /href="\/example\/v2\/guide\/install\/" aria-current="true"/);
+  assert.match(terseOut, /href="\/example\/v2\/guide\/install\/" data-version-target="page" aria-current="true"/);
 });
 
 test("falls back to the page's versions front matter without data", () => {
@@ -126,7 +126,7 @@ test("falls back to the page's versions front matter without data", () => {
 
   assert.match(out, /<span class="version-switcher-version" dir="ltr">1.0<\/span>/);
   assert.match(out, /href="\/example\/v1\/guide\/install\/"/);
-  assert.match(out, /href="\/example\/v2\/guide\/install\/" aria-current="true"/);
+  assert.match(out, /href="\/example\/v2\/guide\/install\/" data-version-target="page" aria-current="true"/);
   assert.match(out, /<span class="version-switcher-current">Current version<\/span>/);
 });
 
@@ -145,9 +145,40 @@ test("a page missing from another version links that version's home, derived fro
   };
   const out = render(props({ versions: data }));
 
-  assert.match(out, /<a class="version-switcher-link" href="\/example\/v1\/">/);
-  assert.match(out, /href="\/example\/v1\/"><span class="version-switcher-version" dir="ltr">v1<\/span>/);
-  assert.match(out, /href="\/example\/v2\/guide\/install\/" aria-current="true"/);
+  assert.match(out, /<a class="version-switcher-link" href="\/example\/v1\/" data-version-target="home">/);
+  assert.match(out, /href="\/example\/v1\/" data-version-target="home"><span class="version-switcher-version" dir="ltr">v1<\/span>/);
+  assert.match(out, /href="\/example\/v2\/guide\/install\/" data-version-target="page" aria-current="true">/);
+});
+
+test("a version-home link says the page is not in that version, and keeps a distinct link state", () => {
+  const data = {
+    pages: [
+      {
+        path: "guide/legacy.md",
+        versions: [
+          { version: "v1", url: "/v1/guide/legacy/" },
+          { version: "v2", url: "/v2/guide/legacy/" },
+        ],
+      },
+      { path: "guide/install.md", versions: [{ version: "v2", url: "/v2/guide/install/" }] },
+    ],
+  };
+  const out = render(props({ versions: data }));
+
+  assert.match(out, /<span class="version-switcher-home">Not in this version<\/span>/);
+  assert.equal(out.match(/data-version-target="home"/g)?.length, 1);
+  assert.equal(out.match(/data-version-target="page"/g)?.length, 1);
+  assert.doesNotMatch(out, /href="\/example\/v1\/"[^>]*aria-current/);
+
+  const fa = render(props({ versions: data }, pageWith({ lang: "fa", dir: "rtl" })));
+  assert.match(fa, /<span class="version-switcher-home">در این نسخه نیست<\/span>/);
+
+  const ar = render(props({ versions: data }, pageWith({ lang: "ar", dir: "rtl" })));
+  assert.match(ar, /<span class="version-switcher-home">غير موجود في هذا الإصدار<\/span>/);
+
+  const links = versionsOf(props({ versions: data }).site, pageWith());
+  assert.equal(links?.find((link) => link.version === "v1")?.home, true);
+  assert.equal(links?.find((link) => link.version === "v2")?.home, false);
 });
 
 test("data can set a version home instead of deriving it", () => {
@@ -236,8 +267,8 @@ test("the label is localised: Persian and Arabic use their own strings", () => {
 test("versionsOf returns the links without rendering, and ignores unusable entries", () => {
   const links = versionsOf(props({ versions: n17 }).site, pageWith());
   assert.deepEqual(links, [
-    { version: "v1", url: "/example/v1/guide/install/", current: false },
-    { version: "v2", url: "/example/v2/guide/install/", current: true },
+    { version: "v1", url: "/example/v1/guide/install/", current: false, home: false },
+    { version: "v2", url: "/example/v2/guide/install/", current: true, home: false },
   ]);
 
   const mixed = { pages: [{ path: "guide/install.md", versions: [{ version: "v2", url: "/v2/guide/install/" }, { url: "/nope/" }] }] };

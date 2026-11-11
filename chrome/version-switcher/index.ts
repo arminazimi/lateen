@@ -35,11 +35,17 @@ export const VERSION_CLASS = "version-switcher-version";
 /** Class on the "current version" badge next to the current version's name. */
 export const CURRENT_CLASS = "version-switcher-current";
 
+/** Class on the note that a version has no copy of this page and links its home. */
+export const HOME_CLASS = "version-switcher-home";
+
 /** The i18n key with the label of the control and the name of its list. */
 export const LABEL_KEY = "versions";
 
 /** The i18n key with the text that marks the current version. */
 export const CURRENT_KEY = "version_current";
+
+/** The i18n key with the text that marks a link to a version home instead of this page. */
+export const HOME_KEY = "version_home";
 
 /** One version a page can switch to. */
 export interface VersionLink {
@@ -49,6 +55,8 @@ export interface VersionLink {
   readonly url: string;
   /** Whether this entry is the page being rendered. */
   readonly current: boolean;
+  /** Whether `url` is the version's home because this page does not exist in that version. */
+  readonly home: boolean;
 }
 
 /** One entry after parsing: a version, the page's URL in it, and an optional version home. */
@@ -262,7 +270,12 @@ export function versionsOf(site: Site, page: Page): readonly VersionLink[] | und
       const entry = current.entries.find((candidate) => candidate.version === version);
       const url = entry === undefined ? home : withBase(base, entry.url);
       if (!isSafeUrl(url)) continue;
-      links.push({ version, url, current: entry !== undefined && url === page.url });
+      links.push({
+        version,
+        url,
+        current: entry !== undefined && url === page.url,
+        home: entry === undefined,
+      });
     }
     return links.length === 0 ? undefined : links;
   }
@@ -274,14 +287,15 @@ export function versionsOf(site: Site, page: Page): readonly VersionLink[] | und
   for (const entry of entries) {
     const url = withBase(base, entry.url);
     if (!isSafeUrl(url)) continue;
-    links.push({ version: entry.version, url, current: url === page.url });
+    links.push({ version: entry.version, url, current: url === page.url, home: false });
   }
   return links.length === 0 ? undefined : links;
 }
 
 /**
  * The version switcher: a native `<details>` whose list links the same page in every version the site keeps, with the
- * current one marked. A page that is missing from another version links that version's home instead. It reads
+ * current one marked. A page that is missing from another version links that version's home instead, and that entry
+ * says so in the page language and carries `data-version-target="home"` (a page link carries `"page"`). It reads
  * `_data/versions.*` (the N17 `versions.json` shape or a page-to-versions map) and falls back to the page's `versions`
  * front matter. Fewer than two versions, or a page the data does not list, renders nothing. `<details>`/`<summary>`
  * are keyboard operable with no script; the header places it, and it hides behind the summary until opened.
@@ -314,9 +328,18 @@ const versionSwitcher: Chrome = ({ site, page }) => {
             { class: ITEM_CLASS },
             h(
               "a",
-              { class: LINK_CLASS, href: version.url, ...(version.current ? { "aria-current": "true" } : {}) },
+              {
+                class: LINK_CLASS,
+                href: version.url,
+                "data-version-target": version.home ? "home" : "page",
+                ...(version.current ? { "aria-current": "true" } : {}),
+              },
               h("span", { class: VERSION_CLASS, dir: "ltr" }, version.version),
-              version.current ? h("span", { class: CURRENT_CLASS }, t(page.lang, CURRENT_KEY)) : null,
+              version.current
+                ? h("span", { class: CURRENT_CLASS }, t(page.lang, CURRENT_KEY))
+                : version.home
+                  ? h("span", { class: HOME_CLASS }, t(page.lang, HOME_KEY))
+                  : null,
             ),
           ),
         ),

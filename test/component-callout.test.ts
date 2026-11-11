@@ -14,12 +14,12 @@ const namesPath = join(root, "tokens/names.json");
 type Tree = { props: { children?: unknown; [key: string]: unknown } };
 type Node = Tree | string | number | null | undefined | boolean;
 
-function render(props: Partial<CalloutProps> & { html?: string }) {
+function render(props: Partial<CalloutProps> & { html?: string }, lang = "en") {
   const { html = "<p>Body</p>", ...rest } = props;
   const input = {
     props: rest,
     html,
-    page: {} as ComponentProps["page"],
+    page: { lang } as ComponentProps["page"],
     site: {} as ComponentProps["site"],
   } as ComponentProps<CalloutProps>;
   return callout(input) as unknown as Tree;
@@ -93,6 +93,25 @@ test("a custom title replaces the default; a blank one does not", () => {
     textOf(elements(tree).find((node) => node.props.class === "callout-title"));
   assert.equal(titleOf(titled), "Read first");
   assert.equal(titleOf(render({ type: "tip", title: "   " })), "Tip");
+});
+
+test("the default title follows the page language, while an author's title stays as written", () => {
+  const persian: Record<string, string> = {
+    note: "یادداشت",
+    tip: "نکته",
+    important: "مهم",
+    warning: "هشدار",
+    caution: "احتیاط",
+  };
+  for (const [kind, title] of Object.entries(persian)) {
+    const tree = render({ type: kind }, "fa");
+    const heading = elements(tree).find((node) => node.props.class === "callout-title");
+    assert.equal(textOf(heading), title, `fa ${kind}`);
+  }
+
+  const arabic = render({ type: "caution" }, "ar");
+  assert.equal(textOf(elements(arabic).find((node) => node.props.class === "callout-title")), "تنبيه");
+  assert.equal(textOf(elements(render({ type: "tip", title: "Read first" }, "fa")).find((node) => node.props.class === "callout-title")), "Read first");
 });
 
 test("the rendered body is passed through as HTML", () => {

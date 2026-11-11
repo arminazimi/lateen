@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { Fragment, h } from "preact";
 import type { ChromeProps, Page, Site, SiteConfig, SourcePos } from "@velella/mizzen/contracts";
+import { stringsOf } from "../i18n/index.ts";
 import search from "../chrome/search/index.ts";
 import {
   activate,
@@ -10,11 +11,16 @@ import {
   emptyMessage,
   groupBySection,
   indexUrl,
+  langFrom,
   MESSAGES,
+  messagesFrom,
   OTHER_SECTION,
+  PLURAL_CATEGORIES,
+  pluralCategory,
   resultNodes,
   sectionOf,
   trap,
+  type MessageSource,
   type PagefindApi,
   type SearchButton,
   type SearchClose,
@@ -25,6 +31,7 @@ import {
   type SearchFocusable,
   type SearchInput,
   type SearchLink,
+  type SearchMessages,
   type SearchNode,
   type SearchParts,
   type SearchRecord,
@@ -101,7 +108,9 @@ function html(node: unknown): string {
 test("renders a closed, hidden dialog that carries the site base", () => {
   const out = html(search(props({ base: "/example" })));
 
-  assert.match(out, /^<dialog class="search" data-search="" data-base="\/example" aria-label="Search" hidden>/);
+  assert.match(out, /^<dialog class="search" data-search="" data-base="\/example"/);
+  assert.match(out, /aria-label="Search"/);
+  assert.match(out, /\bhidden>/);
   assert.doesNotMatch(out, /<dialog[^>]* open/);
   assert.match(out, /<\/dialog>$/);
 });
@@ -117,6 +126,44 @@ test("holds the query field, a close button, the status region, and the result c
   assert.match(out, /<button type="button" class="search-close" aria-label="Close search" data-search-close=""><span aria-hidden="true">×<\/span><\/button>/);
   assert.match(out, /<p class="search-status" role="status" data-search-status=""><\/p>/);
   assert.match(out, /<div class="search-results" role="listbox" aria-label="Search" data-search-results=""><\/div>/);
+});
+
+test("the dialog carries every message the island shows, in the page language", () => {
+  const out = html(search(props()));
+  const attribute = (name: string): string | undefined =>
+    new RegExp(`${name}="([^"]*)"`).exec(out)?.[1];
+
+  assert.equal(attribute("data-search-lang"), "en");
+  assert.equal(attribute("data-search-loading"), "Loading search…");
+  assert.equal(attribute("data-search-searching"), "Searching…");
+  assert.equal(attribute("data-search-failed"), "Search is unavailable right now.");
+  assert.equal(attribute("data-search-empty"), "No results for “{query}”.");
+  assert.equal(attribute("data-search-count-zero"), "{n} results.");
+  assert.equal(attribute("data-search-count-one"), "{n} result.");
+  assert.equal(attribute("data-search-count-other"), "{n} results.");
+  assert.equal(attribute("data-search-other-section"), "Other");
+  assert.equal(attribute("data-search-copied"), "Copied");
+  assert.equal(attribute("data-search-copy-failed"), "Copy failed.");
+  assert.equal(attribute("data-search-actions"), "Actions");
+});
+
+test("the dialog reads right to left and speaks Persian without JavaScript", () => {
+  const page = pageWith({ lang: "fa", dir: "rtl", url: "/fa/guide/install/" });
+  const input: ChromeProps = {
+    site: { config: { ...config, lang: "fa", dir: "rtl" }, pages: [page], nav: { main: [] }, data: {} },
+    page,
+    trail: [],
+    pager: {},
+  };
+  const out = html(search(input));
+
+  assert.match(out, /aria-label="جست‌وجو"/);
+  assert.match(out, /placeholder="جست‌وجو در مستندات"/);
+  assert.match(out, /aria-label="بستن جست‌وجو"/);
+  assert.match(out, /data-search-lang="fa"/);
+  assert.match(out, /data-search-empty="نتیجه‌ای برای «\{query\}» پیدا نشد\."/);
+  assert.match(out, /data-search-count-one="\{n\} نتیجه\."/);
+  assert.match(out, /\bhidden>/);
 });
 
 test("a visitor without JavaScript sees no dialog and no search control", () => {
@@ -163,6 +210,11 @@ test("result nodes are grouped by section and keep Pagefind's mark emphasis", ()
 
   assert.deepEqual(sectionTitles(nodes), ["rules", "guide"]);
   assert.deepEqual(marks(nodes).map((mark) => textOf(mark)), ["cache", "cache"]);
+});
+
+test("the Other section heading follows the page language", () => {
+  const nodes = resultNodes([{ url: "/a/", excerpt: "" }], fakeDocument(), "دیگر");
+  assert.deepEqual(sectionTitles(nodes), ["دیگر"]);
 });
 
 test("result text is built from text nodes: a page title cannot inject an element", () => {
@@ -216,6 +268,68 @@ test("messages name the query and count results in the singular and plural", () 
   assert.equal(emptyMessage("cache"), "No results for “cache”.");
   assert.equal(countMessage(1), "1 result.");
   assert.equal(countMessage(3), "3 results.");
+  assert.equal(countMessage(0), "0 results.");
+});
+
+test("the count follows the page language's CLDR plural category", () => {
+  assert.deepEqual([...PLURAL_CATEGORIES], ["zero", "one", "two", "few", "many", "other"]);
+  assert.equal(pluralCategory("en", 1), "one");
+  assert.equal(pluralCategory("en", 0), "other");
+  assert.equal(pluralCategory("ar", 0), "zero");
+  assert.equal(pluralCategory("ar", 2), "two");
+  assert.equal(pluralCategory("ar", 3), "few");
+  assert.equal(pluralCategory("ar", 11), "many");
+  assert.equal(pluralCategory("ar", 100), "other");
+
+  const arabic: SearchMessages = {
+    ...MESSAGES,
+    counts: {
+      zero: "{n} نتيجة",
+      one: "{n} نتيجة",
+      two: "{n} نتيجتان",
+      few: "{n} نتائج",
+      many: "{n} نتيجة",
+      other: "{n} نتيجة",
+    },
+  };
+  assert.equal(countMessage(0, "ar", arabic), "0 نتيجة");
+  assert.equal(countMessage(1, "ar", arabic), "1 نتيجة");
+  assert.equal(countMessage(2, "ar", arabic), "2 نتيجتان");
+  assert.equal(countMessage(3, "ar", arabic), "3 نتائج");
+  assert.equal(countMessage(11, "ar", arabic), "11 نتيجة");
+  assert.equal(countMessage(100, "ar", arabic), "100 نتيجة");
+
+  const persian: SearchMessages = {
+    ...MESSAGES,
+    counts: { zero: "{n} نتیجه", one: "{n} نتیجه", two: "{n} نتیجه", few: "{n} نتیجه", many: "{n} نتیجه", other: "{n} نتیجه" },
+  };
+  assert.equal(countMessage(0, "fa", persian), "0 نتیجه");
+  assert.equal(countMessage(2, "fa", persian), "2 نتیجه");
+});
+
+test("messagesFrom reads the dialog's attributes and keeps the English fallback for missing ones", () => {
+  const source: MessageSource = {
+    getAttribute(name: string) {
+      const attributes: Record<string, string> = {
+        "data-search-lang": "ar",
+        "data-search-failed": "البحث غير متاح الآن.",
+        "data-search-count-zero": "{n} نتيجة",
+        "data-search-count-two": "{n} نتيجتان",
+      };
+      return attributes[name] ?? null;
+    },
+  };
+  const messages = messagesFrom(source);
+
+  assert.equal(langFrom(source), "ar");
+  assert.equal(messages.failed, "البحث غير متاح الآن.");
+  assert.equal(messages.counts.zero, "{n} نتيجة");
+  assert.equal(messages.counts.two, "{n} نتيجتان");
+  assert.equal(messages.loading, MESSAGES.loading, "a missing attribute falls back to English");
+  assert.equal(messages.counts.other, MESSAGES.counts.other);
+
+  assert.equal(langFrom({ getAttribute: () => "" }), "en");
+  assert.deepEqual(messagesFrom({ getAttribute: () => null }), MESSAGES);
 });
 
 /** Lets every pending promise in `activate` settle before the test asserts. */
@@ -441,16 +555,44 @@ function apiOf(data: readonly SearchRecord[], terms: string[] = []): PagefindApi
   };
 }
 
-function envWith(api: PagefindApi) {
+function envWith(
+  api: PagefindApi,
+  options: { lang?: string; messages?: SearchMessages } = {},
+) {
   const env = {
     calls: [] as string[],
     document: fakeDocument(),
+    lang: options.lang ?? "en",
+    messages: options.messages ?? MESSAGES,
     load(url: string) {
       env.calls.push(url);
       return Promise.resolve(api);
     },
   };
   return env;
+}
+
+/** The dialog's messages for a shipped language, built from the real catalogs. */
+function messagesFor(lang: "fa" | "ar"): SearchMessages {
+  const text = stringsOf(lang);
+  return {
+    loading: text.search_loading ?? "",
+    searching: text.search_results_loading ?? "",
+    failed: text.search_results_failed ?? "",
+    copied: text.copied ?? "",
+    copyFailed: text.search_copy_failed ?? "",
+    empty: text.search_results_empty ?? "",
+    otherSection: text.search_other_section ?? "",
+    actions: text.command_actions ?? "",
+    counts: {
+      zero: text.search_count_zero ?? "",
+      one: text.search_count_one ?? "",
+      two: text.search_count_two ?? "",
+      few: text.search_count_few ?? "",
+      many: text.search_count_many ?? "",
+      other: text.search_count_other ?? "",
+    },
+  };
 }
 
 test("activate reveals the search button and the dialog but loads no index until it opens", () => {
@@ -534,6 +676,32 @@ test("typing searches the loaded index and renders grouped, highlighted results"
   assert.deepEqual(sectionTitles(results.nodes), ["rules", "guide"]);
   assert.deepEqual(marks(results.nodes).map((mark) => textOf(mark)), ["cache", "cache"]);
   assert.equal(status.textContent, "2 results.");
+});
+
+test("activate announces results and groups in the page language", async () => {
+  const { button, input, results, status, parts } = partsOf();
+  const messages = messagesFor("ar");
+  const api: PagefindApi = {
+    search(term: string) {
+      const results = term === "nothing" ? [] : [{ url: "/a/", excerpt: "", filters: { section: ["  "] } }];
+      return Promise.resolve({ results: results.map((record) => ({ data: () => Promise.resolve(record) })) });
+    },
+  };
+  activate(parts, envWith(api, { lang: "ar", messages }));
+  button.click();
+  await tick();
+
+  input.type("x");
+  await tick();
+
+  assert.equal(status.textContent, "1 نتيجة.");
+  assert.deepEqual(sectionTitles(results.nodes), ["أخرى"]);
+
+  input.type("nothing");
+  await tick();
+
+  assert.equal(status.textContent, "لا نتائج لـ «nothing».");
+  assert.equal(status.textContent, emptyMessage("nothing", messages));
 });
 
 test("an empty field clears the results and the status", async () => {

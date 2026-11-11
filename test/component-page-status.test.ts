@@ -17,8 +17,8 @@ type Node = {
 };
 
 /** Render the banner the way the render host calls it: props from front matter or the directive. */
-function render(props: PageStatusProps): Node | null {
-  return pageStatus({ props, html: "" } as unknown as ComponentProps<PageStatusProps>) as Node | null;
+function render(props: PageStatusProps, lang = "en"): Node | null {
+  return pageStatus({ props, html: "", page: { lang } } as unknown as ComponentProps<PageStatusProps>) as Node | null;
 }
 
 /** Every element in a rendered tree, depth first. Text and empty children are skipped. */
@@ -71,6 +71,29 @@ test("renders a banner with the status class and label for each banner status", 
   }
 });
 
+test("the banner explains each status in the page language", () => {
+  const english: Record<string, string> = {
+    experimental: "This interface may change without notice.",
+    beta: "This page describes a beta feature. It may change before it is final.",
+    deprecated: "This page is no longer maintained.",
+  };
+  for (const status of STATUSES) {
+    const [message] = withClass(render({ status }) as Node, "page-status-message");
+    assert.equal(textOf(message), english[status]);
+  }
+
+  assert.equal(textOf(withClass(render({ status: "beta" }, "fa") as Node, "page-status-label")[0]), "بتا");
+  assert.equal(
+    textOf(withClass(render({ status: "beta" }, "fa") as Node, "page-status-message")[0]),
+    "این صفحه یک ویژگی بتا را توصیف می‌کند. ممکن است پیش از نهایی شدن تغییر کند.",
+  );
+  assert.equal(textOf(withClass(render({ status: "deprecated" }, "ar") as Node, "page-status-label")[0]), "مهمل");
+  assert.equal(
+    textOf(withClass(render({ status: "deprecated" }, "ar") as Node, "page-status-message")[0]),
+    "لم تعد هذه الصفحة تُصان.",
+  );
+});
+
 test("a missing, blank, or unknown status renders nothing", () => {
   assert.equal(render({}), null);
   assert.equal(render({ status: "  " }), null);
@@ -92,6 +115,9 @@ test("shows the version when the status was set", () => {
   const [since] = withClass(render({ status: "beta", since: " 0.3.0 " }) as Node, "page-status-since");
   assert.equal(textOf(since), "Since 0.3.0");
   assert.equal(sinceOf(" 0.3.0 "), "0.3.0");
+
+  const [fa] = withClass(render({ status: "beta", since: "0.3.0" }, "fa") as Node, "page-status-since");
+  assert.equal(textOf(fa), "از 0.3.0");
 });
 
 test("omits the version when it is missing, blank, or not a string", () => {
@@ -108,6 +134,12 @@ test("a deprecated page with a replacement links to it", () => {
   assert.equal(link?.type, "a");
   assert.equal(link?.props.href, "/guide/new-install/");
   assert.equal(textOf(link), "Go to the replacement");
+
+  const [fa] = withClass(
+    render({ status: "deprecated", replaced_by: "/guide/new-install/" }, "fa") as Node,
+    "page-status-replacement",
+  );
+  assert.equal(textOf(fa), "رفتن به جایگزین");
 });
 
 test("accepts an https replacement link", () => {

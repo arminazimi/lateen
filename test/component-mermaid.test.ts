@@ -15,11 +15,11 @@ import mermaid, {
   type MermaidProps,
 } from "../components/mermaid/index.ts";
 
-function render(props: MermaidProps): string {
+function render(props: MermaidProps, lang = "en"): string {
   const input = {
     props,
     html: "",
-    page: {} as ComponentProps["page"],
+    page: { lang } as ComponentProps["page"],
     site: {} as ComponentProps["site"],
   } as ComponentProps<MermaidProps>;
   const node = mermaid(input);
@@ -93,7 +93,7 @@ test("the figure can keep a source position", () => {
 test("an invalid diagram falls back without throwing and keeps the source", () => {
   const props: MermaidProps = { source: "flowchart TD\n  A -->", alt: "Broken" };
   const renders = diagramRenderCount();
-  const node = mermaid({ props, html: "", page: {}, site: {} } as ComponentProps<MermaidProps>);
+  const node = mermaid({ props, html: "", page: { lang: "en" }, site: {} } as unknown as ComponentProps<MermaidProps>);
   const out = renderToString(node as never);
   assert.equal(diagramRenderCount(), renders + 1);
   assert.match(out, /class="mermaid-fallback"/);
@@ -117,6 +117,20 @@ test("the same diagram has the same output in a fresh cache", () => {
 test("an empty source renders nothing", () => {
   assert.equal(render({}), "");
   assert.equal(render({ source: "  " }), "");
+});
+
+test("the fallback and the source disclosure follow the page language", () => {
+  const broken = "flowchart TD\n  A -->";
+  const fa = render({ source: broken }, "fa");
+  assert.match(fa, /<p>این نمودار ترسیم نشد\. منبع زیر کامل است\.<\/p>/);
+  assert.match(fa, /<summary>منبع نمودار<\/summary>/);
+
+  const ar = render({ source: broken }, "ar");
+  assert.match(ar, /تعذّر رسم هذا المخطط\. المصدر أدناه كامل\./);
+  assert.match(ar, /<summary>مصدر المخطط<\/summary>/);
+
+  const rendered = render({ source: FLOWCHART, alt: "A flow" }, "fa");
+  assert.match(rendered, /<summary>منبع نمودار<\/summary>/);
 });
 
 test("style.css uses only token names from tokens/names.json", () => {

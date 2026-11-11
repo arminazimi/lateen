@@ -6,7 +6,9 @@ positions the open list.
 
 The current version is marked with `aria-current="true"` and the visible "Current version" badge, so the mark is
 not color alone. When the page does not exist in another version, that version's entry links its home page, found
-from the version's URL folder (`/v1/guide/install/` gives `/v1/`) unless the data sets `home`.
+from the version's URL folder (`/v1/guide/install/` gives `/v1/`) unless the data sets `home`. That entry carries
+`data-version-target="home"` and a visible "Not in this version" note in the page's language; a link to the same page
+carries `data-version-target="page"`, so a client can tell the two apart without reading the text.
 
 The unit renders nothing when it finds fewer than two versions, and nothing on a page the version data does not
 list.

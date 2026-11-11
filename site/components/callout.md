@@ -45,7 +45,7 @@ A GitHub alert:
 | `type` | `note`, `tip`, `important`, `warning`, or `caution` | `note` | The icon, color, and default title. `danger` is read as `caution`. |
 | `title` | string | the kind's name | Replaces the heading above the body. |
 
-The defaults are **Note**, **Tip**, **Important**, **Warning**, and **Caution**. An unknown `type` falls back to `note`.
+The defaults are **Note**, **Tip**, **Important**, **Warning**, and **Caution**, read from `i18n/*.json` in the page's language. An author's `title` is shown as written. An unknown `type` falls back to `note`.
 
 ## Example
 

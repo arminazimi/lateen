@@ -50,5 +50,5 @@ sequenceDiagram
 
 - The diagram is rendered during the build in a short child process, so a complex diagram adds build time but no page weight.
 - Colors come from the theme tokens, so the diagram follows light, dark, and right-to-left pages.
-- When a diagram cannot be rendered, the page keeps the source and shows a short fallback instead of failing the build.
+- When a diagram cannot be rendered, the page keeps the source and shows a short fallback instead of failing the build. The fallback sentence and the "Diagram source" summary are read from `i18n/*.json` in the page's language.
 - The source disclosure keeps the exact Mermaid text for agents; the Markdown twin and `llms-full.txt` carry the same source.
