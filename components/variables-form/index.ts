@@ -26,6 +26,12 @@ export const LABEL_CLASS = "variables-form-label";
 /** Class on a variable's text input. */
 export const INPUT_CLASS = "variables-form-input";
 
+/** Class on the reset button. It starts `hidden`; `client.ts` reveals it. */
+export const RESET_CLASS = "variables-form-reset";
+
+/** The `type` values an input can take from a declaration; anything else is a plain text field. */
+const INPUT_TYPES = new Set(["email", "number", "password", "search", "tel", "text", "url"]);
+
 /** Id prefix used when the directive gives none. */
 export const DEFAULT_ID = "variables-form";
 
@@ -81,6 +87,15 @@ export function valueOf(value: unknown): string {
   if (typeof value === "string") return value;
   if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") return String(value);
   return "";
+}
+
+/**
+ * The input `type` for a declared type, so the browser validates a `url` or an `email` for free and shows
+ * its own message. A type that is not an HTML input type, or no type at all, is a text field.
+ */
+export function inputTypeOf(type: string | undefined): string {
+  const name = type?.trim().toLowerCase() ?? "";
+  return INPUT_TYPES.has(name) ? name : "text";
 }
 
 /** The declaration in one list item, or undefined when it has no usable name. */
@@ -175,7 +190,9 @@ export function fieldsFor(
  * A personalization form for the variables a page's code examples use. Each variable gets a labelled input,
  * and the declared default is both its value and its placeholder, so the form reads correctly and shows the
  * defaults before any script runs. The island (`client.ts`) copies what the reader types into that variable's
- * placeholders; nothing is stored and nothing leaves the browser. With no variable at all it renders nothing.
+ * placeholders, keeps the commands a copy button takes in step, and marks recorded output as stale; nothing is
+ * stored, nothing leaves the browser, and no command runs. The reset button starts `hidden`, because only the
+ * island can put the examples back too. With no variable at all it renders nothing.
  */
 export default function variablesForm({ props, page, site }: ComponentProps<VariablesFormProps>) {
   const fields = fieldsFor(props, page, site);
@@ -203,16 +220,22 @@ export default function variablesForm({ props, page, site }: ComponentProps<Vari
             class: INPUT_CLASS,
             id,
             name: field.name,
-            type: "text",
+            type: inputTypeOf(field.type),
             value: field.value,
             placeholder: field.value,
             "data-var": field.name,
+            "data-default": field.value,
             "aria-describedby": hintId,
             autocomplete: "off",
             spellcheck: "false",
           }),
         );
       }),
+    ),
+    h(
+      "button",
+      { type: "button", class: RESET_CLASS, hidden: true, "data-variables-reset": true },
+      t(lang, "variables_form_reset"),
     ),
   );
 }

@@ -71,6 +71,25 @@ export function parseLines(text: string): TerminalLine[] {
   });
 }
 
+/** A `{{name}}` in plain text: the engine's rule, so `.` and `-` names work and spaces inside the braces do. */
+const PLACEHOLDER = /\{\{[ \t]*([A-Za-z0-9_.-]+)[ \t]*\}\}/g;
+
+/**
+ * The variables a plain-text body names, in order, once each. `\{{name}}` is escape-written and stays
+ * literal, so it is not a variable: an odd run of backslashes before the braces escapes one.
+ */
+export function variableNamesOf(text: string): string[] {
+  const names: string[] = [];
+  for (const match of text.matchAll(PLACEHOLDER)) {
+    let slashes = 0;
+    for (let i = (match.index ?? 0) - 1; i >= 0 && text.charAt(i) === "\\"; i--) slashes += 1;
+    const name = match[1];
+    if (slashes % 2 === 1 || name === undefined || names.includes(name)) continue;
+    names.push(name);
+  }
+  return names;
+}
+
 /** The commands of a session, one per line, and nothing else: this is what the copy button takes. */
 export function commandsOf(lines: readonly TerminalLine[]): string {
   return lines
@@ -95,9 +114,16 @@ function lineElement(line: TerminalLine) {
  * A shell session: each `$` line is a command with its prompt, every other line is output. The copy
  * button, when there is a command, puts only the commands on the clipboard. It starts `hidden` and
  * `client.ts` reveals it, so a visitor without JavaScript sees no control that would do nothing.
+ *
+ * The code element records the variables the session names in `data-placeholders`, the shape the engine gives
+ * a code block, so the variables form island follows the reader's values here too. The button's `data-commands`
+ * is the command text without the prompts, and `client.ts` reads the commands from the page again when it
+ * copies, so a value changed on screen is the value copied.
  */
 export default function terminal({ html, page }: ComponentProps) {
-  const lines = parseLines(bodyText(html));
+  const text = bodyText(html);
+  const lines = parseLines(text);
+  const variables = variableNamesOf(text);
   const commands = commandsOf(lines);
   const lang = page.lang;
   const hasCommands = lines.some((line) => line.kind === "command");
@@ -124,6 +150,14 @@ export default function terminal({ html, page }: ComponentProps) {
           ),
         )
       : null,
-    h("pre", { class: BODY_CLASS, tabindex: 0 }, h("code", null, ...lines.map(lineElement))),
+    h(
+      "pre",
+      { class: BODY_CLASS, tabindex: 0 },
+      h(
+        "code",
+        variables.length === 0 ? {} : { "data-placeholders": JSON.stringify(variables.map((name) => ({ name }))) },
+        ...lines.map(lineElement),
+      ),
+    ),
   );
 }

@@ -13,12 +13,14 @@ import variablesForm, {
   INPUT_CLASS,
   LABEL_CLASS,
   LEGEND_CLASS,
+  RESET_CLASS,
   declarationsFor,
   declarationsOf,
   directive,
   fieldId,
   fieldsFor,
   idBase,
+  inputTypeOf,
   mergeDeclarations,
   parseDeclarations,
   valueOf,
@@ -30,14 +32,19 @@ import {
   FORM_SELECTOR,
   INLINE_SELECTOR,
   INPUT_SELECTOR,
+  OUTPUT_DEPENDENCY_SELECTOR,
+  RESET_SELECTOR,
+  STALE_NOTE_SELECTOR,
   activate,
   applyValue,
+  markStale,
   namesOf,
   replaceIn,
   tokenOf,
   valuesOf,
   type PlaceholderNode,
   type PlaceholderRoot,
+  type ResetButton,
   type VariableForm,
   type VariableInput,
 } from "../components/variables-form/client.ts";
@@ -84,7 +91,7 @@ test("default export is the component and its directive is variables-form", () =
   assert.equal(typeof variablesForm, "function");
   assert.equal(directive, "variables-form");
   assert.deepEqual(
-    [FORM_CLASS, LEGEND_CLASS, HINT_CLASS, FIELDS_CLASS, FIELD_CLASS, LABEL_CLASS, INPUT_CLASS],
+    [FORM_CLASS, LEGEND_CLASS, HINT_CLASS, FIELDS_CLASS, FIELD_CLASS, LABEL_CLASS, INPUT_CLASS, RESET_CLASS],
     [
       "variables-form",
       "variables-form-legend",
@@ -93,8 +100,41 @@ test("default export is the component and its directive is variables-form", () =
       "variables-form-field",
       "variables-form-label",
       "variables-form-input",
+      "variables-form-reset",
     ],
   );
+});
+
+test("a declared input type becomes the field's type, so the browser validates it", () => {
+  assert.equal(inputTypeOf("url"), "url");
+  assert.equal(inputTypeOf(" URL "), "url");
+  assert.equal(inputTypeOf("number"), "number");
+  assert.equal(inputTypeOf("string"), "text");
+  assert.equal(inputTypeOf(undefined), "text");
+  assert.equal(inputTypeOf("unknown"), "text");
+  assert.equal(inputTypeOf("checkbox"), "text", "a declaration never turns a variable into a checkbox");
+
+  const out = render(
+    {},
+    pageWith([
+      { name: "host", default: "https://api.example.com", type: "url" },
+      { name: "api_key", default: "YOUR_KEY", type: "string" },
+    ]),
+  );
+  assert.ok(out);
+  assert.match(out, /name="host" type="url"/);
+  assert.match(out, /name="api_key" type="text"/);
+});
+
+test("the reset button is hidden, labelled, and carries each declared default", () => {
+  const out = render({}, pageWith([{ name: "api_key", default: "YOUR_KEY" }]));
+  assert.ok(out);
+  assert.match(out, new RegExp(`<button type="button" class="${RESET_CLASS}" hidden data-variables-reset="true">`));
+  assert.ok(out.endsWith(">Reset values</button></fieldset>"));
+  assert.match(out, /data-default="YOUR_KEY"/);
+
+  assert.ok(render({}, { lang: "fa", ...pageWith([{ name: "api_key" }]) })!.includes(">بازنشانی مقدارها</button>"));
+  assert.ok(render({}, { lang: "ar", ...pageWith([{ name: "api_key" }]) })!.includes(">إعادة ضبط القيم</button>"));
 });
 
 test("one labelled input per variable, in code-point order", () => {
@@ -134,12 +174,14 @@ test("the declared default is both the input value and its placeholder", () => {
 test("defaults are in the server-rendered markup, so the page works without JavaScript", () => {
   const out = render({}, pageWith([{ name: "host", default: "https://api.example.com" }]));
   assert.ok(out);
-  assert.doesNotMatch(out, /\bhidden\b/);
   assert.doesNotMatch(out, /<script\b/);
   assert.match(out, /\bvalue="https:\/\/api\.example\.com"/);
   assert.match(out, /\bplaceholder="https:\/\/api\.example\.com"/);
   assert.match(out, new RegExp(`<legend class="${LEGEND_CLASS}"`));
   assert.match(out, new RegExp(`<p class="${HINT_CLASS}"`));
+  // Only the reset button starts hidden: it needs the island to put the examples back too.
+  const withoutReset = out.replace(/<button\b[^>]*>Reset values<\/button>/, "");
+  assert.doesNotMatch(withoutReset, /\bhidden\b/);
 });
 
 test("a form with no variables renders nothing", () => {
@@ -327,14 +369,23 @@ test("style.css gives the inputs a visible focus ring and shows the placeholder"
   assert.match(css, /\.variables-form-input::placeholder\s*\{[^}]*opacity:\s*1/s);
 });
 
+test("style.css marks a rejected value and gives the reset button a visible focus ring", () => {
+  assert.match(css, /\.variables-form-input:invalid\s*\{[^}]*border-color:\s*var\(--color-danger\)/s);
+  assert.match(css, /\.variables-form-reset:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--state-focus-ring\)/s);
+});
+
 test("the island targets the engine's placeholder markup and records no values", () => {
   assert.equal(FORM_SELECTOR, "[data-variables-form]");
   assert.equal(INPUT_SELECTOR, "input[data-var]");
+  assert.equal(RESET_SELECTOR, "[data-variables-reset]");
   assert.equal(INLINE_SELECTOR, ".placeholder[data-var]");
   assert.equal(BLOCK_SELECTOR, "[data-placeholders]");
+  assert.equal(OUTPUT_DEPENDENCY_SELECTOR, "[data-output-deps]");
+  assert.equal(STALE_NOTE_SELECTOR, "[data-output-stale-note]");
   assert.equal(tokenOf("api_key"), "{{api_key}}");
 
   assert.doesNotMatch(client, /\blocalStorage\b|\bsessionStorage\b|document\.cookie|\bfetch\s*\(|XMLHttpRequest|sendBeacon/);
+  assert.doesNotMatch(client, /\beval\s*\(|\bnew Function\b|\bimport\s*\(/);
   assert.doesNotMatch(client, /navigator\s*\.\s*clipboard/);
 });
 
@@ -368,10 +419,10 @@ class FakeText implements PlaceholderNode {
 class FakeElement implements PlaceholderNode {
   readonly nodeType = 1;
   readonly childNodes: PlaceholderNode[];
-  readonly attrs: Readonly<Record<string, string>>;
+  attrs: Record<string, string>;
 
   constructor(attrs: Readonly<Record<string, string>>, children: PlaceholderNode[] = []) {
-    this.attrs = attrs;
+    this.attrs = { ...attrs };
     this.childNodes = children;
   }
 
@@ -387,21 +438,40 @@ class FakeElement implements PlaceholderNode {
   getAttribute(name: string): string | null {
     return this.attrs[name] ?? null;
   }
+
+  setAttribute(name: string, value: string): void {
+    this.attrs[name] = value;
+  }
+
+  /** Supports the one selector the island uses inside a node: `[attribute]`. */
+  querySelector(selector: string): PlaceholderNode | null {
+    const attribute = /^\[([a-z-]+)\]$/.exec(selector)?.[1];
+    if (attribute === undefined) return null;
+    for (const child of this.childNodes) {
+      if (child.getAttribute(attribute) !== null) return child;
+      const nested = child.querySelector?.(selector) ?? null;
+      if (nested !== null) return nested;
+    }
+    return null;
+  }
 }
 
-/** A page root returning the inline spans and code blocks the test made. */
+/** A page root returning the inline spans, code blocks, outputs, and buttons the test made. */
 class FakeRoot implements PlaceholderRoot {
   readonly inline: PlaceholderNode[];
   readonly blocks: PlaceholderNode[];
+  readonly outputs: PlaceholderNode[];
 
-  constructor(inline: PlaceholderNode[], blocks: PlaceholderNode[]) {
+  constructor(inline: PlaceholderNode[], blocks: PlaceholderNode[], outputs: PlaceholderNode[] = []) {
     this.inline = inline;
     this.blocks = blocks;
+    this.outputs = outputs;
   }
 
   querySelectorAll(selector: string): Iterable<PlaceholderNode> {
     if (selector === INLINE_SELECTOR) return this.inline;
     if (selector === BLOCK_SELECTOR) return this.blocks;
+    if (selector === OUTPUT_DEPENDENCY_SELECTOR) return this.outputs;
     return [];
   }
 }
@@ -410,16 +480,25 @@ class FakeRoot implements PlaceholderRoot {
 class FakeInput implements VariableInput {
   value: string;
   readonly name: string;
+  readonly fallback: string;
   readonly listeners: Array<() => void>;
+  accepted = true;
 
-  constructor(name: string, value: string) {
+  constructor(name: string, value: string, fallback = value) {
     this.name = name;
     this.value = value;
+    this.fallback = fallback;
     this.listeners = [];
   }
 
+  get validity(): { readonly valid: boolean } {
+    return { valid: this.accepted };
+  }
+
   getAttribute(name: string): string | null {
-    return name === "data-var" ? this.name : null;
+    if (name === "data-var") return this.name;
+    if (name === "data-default") return this.fallback;
+    return null;
   }
 
   addEventListener(_type: "input", listener: () => void): void {
@@ -432,16 +511,36 @@ class FakeInput implements VariableInput {
   }
 }
 
-/** A form returning the inputs the test made. */
+/** The reset button the form renders, with a click the test can fire. */
+class FakeReset implements ResetButton {
+  hidden = true;
+  readonly listeners: Array<() => void> = [];
+
+  addEventListener(_type: "click", listener: () => void): void {
+    this.listeners.push(listener);
+  }
+
+  click(): void {
+    for (const listener of this.listeners) listener();
+  }
+}
+
+/** A form returning the inputs and reset button the test made. */
 class FakeForm implements VariableForm {
   readonly inputs: VariableInput[];
+  readonly reset: ResetButton | undefined;
 
-  constructor(inputs: VariableInput[]) {
+  constructor(inputs: VariableInput[], reset?: ResetButton) {
     this.inputs = inputs;
+    this.reset = reset;
   }
 
   querySelectorAll(selector: string): Iterable<VariableInput> {
     return selector === INPUT_SELECTOR ? this.inputs : [];
+  }
+
+  querySelector(selector: string): ResetButton | null {
+    return selector === RESET_SELECTOR ? (this.reset ?? null) : null;
   }
 }
 
@@ -499,4 +598,81 @@ test("an input without a variable name is ignored", () => {
   const form = new FakeForm([nameless]);
   assert.deepEqual(activate(root, form), []);
   assert.deepEqual(valuesOf(form), new Map());
+});
+
+test("a second change replaces the value a code block already shows", () => {
+  const code = new FakeElement({ "data-placeholders": '[{"name":"host"}]' }, [new FakeText("curl {{host}}/v1")]);
+  const root = new FakeRoot([], [code]);
+
+  applyValue(root, "host", "https://one.example.com");
+  assert.equal(code.textContent, "curl https://one.example.com/v1");
+  applyValue(root, "host", "https://two.example.com");
+  assert.equal(code.textContent, "curl https://two.example.com/v1");
+});
+
+test("marking a change stale touches only the outputs that depend on it", () => {
+  const note = new FakeElement({ "data-output-stale-note": "" }, [new FakeText("")]);
+  const dependent = new FakeElement(
+    { "data-output-deps": '[{"name":"host"}]', "data-stale-text": "Run the command again." },
+    [new FakeText("old output"), note],
+  );
+  const other = new FakeElement({ "data-output-deps": '[{"name":"api_key"}]' }, [new FakeText("other output")]);
+  const root = new FakeRoot([], [], [dependent, other]);
+
+  assert.equal(markStale(root, "host"), 1);
+  assert.equal(dependent.getAttribute("data-output-stale"), "true");
+  assert.equal(note.textContent, "Run the command again.");
+  assert.equal(dependent.textContent, "old outputRun the command again.", "the recorded output itself never changes");
+  assert.equal(other.getAttribute("data-output-stale"), null);
+  assert.equal(markStale(root, "missing"), 0);
+});
+
+test("typing updates the examples and marks dependent output stale", () => {
+  const span = new FakeElement({ "data-var": "host" }, [new FakeText("{{host}}")]);
+  const output = new FakeElement(
+    { "data-output-deps": '[{"name":"host"}]', "data-stale-text": "Run the command again." },
+    [new FakeText("200 OK")],
+  );
+  const root = new FakeRoot([span], [], [output]);
+  const host = new FakeInput("host", "https://api.example.com");
+
+  activate(root, new FakeForm([host]));
+  assert.equal(span.textContent, "https://api.example.com");
+  assert.equal(output.getAttribute("data-output-stale"), null, "the documented defaults are not stale");
+
+  host.type("https://sandbox.example.com");
+  assert.equal(span.textContent, "https://sandbox.example.com");
+  assert.equal(output.getAttribute("data-output-stale"), "true");
+});
+
+test("a value the declared type rejects never reaches an example or marks output stale", () => {
+  const span = new FakeElement({ "data-var": "host" }, [new FakeText("{{host}}")]);
+  const output = new FakeElement({ "data-output-deps": '[{"name":"host"}]' }, [new FakeText("200 OK")]);
+  const root = new FakeRoot([span], [], [output]);
+  const host = new FakeInput("host", "https://api.example.com");
+  host.accepted = false;
+
+  activate(root, new FakeForm([host]));
+  host.type("not a url");
+
+  assert.equal(span.textContent, "https://api.example.com");
+  assert.equal(output.getAttribute("data-output-stale"), null);
+});
+
+test("the reset button starts hidden, and puts every declared default back", () => {
+  const span = new FakeElement({ "data-var": "api_key" }, [new FakeText("{{api_key}}")]);
+  const root = new FakeRoot([span], []);
+  const reset = new FakeReset();
+  const api = new FakeInput("api_key", "YOUR_KEY", "YOUR_KEY");
+  const form = new FakeForm([api], reset);
+
+  activate(root, form);
+  assert.equal(reset.hidden, false);
+
+  api.type("LIVE_KEY");
+  assert.equal(span.textContent, "LIVE_KEY");
+
+  reset.click();
+  assert.equal(api.value, "YOUR_KEY");
+  assert.equal(span.textContent, "YOUR_KEY");
 });

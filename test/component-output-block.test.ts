@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { renderToString } from "preact-render-to-string";
 import type { ComponentProps } from "@velella/mizzen/contracts";
+import { stringsOf } from "../i18n/index.ts";
 import outputBlock, {
   BAR_CLASS,
   BLOCK_CLASS,
@@ -11,6 +12,8 @@ import outputBlock, {
   directive,
   LABEL_KEY,
   outputText,
+  STALE_CLASS,
+  STALE_KEY,
   STATUS_CLASS,
   type OutputBlockProps,
 } from "../components/output-block/index.ts";
@@ -118,6 +121,22 @@ test("HTML in the output stays text, never markup", () => {
 
   assert.match(out, /<code>&lt;b>hi&lt;\/b> &amp; done<\/code>/);
   assert.doesNotMatch(out, /<b>/);
+});
+
+test("an output that names a variable records it and carries the stale note", () => {
+  const out = render("<p>Created project {{project}}</p>");
+
+  assert.match(out, /data-output-deps="\[[^"]*project[^"]*\]"/);
+  assert.match(out, new RegExp(`data-stale-text="[^"]+"`));
+  assert.match(out, new RegExp(`<span class="${STALE_CLASS}" role="status" data-output-stale-note="true">`));
+  assert.equal(STALE_KEY, "output_stale");
+  assert.ok(out.includes(`data-stale-text="${stringsOf("en").output_stale}"`));
+});
+
+test("an output with no variable carries no stale state and no note", () => {
+  const out = render(OUTPUT);
+
+  assert.doesNotMatch(out, /data-output-deps|data-output-stale-note|data-stale-text|output-block-stale/);
 });
 
 test("without JavaScript the output is fully visible and the button stays hidden", () => {
@@ -256,4 +275,12 @@ test("style.css sets the block apart from input code with a dashed edge and the 
 
 test("style.css scrolls the output inside the block, never the page", () => {
   assert.match(css, new RegExp(`\\.${BODY_CLASS} \\{[^}]*overflow-x: auto;`));
+});
+
+test("style.css makes a stale output visible and keeps the island from executing anything", () => {
+  assert.match(css, new RegExp(`\\.${STALE_CLASS} \\{[^}]*color: var\\(--color-warning\\);`));
+  assert.match(css, /\.output-block\[data-output-stale\] \{[^}]*border-color: var\(--color-warning\);/);
+
+  const client = readFileSync(new URL("../components/output-block/client.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(client, /\bfetch\s*\(|\beval\s*\(|\bnew Function\b|XMLHttpRequest|sendBeacon|child_process/);
 });

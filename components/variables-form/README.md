@@ -14,10 +14,12 @@ form and the page are readable before any script runs.
   declaration shape from the directive, the page's front matter, and `site.data`.
 - `style.css`: tokens only and logical properties only, so dark mode and right-to-left pages follow.
 - `client.ts`: the island. Typing in an input copies its value into that variable's placeholders on the
-  page; each default is applied once on load. Values stay in the browser: no cookie, no storage, no
-  request.
+  page; each default is applied once on load; a change marks the recorded output that depends on it
+  stale; and the reset button puts every declared default back. Values stay in the browser: no cookie,
+  no storage, no request, and no command runs.
 - `test/component-variables-form.test.ts`: labels, defaults, the empty case, the data fallback, every
-  language, escaping, the island's placeholder updates, and the stylesheet rules.
+  language, escaping, input types, the reset button, validation, stale output, the island's placeholder
+  updates, and the stylesheet rules.
 
 ## Data
 
@@ -57,13 +59,22 @@ site data are used. An empty list renders nothing, as does a page with no declar
 
 - One `<fieldset>` with a legend, a hint, and one label-and-input pair per variable. The input's `id`
   pairs with its label's `for`, the hint is its `aria-describedby`, and focus is visible.
-- The inline placeholders the engine writes (`<span class="placeholder" data-var="name">`) and code
-  blocks that carry `data-placeholders` both follow the input.
+- An input's `type` follows the declaration's `type` when that is an HTML input type (`url`, `email`,
+  `number`, …), so the browser validates it and reports a bad value itself. Any other type, or none, is a
+  text field, and a value the browser rejects never reaches an example.
+- The inline placeholders the engine writes (`<span class="placeholder" data-var="name">`), code blocks
+  that carry `data-placeholders`, and a terminal's session all follow the input. A terminal's copy button
+  reads the command text from the page when it is clicked, so it copies the values on screen.
+- A recorded output block that names the variable in `data-output-deps` is marked stale instead of being
+  rewritten: the text is what a command printed once, and only running the command again can change it.
+  Its note says so and its edge turns to the warning color.
+- The reset button restores every declared default, in the inputs and in the examples. It starts `hidden`
+  and the island reveals it, because only the island can put the examples back too.
 - Without JavaScript the inputs still show every default, so a reader can copy the values by hand; the
   code examples keep the literal `{{name}}` the author wrote.
 - A declaration with no default, or a structured default, shows an empty value.
 - The legend and hint are localized through the theme's i18n keys `variables_form_legend` and
-  `variables_form_hint`.
+  `variables_form_hint`; the reset action uses `variables_form_reset`.
 
 This unit does not edit the code component, the layouts, the engine, or a shared index; the engine's
 registry finds it by its folder name.
