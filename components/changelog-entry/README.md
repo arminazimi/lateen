@@ -23,7 +23,7 @@ the release touches, and the entry text. It is a container directive, so the bod
 ```html
 <section class="changelog-entry" id="v1-2-0" aria-labelledby="changelog-version-v1-2-0">
   <h2 class="changelog-entry-version" aria-labelledby="changelog-version-v1-2-0">
-    <span id="changelog-version-v1-2-0" class="changelog-entry-version-text">1.2.0</span>
+    <span id="changelog-version-v1-2-0" class="changelog-entry-version-text"><span class="changelog-entry-sr">Version </span>1.2.0</span>
     <a class="changelog-entry-anchor" href="#v1-2-0" aria-label="Link to release 1.2.0">…</a>
   </h2>
   <div class="changelog-entry-meta">
@@ -38,7 +38,8 @@ the release touches, and the entry text. It is a container directive, so the bod
 
 - The section id is `v` plus a slug of the version: lower case, dots become dashes, and any other run of
   characters becomes one dash. `1.2.0` becomes `v1-2-0`; a leading `v` is not doubled. The id is
-  deterministic, so links to a release survive a rebuild.
+  deterministic, so links to a release survive a rebuild. The heading also reads "Version 1.2.0" to
+  assistive tech, and the section carries the authored version as `data-version` for machine context.
 - A missing or blank version renders the heading text "Unreleased" and the id `vunversioned`. It never
   renders a bare `v`. Two unversioned entries on one page share an id, so give every entry a version when a
   page has more than one.

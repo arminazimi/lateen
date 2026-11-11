@@ -3,7 +3,9 @@
 A section-by-section comparison of two versions of a page. Each change is `added`, `removed`,
 `changed`, or `moved`; the kind shows as a visible label beside its own icon shape, never as color
 alone. A moved change also shows its old and new position. The viewer renders nothing when there are
-no changes or the two versions are equal.
+no changes or the two versions are equal. The header names both versions in text, `Base version` and
+`Target version`, and the changed text carries a visible `+` or `−` beside its Before or After label,
+so a copied or printed diff keeps the added and removed markers.
 
 - `index.ts` is the Preact component, written with `h()`. Its `directive` export is `version-diff`.
   It accepts the diff from the directive's `data` or `from`/`to`/`changes` attributes, then from the
@@ -13,7 +15,9 @@ no changes or the two versions are equal.
   keyboard: ArrowDown and ArrowUp move one change, ArrowRight and ArrowLeft follow the reading
   direction, Home and End jump to the ends, and the keys wrap. One change is in the tab order at a
   time, so the viewer is a single tab stop once it is enhanced.
-- `style.css` uses tokens for both themes and logical properties for right-to-left pages.
+- `style.css` uses tokens for both themes and logical properties for right-to-left pages. The `+` and
+  `−` markers are real text, so copying and printing keep them, and the print stylesheet drops the
+  Previous and Next controls.
 
 The data is:
 

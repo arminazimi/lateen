@@ -9,6 +9,7 @@ import versionDiff, {
   ICONS,
   KINDS,
   LABEL_KEYS,
+  SR_CLASS,
   changeOf,
   diffOf,
   directive,
@@ -107,6 +108,55 @@ test("a moved change shows its old and new position", () => {
   assert.ok(out.includes(stringsOf("en").version_diff_moved_to!.replace("{to}", "5")));
 });
 
+test("the header names the base and target versions in text, not only in the sentence", () => {
+  const out = render({ data: dataOf() });
+  assert.ok(out);
+  assert.match(
+    out,
+    /<span class="version-diff-version version-diff-base" data-version="v1"><span class="version-diff-version-label">Base version <\/span><span class="version-diff-version-value" dir="ltr">v1<\/span><\/span>/,
+  );
+  assert.match(
+    out,
+    /<span class="version-diff-version version-diff-target" data-version="v2"><span class="version-diff-version-label">Target version <\/span><span class="version-diff-version-value" dir="ltr">v2<\/span><\/span>/,
+  );
+  assert.match(out, /data-version-from="v1"/);
+  assert.match(out, /data-version-to="v2"/);
+});
+
+test("the base and target labels follow the page language", () => {
+  for (const lang of languages) {
+    const out = render({ data: dataOf() }, lang);
+    assert.ok(out, `${lang} renders`);
+    assert.ok(out.includes(`>${stringsOf(lang).version_diff_base!} <`), `${lang} base label`);
+    assert.ok(out.includes(`>${stringsOf(lang).version_diff_target!} <`), `${lang} target label`);
+  }
+});
+
+test("changed text carries a visible − or + marker beside its label, so a copy keeps it", () => {
+  const out = render({
+    data: dataOf([{ kind: "changed", title: "Install", before: "old", after: "new" }]),
+  });
+  assert.ok(out);
+  assert.match(
+    out,
+    new RegExp(
+      `<div class="version-diff-before"><span class="version-diff-text-label"><span class="${SR_CLASS}">Removed: </span><span class="version-diff-marker" aria-hidden="true">− </span>Before</span>`,
+    ),
+  );
+  assert.match(
+    out,
+    new RegExp(
+      `<div class="version-diff-after"><span class="version-diff-text-label"><span class="${SR_CLASS}">Added: </span><span class="version-diff-marker" aria-hidden="true">\\+ </span>After</span>`,
+    ),
+  );
+  assert.match(out, /<p class="version-diff-text" dir="auto">old<\/p>/);
+  assert.match(out, /<p class="version-diff-text" dir="auto">new<\/p>/);
+});
+
+test("the screen-reader marker word stays out of a copied selection", () => {
+  assert.match(css, new RegExp(`\\.${SR_CLASS}\\s*\\{[^}]*user-select:\\s*none`, "s"));
+});
+
 test("the diff is a heading and an ordered list with one h3 per change", () => {
   const out = render({ data: dataOf() });
   assert.ok(out);
@@ -168,6 +218,7 @@ test("the i18n keys exist with matching placeholders in every language", () => {
   const keys = [
     ...Object.values(LABEL_KEYS),
     "version_diff_after",
+    "version_diff_base",
     "version_diff_before",
     "version_diff_count",
     "version_diff_group",
@@ -175,6 +226,7 @@ test("the i18n keys exist with matching placeholders in every language", () => {
     "version_diff_moved_to",
     "version_diff_next",
     "version_diff_previous",
+    "version_diff_target",
     "version_diff_title",
   ];
   const placeholders = (text: string) => [...new Set(text.match(/\{\w+\}/g) ?? [])].sort();
@@ -467,4 +519,10 @@ test("style.css keeps every kind visible with its own colour and a text label be
   assert.match(css, /\.version-diff-text-label\s*\{[^}]*text-transform:\s*uppercase/s);
   assert.match(css, /\.version-diff-item:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--state-focus-ring\)/s);
   assert.match(css, /\.version-diff-previous:focus-visible/);
+});
+
+test("style.css prints the markers and leaves the screen-only controls out", () => {
+  assert.match(css, /@media print\s*\{[^}]*\.version-diff-controls\s*\{[^}]*display:\s*none/s);
+  assert.match(css, /\.version-diff-marker\s*\{[^}]*font-weight:\s*var\(--type-weight-bold\)/s);
+  assert.match(css, /\.version-diff-version-value\s*\{[^}]*direction:\s*ltr/s);
 });

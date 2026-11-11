@@ -172,7 +172,7 @@ test("a release renders its date, categories, and body through the changelog ent
   });
 
   assert.match(page, /<section class="changelog-entry" id="v2-0-0"/);
-  assert.match(page, /<h2 class="changelog-entry-version"[^>]*><span[^>]*>2\.0\.0<\/span>/);
+  assert.match(page, /<h2 class="changelog-entry-version"[^>]*><span[^>]*>(?:<span[^>]*>Version <\/span>)?2\.0\.0<\/span>/);
   assert.match(page, /<time class="changelog-entry-date" datetime="2026-02-01">February 1, 2026<\/time>/);
   assert.match(page, />Added<\/span>/);
   assert.match(page, />Fixed<\/span>/);

@@ -32,6 +32,43 @@
   line-height: var(--type-leading-tight);
 }
 
+.version-diff-heading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* The two versions the comparison connects, each named in text, so "from" and "to" cannot be
+   mistaken for the base and target of the other direction. */
+.version-diff-versions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  color: var(--color-muted);
+  font-size: var(--type-size-sm);
+}
+
+.version-diff-version {
+  display: inline-flex;
+  gap: var(--space-1);
+  align-items: baseline;
+}
+
+.version-diff-version-label {
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-xs);
+  font-weight: var(--type-weight-medium);
+  text-transform: uppercase;
+}
+
+.version-diff-version-value {
+  color: var(--color-text);
+  font-family: var(--type-font-mono);
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
 .version-diff-controls {
   display: flex;
   flex-wrap: wrap;
@@ -165,6 +202,33 @@
   font-size: var(--type-size-xs);
   font-weight: var(--type-weight-medium);
   text-transform: uppercase;
+}
+
+/* The + or − is real text, so it survives copying and printing; the added/removed word beside it
+   is for assistive tech only and stays out of a copied selection. */
+.version-diff-marker {
+  margin-inline-end: var(--space-1);
+  color: var(--color-text);
+  font-family: var(--type-font-mono);
+  font-weight: var(--type-weight-bold);
+}
+
+.version-diff-sr {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  user-select: none;
+}
+
+/* The Previous and Next controls are screen affordances; a printed diff keeps the whole list. */
+@media print {
+  .version-diff-controls {
+    display: none;
+  }
 }
 
 .version-diff-text {
