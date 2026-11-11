@@ -3,7 +3,16 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { renderToString } from "preact-render-to-string";
 import type { ComponentProps } from "@velella/mizzen/contracts";
-import terminal, { bodyText, commandsOf, directive, parseLines, variableNamesOf } from "../components/terminal/index.ts";
+import terminal, {
+  bodyText,
+  commandJson,
+  commandRecords,
+  commandsOf,
+  directive,
+  heredocsOf,
+  parseLines,
+  variableNamesOf,
+} from "../components/terminal/index.ts";
 import {
   activate,
   activateAll,
@@ -22,6 +31,13 @@ import {
 function render(html: string, lang = "en"): string {
   const input = { props: {}, html, page: { lang }, site: {} } as unknown as ComponentProps;
   return renderToString(terminal(input) as never);
+}
+
+/** The command records from the inert JSON script the frame publishes. */
+function recordsIn(out: string): unknown[] {
+  const match = /<script type="application\/json" data-terminal-commands>([\s\S]*?)<\/script>/.exec(out);
+  assert.ok(match, "command records rendered");
+  return JSON.parse(match[1]!) as unknown[];
 }
 
 const names = JSON.parse(readFileSync(new URL("../tokens/names.json", import.meta.url), "utf8")) as Record<
@@ -53,17 +69,105 @@ test("bodyText drops tags that a first pass would rebuild", () => {
 
 test("parseLines marks $ lines as commands and strips the prompt and one space", () => {
   assert.deepEqual(parseLines("$ npm ci\nadded\n$ \n$npm test"), [
-    { kind: "command", text: "npm ci" },
-    { kind: "output", text: "added" },
-    { kind: "command", text: "" },
-    { kind: "command", text: "npm test" },
+    { kind: "command", text: "npm ci", command: 0, continuation: false },
+    { kind: "output", text: "added", command: 0, continuation: false },
+    { kind: "command", text: "", command: 1, continuation: false },
+    { kind: "command", text: "npm test", command: 2, continuation: false },
   ]);
   assert.deepEqual(parseLines(""), []);
+});
+
+test("a trailing backslash continues the command on the next line", () => {
+  const lines = parseLines("$ npm run build \\\n  --out dist\nBuilt 12 pages.");
+
+  assert.deepEqual(lines, [
+    { kind: "command", text: "npm run build \\", command: 0, continuation: false },
+    { kind: "command", text: "  --out dist", command: 0, continuation: true },
+    { kind: "output", text: "Built 12 pages.", command: 0, continuation: false },
+  ]);
+  assert.equal(commandsOf(lines), "npm run build \\\n  --out dist");
+  assert.deepEqual(commandRecords(lines), [
+    { prompt: "$", input: "npm run build \\\n  --out dist", output: ["Built 12 pages."] },
+  ]);
+});
+
+test("an escaped trailing backslash does not continue the command", () => {
+  const lines = parseLines("$ printf '%s\\\\'\nfinished");
+
+  assert.deepEqual(lines, [
+    { kind: "command", text: "printf '%s\\\\'", command: 0, continuation: false },
+    { kind: "output", text: "finished", command: 0, continuation: false },
+  ]);
+});
+
+test("a heredoc body is input, even when it starts with a prompt", () => {
+  const lines = parseLines("$ cat > notes.md <<EOF\n$ this is not a prompt\nplain\nEOF\nwrote notes.md");
+
+  assert.deepEqual(lines, [
+    { kind: "command", text: "cat > notes.md <<EOF", command: 0, continuation: false },
+    { kind: "command", text: "$ this is not a prompt", command: 0, continuation: true },
+    { kind: "command", text: "plain", command: 0, continuation: true },
+    { kind: "command", text: "EOF", command: 0, continuation: true },
+    { kind: "output", text: "wrote notes.md", command: 0, continuation: false },
+  ]);
+  assert.equal(commandsOf(lines), "cat > notes.md <<EOF\n$ this is not a prompt\nplain\nEOF");
+  assert.deepEqual(commandRecords(lines), [
+    {
+      prompt: "$",
+      input: "cat > notes.md <<EOF\n$ this is not a prompt\nplain\nEOF",
+      output: ["wrote notes.md"],
+    },
+  ]);
+});
+
+test("heredoc delimiters may be quoted, tab-stripped, and several in one command", () => {
+  const lines = parseLines("$ cat <<'A' <<-B\n\tone\nA\n\ttwo\n\tB\nafter");
+
+  assert.equal(commandsOf(lines), "cat <<'A' <<-B\n\tone\nA\n\ttwo\n\tB");
+  assert.deepEqual(commandRecords(lines), [
+    { prompt: "$", input: "cat <<'A' <<-B\n\tone\nA\n\ttwo\n\tB", output: ["after"] },
+  ]);
+});
+
+test("a heredoc that never closes stays command input to the end of the session", () => {
+  const lines = parseLines("$ cat <<EOF\none\n$ two\nthree");
+
+  assert.equal(commandsOf(lines), "cat <<EOF\none\n$ two\nthree");
+  assert.deepEqual(commandRecords(lines), [{ prompt: "$", input: "cat <<EOF\none\n$ two\nthree", output: [] }]);
+  assert.equal(heredocsOf("cat <<\\EOF")[0]?.delimiter, "EOF");
+  assert.equal(heredocsOf("cat <<< 'text'").length, 0, "a here-string is not a heredoc");
 });
 
 test("commandsOf joins only the commands, one per line", () => {
   const lines = parseLines("$ npm ci\nadded 200 packages\n$ npm run check\nall gates passed");
   assert.equal(commandsOf(lines), "npm ci\nnpm run check");
+});
+
+test("output before the first command belongs to no record", () => {
+  const lines = parseLines("booting\n$ run\nok");
+
+  assert.deepEqual(lines[0], { kind: "output", text: "booting", command: null, continuation: false });
+  assert.deepEqual(commandRecords(lines), [{ prompt: "$", input: "run", output: ["ok"] }]);
+});
+
+test("a session publishes one record per command with the output that follows it", () => {
+  const out = render("<p>$ npm ci\nadded\n$ cat &lt;&lt;EOF\nhello\nEOF\nwritten</p>");
+
+  assert.deepEqual(recordsIn(out), [
+    { prompt: "$", input: "npm ci", output: ["added"] },
+    { prompt: "$", input: "cat <<EOF\nhello\nEOF", output: ["written"] },
+  ]);
+  assert.match(out, /data-line="output" data-command="0">added<\/span>/);
+  assert.match(out, /terminal-command" data-line="command" data-command="1"><span class="terminal-prompt"/);
+});
+
+test("continuation and heredoc lines show no prompt and copy with their command", () => {
+  const out = render("<p>$ npm run build \\\n  --out dist\n$ cat &lt;&lt;EOF\n$ literal\nEOF\nBuilt 12 pages.</p>");
+
+  assert.match(out, /<span class="terminal-line terminal-command terminal-continuation" data-line="command" data-command="0"><span class="terminal-text"> {2}--out dist<\/span><\/span>/);
+  assert.match(out, /<span class="terminal-line terminal-command terminal-continuation" data-line="command" data-command="1"><span class="terminal-text">\$ literal<\/span><\/span>/);
+  assert.doesNotMatch(out, /terminal-continuation"[^>]*><span class="terminal-prompt"/);
+  assert.match(out, /data-commands="npm run build \\\n {2}--out dist\ncat &lt;&lt;EOF\n\$ literal\nEOF"/);
 });
 
 test("variableNamesOf reads the variables a plain-text session names, once each", () => {
@@ -119,6 +223,55 @@ test("a click copies the command text the page shows now", async () => {
   assert.deepEqual(env.written, ["curl https://sandbox.example.com"]);
 });
 
+test("command records keep a closing script tag inert", () => {
+  const out = render("<p>$ printf '%s' &lt;/script&gt;\nok</p>");
+  const json = commandJson([{ prompt: "$", input: "</script>", output: [] }]);
+
+  assert.doesNotMatch(json, /</);
+  assert.deepEqual(JSON.parse(json), [{ prompt: "$", input: "</script>", output: [] }]);
+  assert.deepEqual(recordsIn(out), [{ prompt: "$", input: "printf '%s' </script>", output: ["ok"] }]);
+});
+
+test("a click copies the whole command, including a changed value in its heredoc", async () => {
+  const button = fakeButton();
+  const env = fakeEnv({
+    writeText(text) {
+      env.written.push(text);
+      return Promise.resolve();
+    },
+  });
+  const lines = [text("cat > conf <<EOF"), text("host={{host}}"), text("EOF")];
+  const frame: TerminalFrame = { querySelectorAll: () => lines };
+
+  activateAll({ querySelectorAll: () => [Object.assign(button, { parentElement: { parentElement: frame } })] }, env);
+  lines[1] = text("host=sandbox.example.com");
+  button.click();
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(env.written, ["cat > conf <<EOF\nhost=sandbox.example.com\nEOF"]);
+});
+
+test("two clicks in a row copy the input each click shows", async () => {
+  const button = fakeButton();
+  const env = fakeEnv({
+    writeText(text) {
+      env.written.push(text);
+      return Promise.resolve();
+    },
+  });
+  const lines = [text("deploy {{env}}")];
+  const frame: TerminalFrame = { querySelectorAll: () => lines };
+
+  activateAll({ querySelectorAll: () => [Object.assign(button, { parentElement: { parentElement: frame } })] }, env);
+  lines[0] = text("deploy staging");
+  button.click();
+  lines[0] = text("deploy production");
+  button.click();
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(env.written, ["deploy staging", "deploy production"]);
+});
+
 test("without a frame the button still copies the commands it was rendered with", async () => {
   const button = fakeButton();
   const env = fakeEnv({ writeText: (text) => (env.written.push(text), Promise.resolve()) });
@@ -137,9 +290,9 @@ function text(value: string): { readonly textContent: string } {
 test("each command shows its prompt, hidden from assistive tech; output has none", () => {
   const out = render(SESSION);
 
-  assert.match(out, /<span class="terminal-line terminal-command"><span class="terminal-prompt" aria-hidden="true">\$ <\/span><span class="terminal-text">npm ci<\/span><\/span>/);
-  assert.match(out, /<span class="terminal-line terminal-output">added 200 packages<\/span>/);
-  assert.doesNotMatch(out, /terminal-output">\$/);
+  assert.match(out, /<span class="terminal-line terminal-command" data-line="command" data-command="0"><span class="terminal-prompt" aria-hidden="true">\$ <\/span><span class="terminal-text">npm ci<\/span><\/span>/);
+  assert.match(out, /<span class="terminal-line terminal-output" data-line="output" data-command="0">added 200 packages<\/span>/);
+  assert.doesNotMatch(out, /terminal-output[^>]*>\$/);
 });
 
 test("the session is a focusable pre with the lines inside, under the terminal frame", () => {
@@ -162,7 +315,8 @@ test("a session with no commands has no copy button", () => {
   const out = render("<p>just output</p>");
 
   assert.doesNotMatch(out, /terminal-copy/);
-  assert.match(out, /terminal-output">just output/);
+  assert.doesNotMatch(out, /data-terminal-commands/);
+  assert.match(out, /<span class="terminal-line terminal-output" data-line="output">just output<\/span>/);
 });
 
 test("the copy button takes its label and messages from the page language", () => {
@@ -184,7 +338,7 @@ test("a fenced block inside the directive is read the same way", () => {
   const out = render('<pre data-src="a.md:2"><code class="language-sh">$ npm ci\nadded\n</code></pre>');
 
   assert.match(out, /data-commands="npm ci"/);
-  assert.match(out, /terminal-output">added</);
+  assert.match(out, /terminal-output" data-line="output" data-command="0">added<\/span>/);
 });
 
 /** A button with the attributes the frame renders and a click listener that tests can fire. */
