@@ -134,7 +134,7 @@ test("with an endpoint it renders the question, two named buttons, and a status 
 
   assert.match(
     out,
-    /^<div class="feedback" data-feedback hidden data-endpoint="https:\/\/feedback\.example\.com\/vote" data-url="\/example\/guide\/install\/" data-thanks="Thanks for your feedback\." data-failed="Thanks for your answer\." data-already="You already answered for this page\.">/,
+    /^<div class="feedback" data-feedback hidden data-endpoint="https:\/\/feedback\.example\.com\/vote" data-url="\/example\/guide\/install\/" data-source="docs\/guide\/install\.md" data-thanks="Thanks for your feedback\." data-failed="Thanks for your answer\." data-already="You already answered for this page\.">/,
   );
   assert.match(out, /<p class="feedback-question">Was this page helpful\?<\/p>/);
   assert.match(
@@ -219,6 +219,7 @@ function fakeRoot(endpoint = ENDPOINT): FakeRoot {
     dataset: {
       endpoint,
       url: PAGE_URL,
+      source: pos.file,
       thanks: "Thanks for your feedback.",
       failed: "Thanks for your answer.",
       already: "You already answered for this page.",
@@ -296,7 +297,7 @@ test("Yes posts the page URL and helpful:true, thanks the reader, and records th
   root.buttons[0]!.click();
   await settle();
 
-  assert.deepEqual(post.calls, [{ endpoint: ENDPOINT, body: `{"url":"${PAGE_URL}","helpful":true}` }]);
+  assert.deepEqual(post.calls, [{ endpoint: ENDPOINT, body: `{"url":"${PAGE_URL}","helpful":true,"source":"${pos.file}"}` }]);
   assert.equal(root.status.textContent, "Thanks for your feedback.");
   assert.deepEqual(storage.writes, [keyFor(PAGE_URL)]);
   assert.equal(storage.values.get(keyFor(PAGE_URL)), "yes");
@@ -315,7 +316,7 @@ test("No posts helpful:false and records that answer", async () => {
   root.buttons[1]!.click();
   await settle();
 
-  assert.deepEqual(post.calls, [{ endpoint: ENDPOINT, body: `{"url":"${PAGE_URL}","helpful":false}` }]);
+  assert.deepEqual(post.calls, [{ endpoint: ENDPOINT, body: `{"url":"${PAGE_URL}","helpful":false,"source":"${pos.file}"}` }]);
   assert.equal(storage.values.get(keyFor(PAGE_URL)), "no");
 });
 

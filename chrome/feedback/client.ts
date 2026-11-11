@@ -7,10 +7,11 @@
 /** The two answers the buttons carry in `data-feedback-vote`. */
 export type FeedbackVote = "yes" | "no";
 
-/** What the endpoint receives: the page's URL and whether it helped. */
+/** What the endpoint receives: the page's URL, whether it helped, and the source file the page came from. */
 export interface FeedbackPayload {
   readonly url: string;
   readonly helpful: boolean;
+  readonly source: string;
 }
 
 /** The POST the island performs; tests pass a fake, the browser passes `fetch`. */
@@ -41,6 +42,7 @@ export interface FeedbackRoot {
   dataset: {
     endpoint?: string;
     url?: string;
+    source?: string;
     thanks?: string;
     failed?: string;
     already?: string;
@@ -111,10 +113,11 @@ export function vote(root: FeedbackRoot, button: FeedbackButton, env: FeedbackEn
   const answer = voteOf(button);
   const endpoint = root.dataset.endpoint ?? "";
   const url = root.dataset.url ?? "";
+  const source = root.dataset.source ?? "";
   if (answer === undefined || endpoint === "" || url === "") return Promise.resolve();
 
   for (const other of root.querySelectorAll("[data-feedback-vote]")) other.disabled = true;
-  return submit(endpoint, { url, helpful: answer === "yes" }, env.post).then(
+  return submit(endpoint, { url, helpful: answer === "yes", source }, env.post).then(
     () => {
       save(env.storage, url, answer);
       finish(root, root.dataset.thanks ?? "");
