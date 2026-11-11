@@ -1,7 +1,6 @@
 import { h } from "preact";
 import type { Chrome, NavLink } from "@velella/mizzen/contracts";
-
-const LABEL = "Breadcrumb";
+import { t } from "../../i18n/index.ts";
 
 /** Chevron pointing toward the current page; `style.css` mirrors it under `dir="rtl"`. */
 function separator() {
@@ -20,7 +19,7 @@ function crumb(link: NavLink, current: boolean) {
 }
 
 /** The trail from the navigation tree above the title; renders nothing without at least one ancestor. */
-const breadcrumb: Chrome = ({ trail }) => {
+const breadcrumb: Chrome = ({ page, trail }) => {
   if (trail.length < 2) return null;
 
   const items = [];
@@ -29,7 +28,7 @@ const breadcrumb: Chrome = ({ trail }) => {
     items.push(crumb(trail[i]!, i === trail.length - 1));
   }
 
-  return h("nav", { class: "breadcrumb", "aria-label": LABEL }, ...items);
+  return h("nav", { class: "breadcrumb", "aria-label": t(page.lang, "breadcrumbs") }, ...items);
 };
 
 export default breadcrumb;

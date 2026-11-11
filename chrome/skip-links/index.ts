@@ -5,7 +5,7 @@ import { t } from "../../i18n/index.ts";
 /** Id of the `<main>` landmark, the first skip link's target. */
 export const MAIN_ID = "main";
 
-/** Id of the navigation `<aside>`, the second skip link's target. */
+/** Id of the sidebar column, which holds the navigation landmark; the second skip link's target. */
 export const NAVIGATION_ID = "site-navigation";
 
 /**
@@ -24,9 +24,9 @@ function hasItems(nav: NavTree): boolean {
 
 /**
  * The skip links at the start of the body: the first goes to the main content, the second to the
- * sidebar. They stay in the tab order and the stylesheet keeps them out of sight until one has
- * keyboard focus. The navigation link appears only when the site has navigation and this layout
- * renders its landmark.
+ * sidebar that holds the navigation. They stay in the tab order and the stylesheet keeps them out of
+ * sight until one has keyboard focus. The navigation link appears only when the site has navigation
+ * and this layout renders the sidebar.
  */
 export default function skipLinks({ site, page, navigation = true }: SkipLinksProps) {
   const lang = page.lang;
