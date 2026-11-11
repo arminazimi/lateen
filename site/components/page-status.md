@@ -43,4 +43,5 @@ To preview one inside a page:
 
 - `status`, `since`, and `replaced_by` are front matter keys. The directive is for a preview inside a page; a real page uses front matter.
 - A `replaced_by` that is not a root-relative path or an `https` URL is shown as text, not a link.
+- The label, explanation, "Since" prefix, and replacement link text come from `i18n/*.json` in the page's language, so a Persian or Arabic page shows a translated banner.
 - Remove the status when the feature is stable. A beta banner left on a finished page is worse than no banner.

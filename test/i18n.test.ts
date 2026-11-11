@@ -132,6 +132,74 @@ test("a value that looks like a placeholder stays text", () => {
   assert.equal(t("en", "trust_reviewed_by", { reviewer: "{version}" }), "Reviewed by {version}");
 });
 
+/** The catalog keys the high-traffic surfaces read, so a new key cannot be added to English only. */
+const SURFACE_KEYS = [
+  "callout_caution",
+  "callout_important",
+  "callout_note",
+  "callout_tip",
+  "callout_warning",
+  "command_actions",
+  "copied",
+  "default",
+  "description",
+  "mermaid_failed",
+  "mermaid_source",
+  "name",
+  "page_agent_open_in",
+  "page_agent_summary",
+  "required",
+  "schema_empty",
+  "schema_missing_data",
+  "schema_missing_schema",
+  "schema_properties",
+  "search",
+  "search_close",
+  "search_copy_failed",
+  "search_count_few",
+  "search_count_many",
+  "search_count_one",
+  "search_count_other",
+  "search_count_two",
+  "search_count_zero",
+  "search_loading",
+  "search_other_section",
+  "search_placeholder",
+  "search_results_empty",
+  "search_results_failed",
+  "search_results_loading",
+  "status_beta_hint",
+  "status_deprecated_hint",
+  "status_experimental_hint",
+  "status_replaced_by",
+  "status_replacement_label",
+  "status_since",
+  "type",
+  "version_home",
+];
+
+test("the high-traffic surfaces have a complete message in every shipped language", () => {
+  const warnings = withNodeEnv("development", () =>
+    warningsFrom(() => {
+      for (const lang of languages) {
+        for (const key of SURFACE_KEYS) {
+          assert.notEqual(patternOf(lang, key).trim(), "", `${lang}.${key} is empty`);
+        }
+      }
+    }),
+  );
+  assert.deepEqual(warnings, [], "no missing-message diagnostics");
+});
+
+test("search count and empty messages keep their placeholders in every language", () => {
+  for (const lang of languages) {
+    for (const key of SURFACE_KEYS.filter((name) => name.startsWith("search_count_"))) {
+      assert.match(patternOf(lang, key), /\{n\}/, `${lang}.${key} keeps {n}`);
+    }
+    assert.match(patternOf(lang, "search_results_empty"), /\{query\}/, `${lang}.search_results_empty keeps {query}`);
+  }
+});
+
 test("every message key the theme names in source exists in the catalog", () => {
   const root = new URL("../", import.meta.url);
   const missing: string[] = [];

@@ -1,5 +1,6 @@
 import { h } from "preact";
 import type { ComponentProps } from "@velella/mizzen/contracts";
+import { t } from "../../i18n/index.ts";
 
 /** The Markdown directive this component handles: `::schema-table{data="widget"}`. */
 export const directive = "schema-table";
@@ -12,9 +13,6 @@ export const TABLE_CLASS = "schema-table";
 
 /** Shown when the directive gives no `data` or the `_data` path holds no schema. */
 export const MISSING_CLASS = "schema-table-missing";
-
-/** Accessible name of the table when the author gives no `label`. */
-const DEFAULT_LABEL = "Properties";
 
 /** Rows nested deeper than this are not expanded, so a recursive schema cannot loop forever. */
 const MAX_DEPTH = 8;
@@ -233,7 +231,7 @@ function flatten(rows: readonly SchemaRow[]): SchemaRow[] {
   return rows.flatMap((row) => [row, ...flatten(row.children)]);
 }
 
-function rowNode(row: SchemaRow, base: string) {
+function rowNode(row: SchemaRow, base: string, lang: string) {
   const indent = row.depth === 0 ? "schema-row" : `schema-row schema-depth-${Math.min(row.depth, MAX_INDENT)}`;
   const ownHeader = `${fieldId(base, row.path)}-name`;
   const ancestors = ancestorPaths(row.path).map((path) => `${fieldId(base, path)}-name`);
@@ -253,7 +251,7 @@ function rowNode(row: SchemaRow, base: string) {
     },
     h("th", { scope: "row", class: "schema-name", id: ownHeader, ...headerHeaders }, h("code", { dir: "ltr" }, row.name)),
     h("td", { ...headersOf("type") }, h("code", { class: "schema-type", dir: "ltr" }, row.type)),
-    h("td", { class: "schema-required", ...headersOf("required") }, row.required ? "required" : null),
+    h("td", { class: "schema-required", ...headersOf("required") }, row.required ? t(lang, "required") : null),
     h(
       "td",
       { class: "schema-default", ...headersOf("default") },
@@ -278,23 +276,25 @@ function rowNode(row: SchemaRow, base: string) {
  * `::schema-table{data="widget"}` renders a JSON Schema from `_data/widget.json` (or `.yml`) as a table of
  * properties: name, type, required, default, and description, with nested properties indented under their
  * parent. `data` is the file's path under `_data` without its extension; `guides/steps` reads
- * `_data/guides/steps.yml`. The table needs no JavaScript and reads the same in right-to-left text.
+ * `_data/guides/steps.yml`. The table needs no JavaScript and reads the same in right-to-left text; its
+ * headers and messages come from the page language's catalog.
  */
-export default function schemaTable({ props, site }: ComponentProps<SchemaTableProps>) {
+export default function schemaTable({ props, site, page }: ComponentProps<SchemaTableProps>) {
+  const lang = page.lang;
   const path = typeof props.data === "string" ? props.data.trim() : "";
-  const label = typeof props.label === "string" && props.label.trim() !== "" ? props.label : DEFAULT_LABEL;
+  const label = typeof props.label === "string" && props.label.trim() !== "" ? props.label : t(lang, "schema_properties");
 
   if (path === "") {
-    return h("p", { class: MISSING_CLASS, role: "note" }, "schema-table needs data=\"<name of a file in _data>\".");
+    return h("p", { class: MISSING_CLASS, role: "note" }, t(lang, "schema_missing_data"));
   }
   const schema = lookup(site.data, path);
   if (!isJson(schema)) {
-    return h("p", { class: MISSING_CLASS, role: "note" }, `No schema in _data at "${path}".`);
+    return h("p", { class: MISSING_CLASS, role: "note" }, t(lang, "schema_missing_schema", { path }));
   }
 
   const rows = flatten(schemaRows(schema));
   if (rows.length === 0) {
-    return h("p", { class: MISSING_CLASS, role: "note" }, `The schema at "${path}" has no properties.`);
+    return h("p", { class: MISSING_CLASS, role: "note" }, t(lang, "schema_empty", { path }));
   }
 
   const base = idBase(props.id, path);
@@ -311,14 +311,14 @@ export default function schemaTable({ props, site }: ComponentProps<SchemaTableP
         h(
           "tr",
           null,
-          h("th", { scope: "col", id: columnId(base, "name") }, "Name"),
-          h("th", { scope: "col", id: columnId(base, "type") }, "Type"),
-          h("th", { scope: "col", id: columnId(base, "required") }, "Required"),
-          h("th", { scope: "col", id: columnId(base, "default") }, "Default"),
-          h("th", { scope: "col", id: columnId(base, "description") }, "Description"),
+          h("th", { scope: "col", id: columnId(base, "name") }, t(lang, "name")),
+          h("th", { scope: "col", id: columnId(base, "type") }, t(lang, "type")),
+          h("th", { scope: "col", id: columnId(base, "required") }, t(lang, "required")),
+          h("th", { scope: "col", id: columnId(base, "default") }, t(lang, "default")),
+          h("th", { scope: "col", id: columnId(base, "description") }, t(lang, "description")),
         ),
       ),
-      h("tbody", null, rows.map((row) => rowNode(row, base))),
+      h("tbody", null, rows.map((row) => rowNode(row, base, lang))),
     ),
   );
 }

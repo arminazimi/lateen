@@ -123,6 +123,20 @@ test("the copy label follows the page language, and the unit ships no untranslat
   assert.match(out, />مشاهده مارک‌داون</);
 });
 
+test("the disclosure and the provider heading follow the page language", () => {
+  const fa = html(
+    pageAgentMenu(props(pageWith("/example/fa/install/", "doc", "fa", "rtl"), {}, "https://docs.example.com")),
+  );
+  assert.match(fa, /<span class="page-agent-menu-summary-text">استفاده با دستیار<\/span>/);
+  assert.match(fa, /<p class="page-agent-menu-heading">باز کردن در<\/p>/);
+
+  const ar = html(
+    pageAgentMenu(props(pageWith("/example/ar/install/", "doc", "ar", "rtl"), {}, "https://docs.example.com")),
+  );
+  assert.match(ar, /<span class="page-agent-menu-summary-text">الاستخدام مع وكيل<\/span>/);
+  assert.match(ar, /<p class="page-agent-menu-heading">افتح في<\/p>/);
+});
+
 test("the menu and the copy-Markdown control name the same twin and announce the same result", () => {
   const page = pageWith("/example/fa/install/", "doc", "fa", "rtl");
   const menuOut = html(pageAgentMenu(props(page)));

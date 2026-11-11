@@ -3,13 +3,6 @@ import type { Chrome, Page, SiteConfig } from "@velella/mizzen/contracts";
 import { t } from "../../i18n/index.ts";
 import { twinUrl } from "../copy-markdown/index.ts";
 
-/*
- * Labels without a key in the string table (i18n/*.json) are English, the same as the other chrome
- * parts' labels. The strings that do have a key are read through `t()`.
- */
-const SUMMARY = "Use with an agent";
-const OPEN_IN = "Open in";
-
 /** A provider the reader can open the page in: a title and a URL template. */
 interface Provider {
   readonly title: string;
@@ -115,7 +108,7 @@ const pageAgentMenu: Chrome = ({ site, page }) => {
   return h(
     "details",
     { class: "page-agent-menu", "data-page-agent-menu": true },
-    h("summary", { class: "page-agent-menu-summary" }, h("span", { class: "page-agent-menu-summary-text" }, SUMMARY), chevron()),
+    h("summary", { class: "page-agent-menu-summary" }, h("span", { class: "page-agent-menu-summary-text" }, t(lang, "page_agent_summary")), chevron()),
     h(
       "div",
       { class: "page-agent-menu-panel" },
@@ -133,7 +126,7 @@ const pageAgentMenu: Chrome = ({ site, page }) => {
         t(lang, "copy_page_md"),
       ),
       h("a", { class: "page-agent-menu-view", href: markdown }, t(lang, "view_markdown")),
-      providers.length === 0 ? null : h("p", { class: "page-agent-menu-heading" }, OPEN_IN),
+      providers.length === 0 ? null : h("p", { class: "page-agent-menu-heading" }, t(lang, "page_agent_open_in")),
       providers.length === 0
         ? null
         : h(

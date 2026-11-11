@@ -1,5 +1,6 @@
 import { h } from "preact";
 import type { ComponentProps } from "@velella/mizzen/contracts";
+import { t } from "../../i18n/index.ts";
 
 /** The five kinds GitHub alerts and `:::callout{type=…}` directives use. */
 export type CalloutKind = "note" | "tip" | "important" | "warning" | "caution";
@@ -16,12 +17,13 @@ const KINDS: readonly CalloutKind[] = ["note", "tip", "important", "warning", "c
 /** Older content says `danger` for what is now `caution`. */
 const ALIASES: ReadonlyMap<string, CalloutKind> = new Map([["danger", "caution"]]);
 
-const DEFAULT_TITLES: Readonly<Record<CalloutKind, string>> = {
-  note: "Note",
-  tip: "Tip",
-  important: "Important",
-  warning: "Warning",
-  caution: "Caution",
+/** The i18n key with each kind's default title, used when the author gives none. */
+const TITLE_KEYS: Readonly<Record<CalloutKind, string>> = {
+  note: "callout_note",
+  tip: "callout_tip",
+  important: "callout_important",
+  warning: "callout_warning",
+  caution: "callout_caution",
 };
 
 /** Stroke paths for each kind's icon, drawn on a 16×16 grid. Symmetric, so they need no flip under RTL. */
@@ -62,12 +64,13 @@ function icon(kind: CalloutKind) {
 
 /**
  * A short message set apart from the text. `role="note"` keeps it readable as a note without announcing
- * it as an alert. The body arrives already rendered to HTML.
+ * it as an alert. The body arrives already rendered to HTML. The default title is read in the page
+ * language; a `title` from the author replaces it as written.
  */
-export default function callout({ props, html }: ComponentProps<CalloutProps>) {
+export default function callout({ props, html, page }: ComponentProps<CalloutProps>) {
   const kind = calloutKind(props.type);
   const custom = typeof props.title === "string" ? props.title.trim() : "";
-  const title = custom === "" ? DEFAULT_TITLES[kind] : custom;
+  const title = custom === "" ? t(page.lang, TITLE_KEYS[kind]) : custom;
 
   return h(
     "div",

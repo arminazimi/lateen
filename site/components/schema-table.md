@@ -40,6 +40,7 @@ The file behind this table is `_data/schema-table.json`:
 ## Notes
 
 - The schema is read from `_data`, so the page and the schema stay separate. A schema that is not there renders a message naming the missing file.
+- Column headers, the `required` cell, the default table name, and every message come from `i18n/*.json` in the page's language.
 - `$ref` must point inside the same document, such as `#/$defs/option`. A reference to another file is ignored.
 - Deeply nested schemas stop expanding after eight levels and show the row without its children.
 - The table scrolls inside its own region and is reachable by keyboard.
