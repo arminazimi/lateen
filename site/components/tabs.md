@@ -63,6 +63,8 @@ Use the `windows` archive and add its folder to `Path`.
 - Without JavaScript the tab list stays hidden and every section shows stacked under its title, so nothing is locked behind a control that does not run.
 - Choosing a tab by hand is remembered in `localStorage["lateen-tabs"]` and switches every group on the page and on later pages that offers the same label.
 - `?tab=` in the URL chooses a label and beats what is remembered; `?lang=` works too, because the sync module is shared with code tabs.
+- Choosing a tab by hand also writes `?tab=<label>` into the address bar, keeping every other query parameter, and does not reload or move the page, so the address can be shared. A link that opens the page with that parameter starts on the same tab.
+- A fragment that points at a panel, or at a heading inside one, opens that panel on load even when a shared `?tab=` would leave it closed. Following a fragment after load — an in-page link, or Back and Forward — opens the owning panel as well. Fragments and `?tab=` labels that no longer match anything are ignored, and a group that stays stacked is never touched.
 - Arrow keys move between tabs, `Home` and `End` go to the ends, and the arrows follow the reading direction in right-to-left pages.
 - Use [OS tabs](../os-tabs/) when the sections are operating systems and the reader's system should win, or [code tabs](../code-tabs/) when the choice is a language or package manager.
 - Component islands are not wired into built pages yet, so a built site shows the no-JavaScript state — every section stacked — until island wiring lands.
