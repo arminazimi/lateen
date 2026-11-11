@@ -121,3 +121,20 @@
   descent-override: 205.24%;
   line-gap-override: 0%;
 }
+
+/* Locale line breaking. A Persian or Arabic sentence breaks between words: `word-break: normal`
+   keeps a joined word whole, and a Latin token mixed into the sentence (a URL, a path, an
+   identifier) may break at the column edge instead of pushing the page sideways. Code, keys, and
+   sample output are exempt so a command reads exactly as written. */
+:lang(fa),
+:lang(ar) {
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+:lang(fa):where(pre, code, kbd, samp),
+:lang(ar):where(pre, code, kbd, samp),
+:lang(fa) :where(pre, code, kbd, samp),
+:lang(ar) :where(pre, code, kbd, samp) {
+  overflow-wrap: normal;
+}
