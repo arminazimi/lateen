@@ -16,8 +16,11 @@ export const PLACEHOLDER_CLASS = "embed-placeholder";
 /** Class on the title shown in the placeholder. */
 export const TITLE_CLASS = "embed-title";
 
-/** Class on the load button. It starts `hidden`; the island reveals it. */
+/** Class on the load button. It starts `hidden`; the island reveals it, then turns it into a retry. */
 export const LOAD_CLASS = "embed-load";
+
+/** Class on the live status line: "Loading embed…" then the failure and retry message. */
+export const STATUS_CLASS = "embed-status";
 
 /** Class on the link that opens the page without JavaScript and stays after the frame loads. */
 export const LINK_CLASS = "embed-link";
@@ -110,10 +113,12 @@ export function providerOf(value: string): string {
 /**
  * `::embed{src=… title=…}` reserves a 16:9 box and renders a load button and a link to the page. The
  * island (`client.ts`) inserts the iframe only when the reader clicks the button, so the page requests
- * nothing from the provider before then and no consent is implied. The link stays under the box after
- * the frame loads, so a failed or blocked embed keeps a way through; without JavaScript the link still
- * opens the page in a new tab. Without a title the component renders a message instead, because the
- * frame would have no accessible name. An empty or unsafe `src` renders nothing.
+ * nothing from the provider before then and no consent is implied. The placeholder and a live status
+ * line stay over the frame while it loads; an error or timeout brings them back with a retry button.
+ * The link stays under the box after the frame loads, so a failed or blocked embed keeps a way through;
+ * without JavaScript the link still opens the page in a new tab. Without a title the component renders
+ * a message instead, because the frame would have no accessible name. An empty or unsafe `src` renders
+ * nothing.
  */
 export default function embed({ props }: ComponentProps<EmbedProps>) {
   const src = embedSrc(props.src);
@@ -131,7 +136,7 @@ export default function embed({ props }: ComponentProps<EmbedProps>) {
 
   return h(
     "div",
-    { class: EMBED_CLASS, "data-embed": src, "data-title": title },
+    { class: EMBED_CLASS, "data-embed": src, "data-title": title, "data-embed-state": "idle" },
     h(
       "div",
       { class: BOX_CLASS, "data-embed-box": true },
@@ -139,6 +144,7 @@ export default function embed({ props }: ComponentProps<EmbedProps>) {
         "div",
         { class: PLACEHOLDER_CLASS, "data-embed-placeholder": true },
         h("span", { class: TITLE_CLASS }, title),
+        h("p", { class: STATUS_CLASS, "data-embed-status": true, role: "status" }),
         h(
           "button",
           {

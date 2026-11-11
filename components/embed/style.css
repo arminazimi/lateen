@@ -25,7 +25,7 @@
   border: 0;
 }
 
-/* The placeholder names the embed before it loads; with JavaScript the button joins the title. */
+/* The placeholder names the embed and covers the frame until it reports that it loaded. */
 .embed-placeholder {
   position: absolute;
   inset: 0;
@@ -36,6 +36,7 @@
   gap: var(--space-3);
   padding-block: var(--space-4);
   padding-inline: var(--space-4);
+  background-color: var(--color-surface);
   text-align: center;
 }
 
@@ -47,6 +48,18 @@
   color: var(--color-text);
   font-size: var(--type-size-sm);
   line-height: var(--type-leading-body);
+}
+
+/* The island writes "Loading…" and then the failure text here; an empty line takes no space. */
+.embed-status {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--type-size-sm);
+  line-height: var(--type-leading-body);
+}
+
+.embed-status:empty {
+  display: none;
 }
 
 /* The island reveals the button, so a reader without JavaScript sees the title and the fallback link. */
