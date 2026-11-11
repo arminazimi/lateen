@@ -38,15 +38,18 @@
 
 /* Code is left to right even inside a right-to-left sentence: a tag name, a path, or a flag keeps
    its own direction and `unicode-bidi: isolate` stops it from reordering the words around it.
-   Geist Mono is named here so no body stack inherited from the RTL root can reach code. The `dir`
-   selector covers every right-to-left page, not only the ones the language stack styles: a Hebrew
-   page, or a page that sets `dir="rtl"` with a left-to-right language, isolates code the same way.
-   `text-align: start` in a left-to-right block is its left edge. */
-:where(pre, code, kbd):lang(fa),
-:where(pre, code, kbd):lang(ar),
-:lang(fa) :where(pre, code, kbd),
-:lang(ar) :where(pre, code, kbd),
-[dir="rtl"] :where(pre, code, kbd) {
+   Geist Mono is named here so no body stack inherited from the RTL root can reach code. `samp`
+   (sample output) and `var` (a placeholder or identifier) are machine text too, so they join
+   `code`, `kbd`, and `pre`. The `dir` selector covers every right-to-left page, not only the ones
+   the language stack styles: a Hebrew page, or a page that sets `dir="rtl"` with a left-to-right
+   language, isolates code the same way. `:not([dir])` leaves an authored `dir` alone, so a run the
+   author marked right to left is not forced back. `text-align: start` in a left-to-right block is
+   its left edge. */
+:where(pre, code, kbd, samp, var):lang(fa):not([dir]),
+:where(pre, code, kbd, samp, var):lang(ar):not([dir]),
+:lang(fa) :where(pre, code, kbd, samp, var):not([dir]),
+:lang(ar) :where(pre, code, kbd, samp, var):not([dir]),
+[dir="rtl"] :where(pre, code, kbd, samp, var):not([dir]) {
   direction: ltr;
   font-family: var(--type-font-mono);
   unicode-bidi: isolate;
@@ -54,8 +57,13 @@
 }
 
 /* The Markdown pipeline wraps Latin runs and numerals in right-to-left prose in `<span dir="ltr">`.
-   Code is isolated above; this states the same isolation for those runs, so a number or a path
-   keeps its place between the words around it. */
-[dir="rtl"] :where([dir="ltr"]) {
+   Any element that states its own direction is an island: the browser detects the direction of
+   `dir="auto"`, `dir="ltr"` and `dir="rtl"` set theirs, and isolation keeps the run from
+   reordering the prose around it. That holds at any depth, so a run nested inside a run of the
+   opposite direction stays whole, and a string of only neutral characters, digits, or punctuation
+   — which has no direction of its own — takes its place in the sentence without moving it. This
+   adds only the isolation: `direction` stays with the attribute, so the theme never overrules an
+   authored direction. */
+:where([dir="ltr"], [dir="rtl"], [dir="auto"]) {
   unicode-bidi: isolate;
 }

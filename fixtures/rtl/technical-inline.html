@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<!-- Technical inline direction: a Persian page (with an Arabic regional island) that quotes sample
+     output, a variable, a URL, a number, and a neutral-only run. Each run is isolated in its own
+     direction, nested runs keep the opposite direction, and an authored `dir` is never overruled. -->
+<html lang="fa-IR" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>خروجی نمونه</title>
+</head>
+<body>
+<main>
+<h1 id="title">خروجی نمونه</h1>
+<p id="samples">خروجی برنامه <samp id="sample">beacon: ready</samp> است و متغیر <var id="variable">retry_limit</var> را تنظیم کنید.</p>
+<p id="addresses">نشانی <span id="url" dir="ltr">https://example.com/api?q=1&amp;v=2</span> و شمارهٔ <span id="number" dir="ltr">1,024.50</span> در نسخهٔ ۲ ثبت شد.</p>
+<p id="neutral">جداکنندهٔ <span id="neutral-run" dir="auto">— 12 —</span> جهت ندارد.</p>
+<p id="nested">رشتهٔ <span id="ltr-run" dir="ltr">run <span id="rtl-run" dir="rtl">فارسی</span> end</span> تودرتو است.</p>
+<p id="forced">مقدار <code id="forced-rtl" dir="rtl">سمتِ راست</code> و <samp id="forced-ltr" dir="ltr">ok</samp>.</p>
+<section id="regional" lang="ar-EG" dir="rtl">
+<h2 id="regional-title">منطقة</h2>
+<p id="regional-prose">استخدم <code id="regional-code">--dry-run</code> للتجربة.</p>
+</section>
+</main>
+</body>
+</html>

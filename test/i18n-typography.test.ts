@@ -7,6 +7,7 @@ import { readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { JSDOM } from "jsdom";
 
 const read = (path: string): string => readFileSync(new URL(path, import.meta.url), "utf8");
 
@@ -164,6 +165,30 @@ test("a mixed sentence keeps each script in its own face", () => {
   assert.equal(served.get("،"), "Vazirmatn");
 });
 
+/** A page with the theme's styles, so a regional tag's cascade can be read back. */
+function styled(lang: string) {
+  const dom = new JSDOM(`<!DOCTYPE html><html lang="${lang}" dir="rtl"><body><p id="prose">متن</p></body></html>`);
+  for (const path of ["../styles/tokens.css", "../styles/base.css", "../styles/fonts.css", "../styles/rtl.css"]) {
+    const style = dom.window.document.createElement("style");
+    style.textContent = read(path);
+    dom.window.document.head.append(style);
+  }
+  return dom.window;
+}
+
+test("a regional Persian or Arabic tag gets the same prose typography", () => {
+  // `:lang(fa)` and `:lang(ar)` match `fa-IR`, `ar-EG`, and every other regional tag of the script.
+  for (const tag of ["fa-IR", "ar-EG"]) {
+    const window = styled(tag);
+    const body = window.getComputedStyle(window.document.body);
+    assert.deepEqual(familyNames(body.fontFamily), rtlStack, `${tag} should use the RTL body stack`);
+    assert.equal(body.overflowWrap, "break-word", `${tag} should break a long token instead of overflowing`);
+    assert.equal(body.letterSpacing, "normal", `${tag} should not space joined letters`);
+  }
+  const latin = styled("en");
+  assert.deepEqual(familyNames(latin.getComputedStyle(latin.document.body).fontFamily), bodyStack);
+});
+
 test("a command or identifier keeps the monospace face on either language page", () => {
   assert.equal(monoStack[0], "Geist Mono");
   assert.deepEqual(familiesOf("npm install --save-dev @scope/pkg@1.2.3", monoStack), ["Geist Mono"]);
@@ -171,6 +196,19 @@ test("a command or identifier keeps the monospace face on either language page",
 
   // The right-to-left layer changes prose faces only; it never remaps code to a proportional face.
   assert.doesNotMatch(stripComments(rtlCss), /--type-font-mono\s*:/, "rtl.css remaps the code face");
+});
+
+test("sample output and variables keep the monospace face on a right-to-left page", () => {
+  // `samp` and `var` are machine text: their values keep the mono face and isolate in rtl.css.
+  for (const value of ["beacon: ready", "retry_limit", "https://example.com/api?q=1", "1,024.50"]) {
+    assert.deepEqual(familiesOf(value, monoStack), ["Geist Mono"]);
+  }
+  const technical = blocks(rtlCss).find((block) => block.body.includes("font-family: var(--type-font-mono)"));
+  assert.ok(technical, "rtl.css does not give technical inline content the mono face");
+  for (const element of ["samp", "var"]) {
+    assert.ok(technical.selector.includes(element), `rtl.css does not name ${element}`);
+  }
+  assert.match(technical.body, /unicode-bidi:\s*isolate/);
 });
 
 test("Persian and Arabic prose may break a long token but never inside a joined word", () => {
