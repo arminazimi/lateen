@@ -18,6 +18,7 @@ import osTabs, {
   type OsTabsProps,
 } from "../components/os-tabs/index.ts";
 import {
+  ENHANCED_ATTR,
   PANEL_SELECTOR,
   STORAGE_KEY,
   TABLIST_SELECTOR,
@@ -314,7 +315,7 @@ class FakeEl implements TabsElement {
 }
 
 /** A group with one tab and panel per OS name, the first tab selected. */
-function fakeGroup(names: string[], { panels = names.length }: { panels?: number } = {}) {
+function fakeGroup(names: string[], { panels = names.length, enhanced = true }: { panels?: number; enhanced?: boolean } = {}) {
   const list = new FakeEl("list");
   list.hidden = true;
   const tabs = names.map((name, i) => {
@@ -325,13 +326,16 @@ function fakeGroup(names: string[], { panels = names.length }: { panels?: number
   });
   const panelEls = Array.from({ length: panels }, (_, i) => {
     const panel = new FakeEl(`p${i + 1}`);
-    panel.hidden = i !== 0;
+    panel.hidden = enhanced && i !== 0;
     return panel;
   });
   const group = {
-    attrs: new Map<string, string>(),
+    attrs: new Map<string, string>(enhanced ? [[ENHANCED_ATTR, ""]] : []),
     setAttribute(name: string, value: string) {
       this.attrs.set(name, value);
+    },
+    getAttribute(name: string) {
+      return this.attrs.get(name) ?? null;
     },
     querySelector(selector: string) {
       return selector === TABLIST_SELECTOR ? list : null;
@@ -404,16 +408,33 @@ test("activate() moves focus with the arrow keys and stops the default scroll", 
   assert.equal(tabs[1]?.focused, true);
   assert.equal(right.prevented, true);
   assert.deepEqual(shown(panels), [false, true, false]);
+  assert.equal(tabs[1]?.attrs.get("aria-selected"), "true", "the focused tab is the selected one");
   list.fire("keydown", { key: "ArrowLeft", target: tabs[1] });
   assert.equal(tabs[0]?.focused, true);
+  assert.equal(tabs[0]?.attrs.get("aria-selected"), "true");
 });
 
 test("activate() leaves a group whose tabs and panels do not pair up stacked", () => {
-  const { group, list, panels } = fakeGroup(["mac", "win"], { panels: 1 });
+  const { group, list, panels } = fakeGroup(["mac", "win"], { panels: 1, enhanced: false });
   activate(group, false);
   assert.equal(list.hidden, true, "the list stays as the server wrote it");
   assert.equal(group.attrs.get("data-enhanced"), undefined);
   assert.equal(panels[0]?.hidden, false, "no panel is hidden by the island");
+});
+
+test("activate() leaves every section stacked when wiring a panel fails", () => {
+  const { group, list, panels } = fakeGroup(["mac", "win"], { enhanced: false });
+  panels[1]!.setAttribute = () => {
+    throw new Error("broken panel");
+  };
+  assert.doesNotThrow(() => activate(group, false));
+  assert.equal(list.hidden, true, "the tab list stays hidden");
+  assert.equal(group.attrs.get("data-enhanced"), undefined, "the titles stay visible");
+  assert.deepEqual(
+    panels.map((panel) => panel.hidden),
+    [false, false],
+    "every section stays readable",
+  );
 });
 
 test("choose() switches a group to the tab for the OS", () => {
@@ -450,6 +471,15 @@ test("sync() applies the remembered OS to every group on the page", () => {
   sync(env);
   assert.deepEqual(selected(a.tabs), ["false", "true"]);
   assert.deepEqual(selected(b.tabs), ["false", "false", "true"]);
+});
+
+test("sync() touches only groups the island enhanced", () => {
+  const stacked = fakeGroup(["mac", "win"], { enhanced: false });
+  const { env } = fakeEnv([stacked], { platform: "Win32", stored: { [STORAGE_KEY]: "win" } });
+  sync(env);
+  assert.deepEqual(selected(stacked.tabs), ["true", "false"], "a stacked group keeps its first tab");
+  assert.deepEqual(shown(stacked.panels), [true, true], "every section stays visible");
+  assert.equal(stacked.list.hidden, true, "the tab list stays hidden");
 });
 
 test("sync() detects the OS when nothing is remembered", () => {
