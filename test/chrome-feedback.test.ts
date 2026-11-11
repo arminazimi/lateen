@@ -3,14 +3,17 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { Fragment } from "preact";
 import type { ChromeProps, LayoutProps, Page, Pager, Site, SiteConfig, SourcePos, Trail } from "@velella/mizzen/contracts";
-import feedback, { endpointOf } from "../chrome/feedback/index.ts";
+import feedback, { endpointOf, versionOf } from "../chrome/feedback/index.ts";
 import {
   activate,
   keyFor,
   KEY_PREFIX,
+  postJson,
   read,
   save,
+  vote,
   type FeedbackButton,
+  type FeedbackFetch,
   type FeedbackPost,
   type FeedbackRoot,
   type FeedbackStatus,
@@ -45,11 +48,11 @@ function siteConfig(options: Readonly<Record<string, unknown>> = {}): SiteConfig
 const trail: Trail = [];
 const pager: Pager = {};
 
-function pageWith(lang = "en", dir: Page["dir"] = "ltr"): Page {
+function pageWith(lang = "en", dir: Page["dir"] = "ltr", version?: unknown): Page {
   return {
     url: PAGE_URL,
     source: pos,
-    frontMatter: { title: "Install" },
+    frontMatter: { title: "Install", ...(version === undefined ? {} : { version }) },
     title: "Install",
     lang,
     dir,
@@ -129,12 +132,20 @@ test("endpointOf trims the configured address and rejects anything else", () => 
   assert.equal(endpointOf(siteConfig()), undefined);
 });
 
+test("versionOf reads a declared version and ignores anything else", () => {
+  assert.equal(versionOf(pageWith("en", "ltr", "v2")), "v2");
+  assert.equal(versionOf(pageWith("en", "ltr", "  v3  ")), "v3");
+  assert.equal(versionOf(pageWith("en", "ltr", "   ")), undefined);
+  assert.equal(versionOf(pageWith("en", "ltr", 2)), undefined);
+  assert.equal(versionOf(pageWith()), undefined);
+});
+
 test("with an endpoint it renders the question, two named buttons, and a status region", () => {
   const out = html(feedback(props(pageWith(), configured())));
 
   assert.match(
     out,
-    /^<div class="feedback" data-feedback hidden data-endpoint="https:\/\/feedback\.example\.com\/vote" data-url="\/example\/guide\/install\/" data-source="docs\/guide\/install\.md" data-thanks="Thanks for your feedback\." data-failed="Thanks for your answer\." data-already="You already answered for this page\.">/,
+    /^<div class="feedback" data-feedback hidden data-endpoint="https:\/\/feedback\.example\.com\/vote" data-url="\/example\/guide\/install\/" data-source="docs\/guide\/install\.md" data-lang="en" data-thanks="Thanks for your feedback\." data-failed="Thanks for your answer\." data-already="You already answered for this page\.">/,
   );
   assert.match(out, /<p class="feedback-question">Was this page helpful\?<\/p>/);
   assert.match(
@@ -165,6 +176,19 @@ test("Persian and Arabic pages get their own question and button names", () => {
   assert.match(ar, />نعم، ساعدتني هذه الصفحة<\/button>/);
   assert.match(ar, />لا<\/button>/);
   assert.match(ar, /data-thanks="شكرًا على ملاحظاتك\."/);
+});
+
+test("localized and versioned pages carry the exact language and declared version as data attributes", () => {
+  const fa = html(feedback(props(pageWith("fa", "rtl", "v2"), configured())));
+  assert.match(fa, /data-lang="fa"/);
+  assert.match(fa, /data-version="v2"/);
+
+  const plain = html(feedback(props(pageWith(), configured())));
+  assert.match(plain, /data-lang="en"/);
+  assert.doesNotMatch(plain, /data-version=/);
+
+  const blank = html(feedback(props(pageWith("en", "ltr", "  "), configured())));
+  assert.doesNotMatch(blank, /data-version=/);
 });
 
 test("the doc layout places the feedback under the page footer and before the pager", () => {
@@ -211,7 +235,7 @@ interface FakeRoot extends FeedbackRoot {
   status: FeedbackStatus;
 }
 
-function fakeRoot(endpoint = ENDPOINT): FakeRoot {
+function fakeRoot(endpoint = ENDPOINT, lang = "en", version?: string): FakeRoot {
   const buttons = [fakeButton("yes"), fakeButton("no")];
   const status: FeedbackStatus = { textContent: "Thanks for your feedback." };
   const root: FakeRoot = {
@@ -220,6 +244,8 @@ function fakeRoot(endpoint = ENDPOINT): FakeRoot {
       endpoint,
       url: PAGE_URL,
       source: pos.file,
+      lang,
+      ...(version === undefined ? {} : { version }),
       thanks: "Thanks for your feedback.",
       failed: "Thanks for your answer.",
       already: "You already answered for this page.",
@@ -265,13 +291,38 @@ function fakeStorage(initial: Readonly<Record<string, string>> = {}): FakeStorag
 }
 
 /** A POST that records its endpoint and body, and resolves or rejects as the test asks. */
-function fakePost(ok = true): FeedbackPost & { calls: Array<{ endpoint: string; body: string }> } {
+function fakePost(
+  results: boolean | readonly boolean[] = true,
+): FeedbackPost & { calls: Array<{ endpoint: string; body: string }> } {
+  const sequence = typeof results === "boolean" ? [results] : results;
   const calls: Array<{ endpoint: string; body: string }> = [];
   const post: FeedbackPost = (endpoint, body) => {
+    const ok = sequence[Math.min(calls.length, sequence.length - 1)] ?? true;
     calls.push({ endpoint, body });
     return ok ? Promise.resolve() : Promise.reject(new Error("offline"));
   };
   return Object.assign(post, { calls });
+}
+
+/** A POST whose first answer stays pending until the test resolves or rejects it. */
+function pendingPost(): FeedbackPost & {
+  calls: Array<{ endpoint: string; body: string }>;
+  resolve(): void;
+  reject(): void;
+} {
+  const calls: Array<{ endpoint: string; body: string }> = [];
+  let settle: { resolve: () => void; reject: (reason: Error) => void } | undefined;
+  const post: FeedbackPost = (endpoint, body) => {
+    calls.push({ endpoint, body });
+    return new Promise<void>((resolve, reject) => {
+      settle = { resolve, reject };
+    });
+  };
+  return Object.assign(post, {
+    calls,
+    resolve: () => settle?.resolve(),
+    reject: () => settle?.reject(new Error("offline")),
+  });
 }
 
 /** Lets the promise chain in `vote` settle. */
@@ -297,7 +348,9 @@ test("Yes posts the page URL and helpful:true, thanks the reader, and records th
   root.buttons[0]!.click();
   await settle();
 
-  assert.deepEqual(post.calls, [{ endpoint: ENDPOINT, body: `{"url":"${PAGE_URL}","helpful":true,"source":"${pos.file}"}` }]);
+  assert.deepEqual(post.calls, [
+    { endpoint: ENDPOINT, body: `{"url":"${PAGE_URL}","helpful":true,"source":"${pos.file}","lang":"en"}` },
+  ]);
   assert.equal(root.status.textContent, "Thanks for your feedback.");
   assert.deepEqual(storage.writes, [keyFor(PAGE_URL)]);
   assert.equal(storage.values.get(keyFor(PAGE_URL)), "yes");
@@ -316,11 +369,31 @@ test("No posts helpful:false and records that answer", async () => {
   root.buttons[1]!.click();
   await settle();
 
-  assert.deepEqual(post.calls, [{ endpoint: ENDPOINT, body: `{"url":"${PAGE_URL}","helpful":false,"source":"${pos.file}"}` }]);
+  assert.deepEqual(post.calls, [
+    { endpoint: ENDPOINT, body: `{"url":"${PAGE_URL}","helpful":false,"source":"${pos.file}","lang":"en"}` },
+  ]);
   assert.equal(storage.values.get(keyFor(PAGE_URL)), "no");
 });
 
-test("a failed request still shows a neutral thank-you and records nothing", async () => {
+test("a localized and versioned page sends its language and declared version", async () => {
+  const root = fakeRoot(ENDPOINT, "fa", "v2");
+  const storage = fakeStorage();
+  const post = fakePost();
+  activate(root, { storage, post });
+
+  root.buttons[0]!.click();
+  await settle();
+
+  assert.deepEqual(post.calls, [
+    {
+      endpoint: ENDPOINT,
+      body: `{"url":"${PAGE_URL}","helpful":true,"source":"${pos.file}","lang":"fa","version":"v2"}`,
+    },
+  ]);
+  assert.equal(storage.values.get(keyFor(PAGE_URL)), "yes");
+});
+
+test("a failed request announces the failure, records nothing, and re-enables retry", async () => {
   const root = fakeRoot();
   const storage = fakeStorage();
   const post = fakePost(false);
@@ -332,10 +405,95 @@ test("a failed request still shows a neutral thank-you and records nothing", asy
   assert.equal(post.calls.length, 1);
   assert.equal(root.status.textContent, "Thanks for your answer.");
   assert.deepEqual(storage.writes, []);
+  assert.equal(root.buttons[0]!.hidden, false);
+  assert.equal(root.buttons[1]!.hidden, false);
+  assert.equal(root.buttons[0]!.disabled, false);
+  assert.equal(root.buttons[1]!.disabled, false);
+});
+
+test("a retry after failure posts once more and records the accepted answer", async () => {
+  const root = fakeRoot();
+  const storage = fakeStorage();
+  const post = fakePost([false, true]);
+  activate(root, { storage, post });
+
+  root.buttons[0]!.click();
+  await settle();
+  assert.equal(post.calls.length, 1);
+  assert.equal(root.buttons[0]!.disabled, false);
+
+  root.buttons[1]!.click();
+  await settle();
+
+  assert.equal(post.calls.length, 2);
+  assert.deepEqual(post.calls[1], {
+    endpoint: ENDPOINT,
+    body: `{"url":"${PAGE_URL}","helpful":false,"source":"${pos.file}","lang":"en"}`,
+  });
+  assert.equal(root.status.textContent, "Thanks for your feedback.");
+  assert.deepEqual(storage.writes, [keyFor(PAGE_URL)]);
+  assert.equal(storage.values.get(keyFor(PAGE_URL)), "no");
   assert.equal(root.buttons[0]!.hidden, true);
   assert.equal(root.buttons[1]!.hidden, true);
+});
+
+test("double clicks during a pending request submit once and record once", async () => {
+  const root = fakeRoot();
+  const storage = fakeStorage();
+  const post = pendingPost();
+  activate(root, { storage, post });
+
+  root.buttons[0]!.click();
+  root.buttons[1]!.click();
+  await vote(root, root.buttons[0]!, { storage, post });
+
+  assert.equal(post.calls.length, 1);
   assert.equal(root.buttons[0]!.disabled, true);
   assert.equal(root.buttons[1]!.disabled, true);
+  assert.deepEqual(storage.writes, []);
+
+  post.resolve();
+  await settle();
+
+  assert.equal(root.status.textContent, "Thanks for your feedback.");
+  assert.deepEqual(storage.writes, [keyFor(PAGE_URL)]);
+  assert.equal(storage.values.get(keyFor(PAGE_URL)), "yes");
+});
+
+test("a stale or repeated click after success cannot submit or record again", async () => {
+  const root = fakeRoot();
+  const storage = fakeStorage();
+  const post = fakePost();
+  activate(root, { storage, post });
+
+  root.buttons[0]!.click();
+  await settle();
+
+  root.buttons[0]!.click();
+  root.buttons[1]!.click();
+  await vote(root, root.buttons[0]!, { storage, post });
+  await settle();
+
+  assert.equal(post.calls.length, 1);
+  assert.deepEqual(storage.writes, [keyFor(PAGE_URL)]);
+});
+
+test("postJson rejects on an HTTP error, a network failure, and a missing fetch", async () => {
+  const http: FeedbackFetch = () => Promise.resolve({ ok: false, status: 503 });
+  await assert.rejects(() => postJson(http, ENDPOINT, "{}"), /HTTP 503/);
+
+  const offline: FeedbackFetch = () => Promise.reject(new Error("offline"));
+  await assert.rejects(() => postJson(offline, ENDPOINT, "{}"), /offline/);
+
+  await assert.rejects(() => postJson(undefined, ENDPOINT, "{}"), /fetch is unavailable/);
+
+  const ok: FeedbackFetch = (_url, init) => {
+    assert.equal(init.method, "POST");
+    assert.equal(init.headers["content-type"], "application/json");
+    assert.equal(init.body, "{}");
+    return Promise.resolve({ ok: true, status: 204 });
+  };
+  await assert.doesNotReject(() => postJson(ok, ENDPOINT, "{}"));
 });
 
 test("a session that already answered shows the stored acknowledgement, not the buttons", () => {
@@ -383,6 +541,37 @@ test("a vote is stored under one session key per page, and storage failures are 
   };
   assert.equal(read(broken, PAGE_URL), undefined);
   assert.doesNotThrow(() => save(broken, PAGE_URL, "yes"));
+});
+
+test("a denied sessionStorage fails soft: the buttons appear and an accepted vote still thanks the reader", async () => {
+  const broken: FeedbackStorage = {
+    getItem() {
+      throw new Error("denied");
+    },
+    setItem() {
+      throw new Error("denied");
+    },
+  };
+  const root = fakeRoot();
+  const post = fakePost();
+
+  assert.doesNotThrow(() => activate(root, { storage: broken, post }));
+  assert.equal(root.hidden, false);
+  assert.equal(root.buttons[0]!.hidden, false);
+
+  root.buttons[0]!.click();
+  await settle();
+
+  assert.equal(post.calls.length, 1);
+  assert.equal(root.status.textContent, "Thanks for your feedback.");
+});
+
+test("the vote buttons are native buttons, so Enter and Space activate the same click path", () => {
+  const out = html(feedback(props(pageWith(), configured())));
+
+  assert.equal([...out.matchAll(/<button\b/g)].length, 2);
+  assert.equal([...out.matchAll(/<button type="button"[^>]*>/g)].length, 2);
+  assert.doesNotMatch(out, /tabindex=|onkeydown=|onclick=/);
 });
 
 test("the island never reads or writes cookies or localStorage, and touches sessionStorage only", () => {

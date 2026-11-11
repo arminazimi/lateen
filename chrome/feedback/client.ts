@@ -7,15 +7,29 @@
 /** The two answers the buttons carry in `data-feedback-vote`. */
 export type FeedbackVote = "yes" | "no";
 
-/** What the endpoint receives: the page's URL, whether it helped, and the source file the page came from. */
+/**
+ * What the endpoint receives: the page's URL, whether it helped, the source file the page came from,
+ * the page language, and the version its front matter declares when it declares one. Nothing here
+ * identifies the reader.
+ */
 export interface FeedbackPayload {
   readonly url: string;
   readonly helpful: boolean;
   readonly source: string;
+  readonly lang: string;
+  readonly version?: string;
 }
 
 /** The POST the island performs; tests pass a fake, the browser passes `fetch`. */
 export type FeedbackPost = (endpoint: string, body: string) => Promise<void>;
+
+/** The part of `fetch` the island uses. */
+export interface FeedbackFetch {
+  (
+    url: string,
+    init: { method: string; headers: Record<string, string>; body: string },
+  ): Promise<{ ok: boolean; status: number }>;
+}
 
 /** The parts of `sessionStorage` the island uses. */
 export interface FeedbackStorage {
@@ -43,6 +57,8 @@ export interface FeedbackRoot {
     endpoint?: string;
     url?: string;
     source?: string;
+    lang?: string;
+    version?: string;
     thanks?: string;
     failed?: string;
     already?: string;
@@ -55,6 +71,13 @@ export interface FeedbackRoot {
 export interface FeedbackEnv {
   storage: FeedbackStorage;
   post: FeedbackPost;
+}
+
+/** A non-empty trimmed string, or undefined. */
+function text(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed === "" ? undefined : trimmed;
 }
 
 /** Every stored vote lives under this prefix plus the page's URL. */
@@ -94,36 +117,76 @@ export function submit(endpoint: string, payload: FeedbackPayload, post: Feedbac
   return post(endpoint, JSON.stringify(payload));
 }
 
+/** Writes the outcome on the status region; `role="status"` announces the change. */
+function announce(root: FeedbackRoot, message: string): void {
+  const status = root.querySelector(".feedback-status");
+  if (status !== null) status.textContent = message;
+}
+
+/** Shows both buttons and disables them while a request is in flight, so a double click cannot submit twice. */
+function setPending(root: FeedbackRoot, pending: boolean): void {
+  for (const button of root.querySelectorAll("[data-feedback-vote]")) {
+    button.hidden = false;
+    button.disabled = pending;
+  }
+}
+
 /** Hides and disables every button, then writes the outcome on the status region. */
-export function finish(root: FeedbackRoot, text: string): void {
+export function finish(root: FeedbackRoot, message: string): void {
   for (const button of root.querySelectorAll("[data-feedback-vote]")) {
     button.hidden = true;
     button.disabled = true;
   }
-  const status = root.querySelector(".feedback-status");
-  if (status !== null) status.textContent = text;
+  announce(root, message);
 }
 
 /**
+ * The in-flight attempt per widget. A click while one is pending is ignored, and only the answer for
+ * the current attempt may record a vote or write the status, so a stale response cannot land twice.
+ */
+const inFlight = new WeakMap<FeedbackRoot, number>();
+let attempts = 0;
+
+/**
  * Posts one answer and writes the outcome. The vote is stored only after the endpoint accepts it, so
- * a later page in the same session shows the same thanks; a failed request shows a neutral thanks
- * and leaves the vote unrecorded, so the reader may answer again after a reload.
+ * a later page in the same session shows the same thanks; a failed request announces its translated
+ * failure message and re-enables both buttons so the reader can retry, leaving the vote unrecorded.
  */
 export function vote(root: FeedbackRoot, button: FeedbackButton, env: FeedbackEnv): Promise<void> {
   const answer = voteOf(button);
   const endpoint = root.dataset.endpoint ?? "";
   const url = root.dataset.url ?? "";
   const source = root.dataset.source ?? "";
+  const lang = root.dataset.lang ?? "";
+  const version = text(root.dataset.version);
   if (answer === undefined || endpoint === "" || url === "") return Promise.resolve();
+  // A hidden or disabled button is a finished or in-flight widget, not a new answer.
+  if (button.hidden || button.disabled || inFlight.has(root)) return Promise.resolve();
 
-  for (const other of root.querySelectorAll("[data-feedback-vote]")) other.disabled = true;
-  return submit(endpoint, { url, helpful: answer === "yes", source }, env.post).then(
+  const attempt = ++attempts;
+  inFlight.set(root, attempt);
+  setPending(root, true);
+  announce(root, "");
+
+  const payload: FeedbackPayload = {
+    url,
+    helpful: answer === "yes",
+    source,
+    lang,
+    ...(version === undefined ? {} : { version }),
+  };
+  return submit(endpoint, payload, env.post).then(
     () => {
+      if (inFlight.get(root) !== attempt) return;
+      inFlight.delete(root);
       save(env.storage, url, answer);
       finish(root, root.dataset.thanks ?? "");
     },
     () => {
-      finish(root, root.dataset.failed ?? "");
+      if (inFlight.get(root) !== attempt) return;
+      inFlight.delete(root);
+      setPending(root, false);
+      announce(root, root.dataset.failed ?? "");
     },
   );
 }
@@ -153,19 +216,11 @@ export function activate(root: FeedbackRoot, env: FeedbackEnv): void {
   }
 }
 
-/** The browser globals the island needs; the theme's tsconfig has no DOM lib. */
-const globals = globalThis as unknown as {
-  document?: { querySelector(selector: string): unknown };
-  sessionStorage?: FeedbackStorage;
-  fetch?: (
-    url: string,
-    init: { method: string; headers: Record<string, string>; body: string },
-  ) => Promise<{ ok: boolean; status: number }>;
-};
-
-/** `fetch` as the island wants it: POSTs JSON and rejects on an HTTP error. */
-function browserPost(endpoint: string, body: string): Promise<void> {
-  const fetch = globals.fetch;
+/**
+ * POSTs `body` as JSON through `fetch`, rejecting when `fetch` is unavailable and on an HTTP error,
+ * so the widget shows its failure message and offers a retry instead of pretending it succeeded.
+ */
+export function postJson(fetch: FeedbackFetch | undefined, endpoint: string, body: string): Promise<void> {
   if (fetch === undefined) return Promise.reject(new Error("fetch is unavailable"));
   return fetch(endpoint, {
     method: "POST",
@@ -176,10 +231,41 @@ function browserPost(endpoint: string, body: string): Promise<void> {
   });
 }
 
-// The island runs when the browser loads it; nothing happens in a runtime without a document.
+/** The browser globals the island needs; the theme's tsconfig has no DOM lib. */
+const globals = globalThis as unknown as {
+  document?: { querySelector(selector: string): unknown };
+  sessionStorage?: FeedbackStorage;
+  fetch?: FeedbackFetch;
+};
+
+/** A storage that holds nothing, used when the browser denies `sessionStorage`. */
+const NO_STORAGE: FeedbackStorage = {
+  getItem: () => null,
+  setItem: () => {
+    /* nothing to save */
+  },
+};
+
+/** The browser's `sessionStorage`, or a no-op when even reading the property is denied. */
+function storage(): FeedbackStorage {
+  try {
+    return globals.sessionStorage ?? NO_STORAGE;
+  } catch {
+    return NO_STORAGE;
+  }
+}
+
+/** `fetch` as the island wants it: POSTs JSON and rejects on an HTTP error. */
+function browserPost(endpoint: string, body: string): Promise<void> {
+  return postJson(globals.fetch, endpoint, body);
+}
+
+// The island runs when the browser loads it; nothing happens in a runtime without a document. A
+// denied `sessionStorage` or a missing `fetch` fails soft: the buttons still appear, and a failed
+// request offers retry instead of hiding the widget.
 if (globals.document !== undefined) {
   const root = globals.document.querySelector("[data-feedback]");
-  if (root !== null && globals.sessionStorage !== undefined && globals.fetch !== undefined) {
-    activate(root as FeedbackRoot, { storage: globals.sessionStorage, post: browserPost });
+  if (root !== null) {
+    activate(root as FeedbackRoot, { storage: storage(), post: browserPost });
   }
 }

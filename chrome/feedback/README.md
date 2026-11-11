@@ -11,14 +11,18 @@ optional: the unit renders nothing at all unless the site configures an endpoint
   come from the theme's string table, so English, Persian, and Arabic pages read their own language.
 - `style.css`: token-only, logical-property styles. The widget and its buttons start `hidden` so a
   visitor without JavaScript never sees a control that would do nothing.
-- `client.ts`: the island. It reveals the widget, reads `data-endpoint`, `data-url`, and `data-source`
-  from the root, POSTs `{ "url": "<page url>", "helpful": true | false, "source": "<source file>" }` as
-  JSON when a button is pressed, and writes the outcome on the `role="status"` region. The source file is
-  the page's canonical path from the model, so an answer keeps both the page and the text it came from.
-  A failed request still shows a neutral thank-you. The only stored value is
-  `sessionStorage["lateen-feedback:<page url>"]` (`yes` or `no`); the island never reads or writes
-  cookies or `localStorage`. A page answered earlier in the same session shows the stored
-  acknowledgement instead of the buttons.
+- `client.ts`: the island. It reveals the widget, reads `data-endpoint`, `data-url`, `data-source`,
+  `data-lang`, and `data-version` from the root, POSTs
+  `{ "url": "<page url>", "helpful": true | false, "source": "<source file>", "lang": "<page language>", "version"?: "<declared version>" }`
+  as JSON when a button is pressed, and writes the outcome on the `role="status"` region. The source
+  file is the page's canonical path from the model, and the version comes from the page's `version`
+  front matter when it declares one, so an answer keeps the exact localized/versioned page and the
+  text it came from. Both buttons disable while a request is pending, so a double click submits once.
+  A failed request (network, HTTP, or missing `fetch`) writes the translated failure message and
+  re-enables both buttons so the reader can retry; a stale response cannot record a vote. The only
+  stored value is `sessionStorage["lateen-feedback:<page url>"]` (`yes` or `no`); the island never
+  reads or writes cookies or `localStorage`, and a denied `sessionStorage` still reveals the buttons.
+  A page answered earlier in the same session shows the stored acknowledgement instead of the buttons.
 
 ## Configure
 
@@ -43,5 +47,6 @@ hidden, a built page shows nothing until chrome islands are wired.
 
 ## Test
 
-`packages/theme/test/chrome-feedback.test.ts` covers the rendered markup, the missing-endpoint case,
-the POST payload, session-only storage, an existing vote, and the failure path.
+`test/chrome-feedback.test.ts` covers the rendered markup, the missing-endpoint case, localized and
+versioned POST payloads, pending/double-click races, stale responses, HTTP/network failure, retry,
+session-only storage and storage denial, an existing vote, and keyboard-native buttons.

@@ -1,5 +1,5 @@
 import { h } from "preact";
-import type { Chrome, SiteConfig } from "@velella/mizzen/contracts";
+import type { Chrome, Page, SiteConfig } from "@velella/mizzen/contracts";
 import { t } from "../../i18n/index.ts";
 
 /** The `theme.options.feedback` block as the config wrote it. */
@@ -21,19 +21,26 @@ export function endpointOf(config: SiteConfig): string | undefined {
   return text((options as FeedbackOptions).endpoint);
 }
 
+/** The version the page declares in its front matter under `version`, or `undefined` when it declares none. */
+export function versionOf(page: Page): string | undefined {
+  return text(page.frontMatter.version);
+}
+
 /**
  * The page feedback widget: a question with two vote buttons and a status region. It renders nothing
  * when the site sets no endpoint, so a site that does not use it carries no markup and no request
  * address. The root and both buttons start `hidden`; `client.ts` reveals them, so a visitor without
  * JavaScript sees no control that would do nothing. The vote is posted to
- * `theme.options.feedback.endpoint` with the page's own URL and its canonical source file, so whoever
- * reads the answers can find the page and the text it came from.
+ * `theme.options.feedback.endpoint` with the page's own URL, its canonical source file, its language,
+ * and the version its front matter declares, so whoever reads the answers can find the exact page
+ * and the text it came from.
  */
 const feedback: Chrome = ({ site, page }) => {
   const endpoint = endpointOf(site.config);
   if (endpoint === undefined) return null;
 
   const lang = page.lang;
+  const version = versionOf(page);
   return h(
     "div",
     {
@@ -43,6 +50,8 @@ const feedback: Chrome = ({ site, page }) => {
       "data-endpoint": endpoint,
       "data-url": page.url,
       "data-source": page.source.file,
+      "data-lang": lang,
+      ...(version === undefined ? {} : { "data-version": version }),
       "data-thanks": t(lang, "feedback_thanks"),
       "data-failed": t(lang, "feedback_failed"),
       "data-already": t(lang, "feedback_already"),
