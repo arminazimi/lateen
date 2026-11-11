@@ -51,4 +51,6 @@ pnpm add mizzen
 - The tab list starts `hidden`; without JavaScript the panels stack, each under its label.
 - Arrow keys move between tabs, `Home` and `End` go to the ends, and the arrows follow the reading direction in right-to-left pages.
 - Choosing a label in one group switches every group on the page that offers it, and the choice is remembered on later pages.
+- A chosen label is also written to `?lang=` in the address bar, replacing the current history entry, so a copied URL reopens that example in every group that offers it. Other query parameters and any unrelated fragment stay as they were.
+- A fragment that points into a closed panel — a heading inside one, or the panel itself — opens that panel on load and whenever the fragment changes. The reader is not scrolled twice when the panel was already visible.
 - The blocks are plain fenced code inside the group; the `code` component does not run inside code tabs yet, so the tabs show the fence without Shiki colors.

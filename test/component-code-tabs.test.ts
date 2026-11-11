@@ -211,6 +211,7 @@ class FakeEl implements TabsElement {
   hidden = false;
   readonly attrs = new Map<string, string>();
   focused = false;
+  textContent: string | null = null;
   readonly listeners = new Map<string, Array<(event: TabsEvent) => void>>();
   readonly id: string;
   constructor(id: string) {
@@ -332,8 +333,42 @@ test("activate() leaves a key event whose target is not a tab alone", () => {
   assert.equal(tabs[1]?.focused, false);
 });
 
-test("activate() changes nothing when tabs and panels do not pair up, so the blocks stay stacked", () => {
-  const { group, list, panels } = fakeGroup(2, { panels: 1 });
+test("activate() reports every explicit click and key choice, but not the initial selection", () => {
+  const { group, list, tabs } = fakeGroup(2);
+  tabs[0]!.textContent = "npm";
+  tabs[1]!.textContent = "pnpm";
+  const chosen: string[] = [];
+  activate(group, false, (label) => chosen.push(label));
+  assert.deepEqual(chosen, [], "the first tab is not a choice");
+  tabs[1]!.fire("click", { target: tabs[1] });
+  list.fire("keydown", { key: "ArrowLeft", target: tabs[1] });
+  assert.deepEqual(chosen, ["pnpm", "npm"]);
+});
+
+test("activate() reports the right-to-left neighbour a key moves to, and keeps focus on it", () => {
+  const { group, list, tabs } = fakeGroup(3);
+  tabs.forEach((tab, i) => (tab.textContent = `l${i}`));
+  const chosen: string[] = [];
+  activate(group, true, (label) => chosen.push(label));
+  list.fire("keydown", { key: "ArrowRight", target: tabs[0] });
+  assert.equal(tabs[2]?.focused, true);
+  assert.deepEqual(chosen, ["l2"]);
+  assert.deepEqual(
+    tabs.map((tab) => tab.attrs.get("aria-selected")),
+    ["false", "false", "true"],
+  );
+});
+
+test("activate() reports nothing for a tab with no label", () => {
+  const { group, tabs } = fakeGroup(2);
+  const chosen: string[] = [];
+  activate(group, false, (label) => chosen.push(label));
+  tabs[1]!.fire("click", { target: tabs[1] });
+  assert.deepEqual(chosen, []);
+  assert.equal(tabs[1]?.attrs.get("aria-selected"), "true", "the panel still switches");
+});
+
+test("activate() changes nothing when tabs and panels do not pair up, so the blocks stay stacked", () => {  const { group, list, panels } = fakeGroup(2, { panels: 1 });
   activate(group, false);
   assert.equal(list.hidden, false, "the list stays as the server wrote it");
   assert.equal(group.attrs.get("data-enhanced"), undefined);

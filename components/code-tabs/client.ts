@@ -3,7 +3,8 @@
 // The sync part (`sync.ts`) rides along through this import: the engine loads exactly this one file
 // as the component's island, so the import is the only way the sync module
 // reaches the browser. It waits a microtask before it starts, so every group is already enhanced.
-import "./sync.ts";
+// `shareChoice` writes an explicit choice to the URL, which is why the import is named as well.
+import { shareChoice } from "./sync.ts";
 
 /** Attribute on each group root (`data-code-tabs`); the island finds groups by it. */
 export const GROUP_SELECTOR = "[data-code-tabs]";
@@ -14,6 +15,8 @@ export const PANEL_SELECTOR = ".code-tabs-panel";
 /** An element the island touches: a tab, a panel, or the tab list. */
 export interface TabsElement {
   readonly id: string;
+  /** A tab's label, as rendered; panels and the tab list have no text of their own. */
+  readonly textContent?: string | null;
   hidden: boolean;
   setAttribute(name: string, value: string): void;
   focus(): void;
@@ -74,15 +77,23 @@ export function select(tabs: readonly TabsElement[], panels: readonly TabsElemen
 
 /**
  * Wires one group. A group whose tabs and panels do not pair up stays stacked: the island changes
- * nothing. `rtl` is the group's direction, which decides which arrow key moves forward. The group is
- * enhanced only after every part is wired; a failure halfway through leaves its blocks stacked and
- * readable rather than hidden behind a tab list that does not work.
+ * nothing. `rtl` is the group's direction, which decides which arrow key moves forward. `onSelect`
+ * hears every explicit choice — a click or a key — so the page can make it shareable; the initial
+ * selection is not a choice and is not reported. The group is enhanced only after every part is
+ * wired; a failure halfway through leaves its blocks stacked and readable rather than hidden behind
+ * a tab list that does not work.
  */
-export function activate(group: TabsGroup, rtl: boolean): void {
+export function activate(group: TabsGroup, rtl: boolean, onSelect?: (label: string) => void): void {
   const list = group.querySelector(TABLIST_SELECTOR);
   const tabs = [...group.querySelectorAll(TAB_SELECTOR)];
   const panels = [...group.querySelectorAll(PANEL_SELECTOR)];
   if (!list || tabs.length === 0 || tabs.length !== panels.length) return;
+
+  const choose = (index: number): void => {
+    select(tabs, panels, index);
+    const label = tabs[index]?.textContent?.trim();
+    if (label) onSelect?.(label);
+  };
 
   try {
     tabs.forEach((tab, i) => {
@@ -91,7 +102,7 @@ export function activate(group: TabsGroup, rtl: boolean): void {
         panel.setAttribute("role", "tabpanel");
         panel.setAttribute("aria-labelledby", tab.id);
       }
-      tab.addEventListener("click", () => select(tabs, panels, i));
+      tab.addEventListener("click", () => choose(i));
     });
 
     list.addEventListener("keydown", (event) => {
@@ -100,7 +111,7 @@ export function activate(group: TabsGroup, rtl: boolean): void {
       const to = step(event.key ?? "", from, tabs.length, rtl);
       if (to === undefined) return;
       event.preventDefault();
-      select(tabs, panels, to);
+      choose(to);
       tabs[to]?.focus();
     });
 
@@ -120,7 +131,7 @@ if (typeof document !== "undefined") {
   for (const element of document.querySelectorAll(GROUP_SELECTOR)) {
     const group = element as TabsGroup;
     try {
-      activate(group, getComputedStyle(element).direction === "rtl");
+      activate(group, getComputedStyle(element).direction === "rtl", (label) => shareChoice(label, group));
     } catch {
       // One group that cannot be read must not keep the rest of the page from enhancing.
     }
