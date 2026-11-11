@@ -288,9 +288,10 @@ function unavailableLabel(site: Site): string {
  * written as a relative `hreflang` a crawler cannot use.
  */
 function absoluteUrl(config: SiteConfig, value: string): string | undefined {
-  if (/^https?:\/\//i.test(value)) return value;
   const origin = (config.url ?? "").replace(/\/+$/, "");
-  if (origin === "" || !value.startsWith("/")) return undefined;
+  if (origin === "") return undefined;
+  if (/^https?:\/\//i.test(value)) return value;
+  if (!value.startsWith("/")) return undefined;
   return `${origin}${value}`;
 }
 

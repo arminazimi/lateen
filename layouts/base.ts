@@ -85,7 +85,15 @@ function headNodes(head: Head, site: Site, page: Page) {
     const canonical = canonicalLink(site, page);
     if (canonical !== undefined) links.push(canonical);
   }
-  links.push(...alternateLinks(site, page));
+  const alternates = new Set(
+    links.flatMap((tag) => (tag.rel === "alternate" && tag.attrs?.hreflang !== undefined ? [tag.attrs.hreflang.toLowerCase()] : [])),
+  );
+  for (const alternate of alternateLinks(site, page)) {
+    const hreflang = alternate.attrs?.hreflang;
+    if (hreflang !== undefined && alternates.has(hreflang.toLowerCase())) continue;
+    links.push(alternate);
+    if (hreflang !== undefined) alternates.add(hreflang.toLowerCase());
+  }
   return [
     h("meta", { charset: "utf-8" }),
     h("meta", { name: "viewport", content: "width=device-width, initial-scale=1" }),

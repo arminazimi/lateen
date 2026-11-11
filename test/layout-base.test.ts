@@ -264,6 +264,45 @@ test("adds absolute hreflang alternates and x-default from the translation model
   assert.equal(html.match(/rel="alternate"/g)?.length, 3);
 });
 
+test("keeps the engine's hreflang alternates and adds no duplicate", () => {
+  const props = multilingual({ ...layoutProps().page, url: "/docs/fa/guide/", lang: "fa", dir: "rtl" });
+  const engineLinks = [
+    { rel: "alternate", href: "https://example.com/docs/guide/", attrs: { hreflang: "en" } },
+    { rel: "alternate", href: "https://example.com/docs/fa/guide/", attrs: { hreflang: "fa" } },
+    { rel: "alternate", href: "https://example.com/docs/guide/", attrs: { hreflang: "x-default" } },
+  ];
+  const html = out({ ...props, head: { ...props.head, links: engineLinks } });
+
+  for (const hreflang of ["en", "fa", "x-default"]) {
+    assert.equal(html.match(new RegExp(`<link hreflang="${hreflang}" rel="alternate"`, "g"))?.length, 1, `one ${hreflang} link`);
+  }
+  assert.equal(html.match(/rel="alternate"/g)?.length, 3);
+});
+
+test("writes no canonical or alternate without a site url, even for an absolute mapped alternate", () => {
+  const props = multilingual({ ...layoutProps().page, url: "/docs/fa/guide/", lang: "fa", dir: "rtl" }, { url: "" });
+  const html = out({
+    ...props,
+    site: {
+      ...props.site,
+      data: {
+        languages: {
+          alternates: {
+            "/guide/": {
+              en: "https://example.com/docs/guide/",
+              fa: "https://example.com/docs/fa/guide/",
+            },
+          },
+        },
+      },
+    },
+  });
+
+  assert.doesNotMatch(html, /rel="canonical"/);
+  assert.doesNotMatch(html, /hreflang=/);
+  assert.doesNotMatch(html, /rel="alternate"/);
+});
+
 test("omits x-default and every alternate when the default language has no page or the site has no url", () => {
   const onlyFa = multilingual({ ...layoutProps().page, url: "/docs/fa/guide/", lang: "fa", dir: "rtl" });
   const single = { ...onlyFa, site: { ...onlyFa.site, pages: [onlyFa.page] } };
