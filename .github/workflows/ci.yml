@@ -35,6 +35,31 @@ jobs:
         run: scripts/smoke-package.sh
         working-directory: lateen
 
+  # Builds the docs site and a fixture site, then runs axe-core in Chromium over the layouts, both
+  # themes, the right-to-left locales, and the open drawer and search states. Fails on a critical or
+  # serious violation that test/accessibility/baseline.json does not list.
+  a11y:
+    name: a11y
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: lateen
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+      - name: Install
+        run: npm ci --no-audit --no-fund
+        working-directory: lateen
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+        working-directory: lateen
+      - name: Accessibility gate
+        run: npm run test:a11y
+        working-directory: lateen
+
   # Measures line coverage and publishes it for the README badge. It runs on main only and holds the
   # only write permission in this workflow: it can push the `badges` branch and nothing else. The badge
   # is a shields.io endpoint badge reading coverage.json from that branch, so the number follows main.
