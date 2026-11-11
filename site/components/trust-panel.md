@@ -43,7 +43,8 @@ The entry also works under a `pages` key, which wins when both shapes are presen
 the page's review date from `site.data.reviewers[url].date`. A valid build id is exposed as
 `data-trust-build`, a generation date as `data-trust-generated`, and a review date as
 `data-trust-reviewed`; the two dates render as rows labelled "Updated" and "Reviewed" with exact
-`<time datetime>` values. A malformed or future date is left out, a review dated after its build is left
+`<time datetime>` values, keeping any written time and offset while the visible text stays localised.
+A malformed or future date is left out, a review dated after its build is left
 out, and a trust entry that names a different build than `site.data.build.id` keeps no build provenance.
 None of this changes the level: missing provenance cannot turn a partial, unreviewed, or unknown panel
 into a verified one.

@@ -57,8 +57,10 @@ asOf: 2026-03-06
 Valid provenance ties the recorded evidence to the build and review that produced it. The panel exposes
 it as `data-trust-build`, `data-trust-generated`, and `data-trust-reviewed` on the panel root. A build
 generation date and a human review date render as their own rows, labelled with the existing `updated`
-and `reviewed` strings, each with an exact `<time datetime>` value. The build date is not a source-change
-date, and the review date is not a build date, so the two never stand in for each other.
+and `reviewed` strings, each with an exact `<time datetime>` value. A written date-time keeps its clock,
+seconds, and offset in `datetime` and the tooltip; only the visible text is localised to its calendar
+day. The build date is not a source-change date, and the review date is not a build date, so the two
+never stand in for each other.
 
 A malformed or impossible date is left out. A date after the build's as-of day is future evidence and is
 left out too, as is a review dated after the generation it describes. When an entry names a build and

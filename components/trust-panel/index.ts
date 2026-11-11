@@ -253,13 +253,16 @@ interface ProvenanceDate {
 function provenanceDate(value: unknown): ProvenanceDate | undefined {
   if (value instanceof Date) {
     if (Number.isNaN(value.getTime())) return undefined;
-    const iso = value.toISOString().slice(0, 10);
-    return { iso, day: iso };
+    const iso = value.toISOString();
+    return { iso, day: iso.slice(0, 10) };
   }
   const text = textOf(value);
   if (text === undefined) return undefined;
   const calendar = calendarDate(text, "en");
-  return calendar === undefined ? undefined : { iso: text, day: calendar.datetime };
+  if (calendar === undefined) return undefined;
+  // A written date-time must parse as ISO too, so a malformed clock or offset cannot reach `datetime`.
+  if (text !== calendar.datetime && Number.isNaN(Date.parse(text))) return undefined;
+  return { iso: text, day: calendar.datetime };
 }
 
 /** The `site.data.build` block, or undefined when the site writes none. */
@@ -436,17 +439,19 @@ function row(label: string, value: string, className: string) {
   ];
 }
 
-/** One provenance row: its existing translated label and an exact `<time>` value in the page's calendar. */
+/** One provenance row: its existing translated label, the full ISO value, and the page's calendar text. */
 function dateRow(label: string, iso: string | undefined, lang: string, className: string) {
   if (iso === undefined) return [];
   const date = calendarDate(iso, lang);
   if (date === undefined) return [];
+  // The visible text stays localised; `datetime` and the tooltip keep every part of the written timestamp.
+  const exact = iso === date.datetime ? date.text : iso;
   return [
     h("dt", { class: LABEL_CLASS }, label),
     h(
       "dd",
       { class: `${VALUE_CLASS} ${className}` },
-      h("time", { datetime: date.datetime, title: date.text, "aria-label": date.text }, date.text),
+      h("time", { datetime: iso, title: exact, "aria-label": exact }, date.text),
     ),
   ];
 }

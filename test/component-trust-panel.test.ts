@@ -368,6 +368,30 @@ test("the trust entry's build, generation, and review evidence are exposed with 
   assert.match(out, /trust-panel-reviewer">Reviewed by Ada<\/dd>/);
 });
 
+test("timed provenance keeps its full ISO value in the machine-readable time", () => {
+  const out = render({
+    trust: {
+      "/guide/install/": {
+        ...entry,
+        buildId: "build-42",
+        generatedAt: "2026-03-06T10:00:00Z",
+        reviewedAt: "2026-03-04T09:30:15+03:30",
+      },
+    },
+  });
+  assert.ok(out);
+  assert.match(out, /data-trust-generated="2026-03-06T10:00:00Z"/);
+  assert.match(out, /data-trust-reviewed="2026-03-04T09:30:15\+03:30"/);
+  assert.match(
+    out,
+    /<dt class="trust-panel-label">Updated<\/dt><dd class="trust-panel-value trust-panel-generated"><time datetime="2026-03-06T10:00:00Z" title="2026-03-06T10:00:00Z" aria-label="2026-03-06T10:00:00Z">March 6, 2026<\/time><\/dd>/,
+  );
+  assert.match(
+    out,
+    /<dt class="trust-panel-label">Reviewed<\/dt><dd class="trust-panel-value trust-panel-reviewed"><time datetime="2026-03-04T09:30:15\+03:30" title="2026-03-04T09:30:15\+03:30" aria-label="2026-03-04T09:30:15\+03:30">March 4, 2026<\/time><\/dd>/,
+  );
+});
+
 test("build and reviewer data supply provenance the entry omits, and the dates stay localised", () => {
   for (const [lang, updated, reviewed] of [
     ["en", "Updated", "Reviewed"],
@@ -412,7 +436,7 @@ test("provenanceOf reads the documented build and reviewer shapes without changi
   });
   assert.deepEqual(
     provenanceOf(siteOf({ build: { generatedAt: new Date("2026-03-06T12:00:00Z") } }), "/guide/install/"),
-    { generatedAt: "2026-03-06" },
+    { generatedAt: "2026-03-06T12:00:00.000Z" },
   );
 });
 
@@ -422,6 +446,7 @@ test("missing or malformed provenance adds no attribute, row, or action placehol
     { buildId: "   " },
     { generatedAt: "not-a-date", reviewedAt: "2026-02-30" },
     { generatedAt: "2026-13-01", reviewedAt: "2026-00-10" },
+    { generatedAt: "2026-03-06T99:99:99Z", reviewedAt: "2026-03-04T10:00:00Zjunk" },
   ]) {
     const out = render({ trust: { "/guide/install/": { ...entry, ...evidence } } });
     assert.ok(out);
