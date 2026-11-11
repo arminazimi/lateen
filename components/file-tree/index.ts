@@ -1,6 +1,6 @@
 import { h } from "preact";
 import type { ComponentChildren, VNode } from "preact";
-import type { Component } from "@velella/mizzen/contracts";
+import type { Component, Page } from "@velella/mizzen/contracts";
 
 /** Markdown directive that turns the nested list in its body into a file tree. */
 export const directive = "file-tree";
@@ -140,15 +140,47 @@ function slugOf(value: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
+/** The id an author gave, or `undefined` when the prop is missing or sanitizes to nothing. */
+function givenId(raw: unknown): string | undefined {
+  const given = slugOf(typeof raw === "string" ? raw : "");
+  return given === "" ? undefined : given;
+}
+
 /** The tree's id: the `id` prop when given, otherwise `file-tree`. */
 export function idBase(raw: unknown): string {
-  const given = slugOf(typeof raw === "string" ? raw : "");
-  return given === "" ? "file-tree" : given;
+  return givenId(raw) ?? "file-tree";
+}
+
+/**
+ * Per-page state for trees that give no `id`: the next default instance number, and the page HTML it
+ * was counted against. Keyed by the Page, so one page's ids cannot leak into another page or build.
+ */
+const pageIds = new WeakMap<Page, { html: string; next: number }>();
+
+/** The base of a tree without an `id`: `file-tree`, then `file-tree-2`, in page order. */
+function defaultBase(page: Page): string {
+  let state = pageIds.get(page);
+  if (state === undefined || state.html !== page.html) {
+    state = { html: page.html, next: 0 };
+    pageIds.set(page, state);
+  }
+  const base = state.next === 0 ? idBase(undefined) : `${idBase(undefined)}-${state.next + 1}`;
+  state.next += 1;
+  return base;
 }
 
 /** The id of one tree node, from the full path of the entry. */
 export function nodeId(base: string, path: string): string {
   return `${base}-${slugOf(path) || "node"}`;
+}
+
+/** A node id unique within its tree: a path used twice gets a numeric suffix. */
+function uniqueNodeId(base: string, path: string, used: Set<string>): string {
+  const id = nodeId(base, path);
+  let unique = id;
+  for (let n = 2; used.has(unique); n += 1) unique = `${id}-${n}`;
+  used.add(unique);
+  return unique;
 }
 
 function icon(folder: boolean): VNode {
@@ -169,14 +201,22 @@ function icon(folder: boolean): VNode {
 }
 
 /** One row, as a treeitem with its position in the level and, for a folder, its nested group. */
-function item(entry: FileTreeEntry, level: number, index: number, count: number, base: string, prefix: string): ComponentChildren {
+function item(
+  entry: FileTreeEntry,
+  level: number,
+  index: number,
+  count: number,
+  base: string,
+  prefix: string,
+  used: Set<string>,
+): ComponentChildren {
   const folder = isFolder(entry);
   const hasChildren = entry.children.length > 0;
   const classes = ["file-tree-item", folder ? "is-folder" : "is-file"];
   if (isHighlighted(entry)) classes.push("is-highlighted");
 
   const path = entryPath(prefix, entry.name);
-  const id = nodeId(base, path);
+  const id = uniqueNodeId(base, path, used);
   const nameId = `${id}-name`;
   const noteId = `${id}-note`;
 
@@ -205,18 +245,25 @@ function item(entry: FileTreeEntry, level: number, index: number, count: number,
         ? h("span", { class: "file-tree-note", id: noteId, dangerouslySetInnerHTML: { __html: entry.note } })
         : null,
     ),
-    hasChildren ? group(entry.children, level + 1, base, path) : null,
+    hasChildren ? group(entry.children, level + 1, base, path, undefined, used) : null,
   );
 }
 
 /** A list of sibling rows: the tree itself at the top, a `group` under each folder. */
-function group(entries: FileTreeEntry[], level: number, base: string, prefix: string, root?: string): ComponentChildren {
+function group(
+  entries: FileTreeEntry[],
+  level: number,
+  base: string,
+  prefix: string,
+  root: string | undefined,
+  used: Set<string>,
+): ComponentChildren {
   return h(
     "ul",
     root === undefined
       ? { class: "file-tree-group", role: "group" }
-      : { class: "file-tree", role: "tree", id: base, "aria-label": root },
-    ...entries.map((entry, i) => item(entry, level, i, entries.length, base, prefix)),
+      : { class: "file-tree", role: "tree", id: base, "aria-label": root, "data-file-tree": "" },
+    ...entries.map((entry, i) => item(entry, level, i, entries.length, base, prefix, used)),
   );
 }
 
@@ -226,13 +273,14 @@ function group(entries: FileTreeEntry[], level: number, base: string, prefix: st
  * `data-copy-value` path with no markup in it. Without a list the body is passed through so the
  * page still reads.
  */
-const fileTree: Component<FileTreeProps> = ({ props, html }) => {
+const fileTree: Component<FileTreeProps> = ({ props, html, page }) => {
   const entries = parseEntries(html);
   if (entries.length === 0) {
     return h("div", { class: "file-tree", dangerouslySetInnerHTML: { __html: html } });
   }
   const label = typeof props.label === "string" && props.label !== "" ? props.label : DEFAULT_LABEL;
-  return group(entries, 1, idBase(props.id), "", label);
+  const base = givenId(props.id) ?? defaultBase(page);
+  return group(entries, 1, base, "", label, new Set<string>());
 };
 
 export default fileTree;

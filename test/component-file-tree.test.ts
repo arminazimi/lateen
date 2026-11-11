@@ -3,6 +3,15 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { Fragment } from "preact";
 import fileTree, { directive, entryPath, idBase, nodeId, parseEntries, plainText } from "../components/file-tree/index.ts";
+import {
+  activate,
+  ENHANCED_ATTR,
+  GROUP_SELECTOR,
+  ITEM_SELECTOR,
+  TREE_SELECTOR,
+  type TreeElement,
+  type TreeEvent,
+} from "../components/file-tree/client.ts";
 import type { ComponentProps, Page, Site, SourcePos, SiteConfig } from "@velella/mizzen/contracts";
 
 const pos: SourcePos = { file: "docs/guide/install.md", line: 3, column: 1, endLine: 9, endColumn: 1 };
@@ -67,9 +76,13 @@ function html(node: unknown): string {
   return `<${tag}${attrs}>${inner}</${tag}>`;
 }
 
-function render(body: string, props: Record<string, string> = {}): string {
-  const componentProps: ComponentProps<Record<string, string>> = { props, page, site, html: body };
+function render(body: string, props: Record<string, string> = {}, on: Page = { ...page }): string {
+  const componentProps: ComponentProps<Record<string, string>> = { props, page: on, site, html: body };
   return html(fileTree(componentProps as ComponentProps<{ label?: string }>));
+}
+
+function idsOf(out: string): string[] {
+  return [...out.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]!);
 }
 
 const names = JSON.parse(readFileSync(new URL("../tokens/names.json", import.meta.url), "utf8")) as Record<
@@ -145,7 +158,7 @@ test("parseEntries drops the paragraphs of a loose list and keeps inline markup"
 
 test("renders a tree role with a label and a treeitem level for every row", () => {
   const out = render(NESTED);
-  assert.match(out, /<ul class="file-tree" role="tree" id="file-tree" aria-label="File tree">/);
+  assert.match(out, /<ul class="file-tree" role="tree" id="file-tree" aria-label="File tree" data-file-tree="">/);
   assert.match(out, /role="treeitem"[^>]*aria-level="1"[^>]*aria-setsize="3"[^>]*aria-posinset="1"/);
   assert.match(out, /role="treeitem"[^>]*aria-level="2"[^>]*aria-setsize="2"[^>]*aria-posinset="1"/);
   assert.match(out, /role="treeitem"[^>]*aria-level="3"[^>]*aria-setsize="1"[^>]*aria-posinset="1"/);
@@ -255,4 +268,319 @@ test("a folder whose slash sits inside a closing tag is still a folder", () => {
   const out = render("<ul><li><code>dist/</code></li><li><code>app.js</code></li></ul>");
   assert.equal(out.match(/is-folder-icon/g)?.length, 1);
   assert.equal(out.match(/is-file-icon/g)?.length, 1);
+});
+
+test("without JavaScript the complete tree is visible and every row is a tab stop", () => {
+  const out = render(NESTED);
+  assert.equal(out.match(/tabindex="0"/g)?.length, 7, "every row is reachable without the island");
+  assert.doesNotMatch(out, /\shidden[="\s>]/);
+  assert.doesNotMatch(out, /aria-expanded="false"/);
+  assert.equal(out.match(/aria-expanded="true"/g)?.length, 3, "folders with rows start expanded");
+});
+
+test("only a folder with nested rows reports an expanded state", () => {
+  const out = render(NESTED);
+  assert.match(out, /id="file-tree-dist"[^>]*aria-expanded="true"/);
+  assert.match(out, /id="file-tree-beacon"[^>]*aria-expanded="true"/);
+  assert.doesNotMatch(out, /id="file-tree-beacon-cache"[^>]*aria-expanded/, "an empty folder cannot open");
+});
+
+test("repeated paths in separate trees keep separate ids", () => {
+  const body = "<ul><li>src/<ul><li>index.ts</li></ul></li></ul>";
+  const one = render(body, { id: "one" });
+  const two = render(body, { id: "two" });
+  const ids = (out: string): string[] => [...out.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]!);
+  const all = [...ids(one), ...ids(two)];
+  assert.equal(new Set(all).size, all.length);
+  assert.match(one, /id="one-src-index-ts" role="treeitem"/);
+  assert.match(two, /id="two-src-index-ts" role="treeitem"/);
+  assert.match(one, /aria-labelledby="one-src-index-ts-name"/);
+  assert.match(two, /aria-labelledby="two-src-index-ts-name"/);
+});
+
+test("a path that appears twice in one tree still gets unique ids, and its copy value stays the path", () => {
+  const body = "<ul><li>a/<ul><li>x.md</li></ul></li><li>a/<ul><li>x.md</li></ul></li></ul>";
+  const out = render(body);
+  assert.match(out, /id="file-tree-a-x-md"/);
+  assert.match(out, /id="file-tree-a-x-md-2"/);
+  assert.match(out, /id="file-tree-a-x-md-2" role="treeitem"[^>]*aria-labelledby="file-tree-a-x-md-2-name"/);
+  assert.equal(out.match(/data-copy-value="a\/x\.md"/g)?.length, 2, "source paths are unchanged");
+});
+
+test("two default trees with identical content on one page get unique ids", () => {
+  const body = "<ul><li>src/<ul><li>index.ts</li></ul></li><li>src/<ul><li>index.ts</li></ul></li></ul>";
+  const shared: Page = { ...page };
+  const one = render(body, {}, shared);
+  const two = render(body, {}, shared);
+
+  const all = [...idsOf(one), ...idsOf(two)];
+  assert.equal(new Set(all).size, all.length);
+  assert.match(one, /<ul class="file-tree" role="tree" id="file-tree"/);
+  assert.match(two, /<ul class="file-tree" role="tree" id="file-tree-2"/);
+  assert.match(one, /id="file-tree-src-index-ts"/);
+  assert.match(one, /id="file-tree-src-index-ts-2"/);
+  assert.match(two, /id="file-tree-2-src-index-ts"/);
+  assert.match(two, /id="file-tree-2-src-index-ts-2"/);
+  assert.equal(one.match(/data-copy-value="src\/index\.ts"/g)?.length, 2);
+  assert.equal(two.match(/data-copy-value="src\/index\.ts"/g)?.length, 2);
+});
+
+test("a default tree beside a tree with an explicit id keeps every id unique", () => {
+  const body = "<ul><li>src/<ul><li>index.ts</li></ul></li></ul>";
+  const shared: Page = { ...page };
+  const manual = render(body, { id: "layout" }, shared);
+  const automatic = render(body, {}, shared);
+
+  const all = [...idsOf(manual), ...idsOf(automatic)];
+  assert.equal(new Set(all).size, all.length);
+  assert.match(manual, /<ul class="file-tree" role="tree" id="layout"/);
+  assert.match(manual, /id="layout-src-index-ts" role="treeitem"/);
+  assert.match(automatic, /<ul class="file-tree" role="tree" id="file-tree"/);
+  assert.match(automatic, /id="file-tree-src-index-ts" role="treeitem"/);
+});
+
+test("default-tree ids are deterministic on a fresh page", () => {
+  const body = "<ul><li>src/<ul><li>index.ts</li></ul></li></ul>";
+  const pair = (): string[] => {
+    const fresh: Page = { ...page };
+    return [render(body, {}, fresh), render(body, {}, fresh)];
+  };
+  assert.deepEqual(pair(), pair());
+});
+
+/* The island, with fakes standing in for the browser's elements. */
+
+type Branch = { name: string; children?: Branch[] };
+
+class FakeElement implements TreeElement {
+  hidden = false;
+  focused = false;
+  readonly attrs = new Map<string, string>();
+  readonly children: FakeElement[] = [];
+  readonly listeners = new Map<string, Array<(event: TreeEvent) => void>>();
+
+  constructor(attrs: Record<string, string> = {}) {
+    for (const [name, value] of Object.entries(attrs)) this.attrs.set(name, value);
+  }
+
+  getAttribute(name: string): string | null {
+    return this.attrs.get(name) ?? null;
+  }
+
+  setAttribute(name: string, value: string): void {
+    this.attrs.set(name, value);
+  }
+
+  focus(): void {
+    this.focused = true;
+  }
+
+  contains(node: unknown): boolean {
+    return node === this || this.children.some((child) => child.contains(node));
+  }
+
+  querySelector(selector: string): TreeElement | null {
+    return this.querySelectorAll(selector)[0] ?? null;
+  }
+
+  querySelectorAll(selector: string): FakeElement[] {
+    return this.descendants().filter((element) => matches(element, selector));
+  }
+
+  addEventListener(type: string, listener: (event: TreeEvent) => void): void {
+    this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
+  }
+
+  fire(type: string, event: Partial<TreeEvent> = {}): void {
+    const full: TreeEvent = { target: this, preventDefault: () => {}, ...event };
+    for (const listener of this.listeners.get(type) ?? []) listener(full);
+  }
+
+  private descendants(): FakeElement[] {
+    return this.children.flatMap((child) => [child, ...child.descendants()]);
+  }
+}
+
+function matches(element: FakeElement, selector: string): boolean {
+  if (selector === ITEM_SELECTOR) return element.getAttribute("role") === "treeitem";
+  if (selector === GROUP_SELECTOR) return element.getAttribute("role") === "group";
+  throw new Error(`unexpected selector ${selector}`);
+}
+
+/** A tree of fake rows, in document order, mirroring `li > ul[role=group] > li`. */
+function fakeTree(branches: Branch[]): { root: FakeElement; items: FakeElement[] } {
+  const root = new FakeElement({ role: "tree", "data-file-tree": "" });
+  const items: FakeElement[] = [];
+
+  const add = (branch: Branch, level: number, list: FakeElement): void => {
+    const item = new FakeElement({
+      role: "treeitem",
+      tabindex: "0",
+      "aria-level": String(level),
+      ...(branch.children === undefined ? {} : { "aria-expanded": "true" }),
+    });
+    item.attrs.set("data-name", branch.name);
+    list.children.push(item);
+    items.push(item);
+    if (branch.children !== undefined) {
+      const group = new FakeElement({ role: "group" });
+      item.children.push(group);
+      for (const child of branch.children) add(child, level + 1, group);
+    }
+  };
+
+  for (const branch of branches) add(branch, 1, root);
+  return { root, items };
+}
+
+const SPEC: Branch[] = [
+  { name: "a", children: [{ name: "a1" }, { name: "a2", children: [{ name: "a2x" }] }] },
+  { name: "b" },
+  { name: "c" },
+];
+
+/** Fires a key on the root as if `item` had focus; returns how often the default was stopped. */
+function press(root: FakeElement, item: FakeElement, key: string): number {
+  let prevented = 0;
+  root.fire("keydown", { key, target: item, preventDefault: () => (prevented += 1) });
+  return prevented;
+}
+
+/** The row that is currently the tree's tab stop. */
+function current(items: FakeElement[]): number {
+  return items.findIndex((item) => item.getAttribute("tabindex") === "0");
+}
+
+test("the island finds trees by their data attribute", () => {
+  assert.equal(TREE_SELECTOR, "[data-file-tree]");
+  assert.match(render(NESTED), /<ul class="file-tree" role="tree"[^>]*data-file-tree=""/);
+});
+
+test("activate() leaves one row as the tab stop and does not take focus", () => {
+  const { root, items } = fakeTree(SPEC);
+  activate(root, false);
+  assert.equal(root.getAttribute(ENHANCED_ATTR), "");
+  assert.deepEqual(
+    items.map((item) => item.getAttribute("tabindex")),
+    ["0", "-1", "-1", "-1", "-1", "-1"],
+  );
+  assert.equal(items.some((item) => item.focused), false);
+});
+
+test("arrows, Home, and End move through the visible rows and stop at the ends", () => {
+  const { root, items } = fakeTree(SPEC);
+  activate(root, false);
+
+  assert.equal(press(root, items[0]!, "ArrowDown"), 1);
+  assert.equal(current(items), 1);
+  assert.equal(items[1]!.focused, true);
+
+  assert.equal(press(root, items[5]!, "ArrowUp"), 1);
+  assert.equal(current(items), 4);
+
+  assert.equal(press(root, items[4]!, "End"), 1);
+  assert.equal(current(items), 5);
+  assert.equal(press(root, items[5]!, "ArrowDown"), 1, "the end is still a handled key");
+  assert.equal(current(items), 5, "the tree does not wrap");
+
+  assert.equal(press(root, items[5]!, "Home"), 1);
+  assert.equal(current(items), 0);
+  assert.equal(press(root, items[0]!, "ArrowUp"), 1);
+  assert.equal(current(items), 0, "the start does not wrap");
+});
+
+test("ArrowRight moves into a folder, ArrowLeft collapses it and then moves to the parent", () => {
+  const { root, items } = fakeTree(SPEC);
+  activate(root, false);
+  const group = items[0]!.querySelector(GROUP_SELECTOR);
+  assert.ok(group);
+
+  press(root, items[0]!, "ArrowRight");
+  assert.equal(current(items), 1, "an open folder moves to its first row");
+  press(root, items[1]!, "ArrowLeft");
+  assert.equal(current(items), 0, "a file moves to its parent");
+
+  press(root, items[0]!, "ArrowLeft");
+  assert.equal(items[0]!.getAttribute("aria-expanded"), "false");
+  assert.equal(group.hidden, true);
+
+  press(root, items[0]!, "ArrowRight");
+  assert.equal(items[0]!.getAttribute("aria-expanded"), "true");
+  assert.equal(group.hidden, false);
+
+  press(root, items[0]!, "ArrowLeft");
+  press(root, items[0]!, "ArrowLeft");
+  assert.equal(current(items), 0, "a root folder has no parent to move to");
+});
+
+test("a collapsed subtree is skipped by ArrowDown and comes back when expanded", () => {
+  const { root, items } = fakeTree(SPEC);
+  activate(root, false);
+
+  press(root, items[0]!, "ArrowLeft");
+  press(root, items[0]!, "ArrowDown");
+  assert.equal(current(items), 4, "the next visible row is the sibling, not the hidden child");
+
+  press(root, items[0]!, "ArrowRight");
+  press(root, items[0]!, "ArrowDown");
+  assert.equal(current(items), 1, "the child is reachable again once the folder opens");
+});
+
+test("Enter and Space toggle a folder; a file has no action", () => {
+  const { root, items } = fakeTree(SPEC);
+  activate(root, false);
+
+  assert.equal(press(root, items[0]!, "Enter"), 1);
+  assert.equal(items[0]!.getAttribute("aria-expanded"), "false");
+  assert.equal(press(root, items[0]!, "Enter"), 1);
+  assert.equal(items[0]!.getAttribute("aria-expanded"), "true");
+  assert.equal(press(root, items[0]!, " "), 1);
+  assert.equal(items[0]!.getAttribute("aria-expanded"), "false");
+  assert.equal(press(root, items[4]!, " "), 1, "Space does not scroll the page on a file");
+  assert.equal(press(root, items[4]!, "Enter"), 0, "Enter has nothing to follow on a file");
+});
+
+test("collapsing a folder returns focus to it, never into hidden rows", () => {
+  const { root, items } = fakeTree(SPEC);
+  activate(root, false);
+
+  press(root, items[0]!, "ArrowRight");
+  assert.equal(current(items), 1, "focus sits on the folder's first row");
+  press(root, items[0]!, " ");
+
+  assert.equal(items[1]!.getAttribute("tabindex"), "-1");
+  assert.equal(items[0]!.getAttribute("tabindex"), "0");
+  assert.equal(current(items), 0);
+});
+
+test("right-to-left trees reverse ArrowRight and ArrowLeft", () => {
+  const { root, items } = fakeTree(SPEC);
+  activate(root, true);
+
+  press(root, items[0]!, "ArrowLeft");
+  assert.equal(current(items), 1, "left opens the folder and moves into it");
+  press(root, items[0]!, "ArrowRight");
+  assert.equal(items[0]!.getAttribute("aria-expanded"), "false", "right collapses it");
+});
+
+test("two trees on a page keep their own tab stop and do not cross-control", () => {
+  const first = fakeTree(SPEC);
+  const second = fakeTree(SPEC);
+  activate(first.root, false);
+  activate(second.root, false);
+
+  press(first.root, first.items[0]!, "ArrowDown");
+
+  assert.equal(current(first.items), 1);
+  assert.deepEqual(
+    second.items.map((item) => item.getAttribute("tabindex")),
+    ["0", "-1", "-1", "-1", "-1", "-1"],
+  );
+  assert.equal(second.items.some((item) => item.focused), false);
+});
+
+test("activate() leaves an empty tree alone", () => {
+  const root = new FakeElement({ role: "tree" });
+  activate(root, false);
+  assert.equal(root.getAttribute(ENHANCED_ATTR), null);
 });
