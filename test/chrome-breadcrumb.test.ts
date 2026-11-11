@@ -42,9 +42,10 @@ const pager: Pager = {};
 const guides: NavLink = { title: "Guides", url: "/example/guide/" };
 const gettingStarted: NavLink = { title: "Getting started", url: "/example/guide/getting-started/" };
 
-function props(trail: Trail): ChromeProps {
-  const site: Site = { config, pages: [page], nav: {}, data: {} };
-  return { site, page, trail, pager };
+function props(trail: Trail, lang = "en"): ChromeProps {
+  const localized: Page = { ...page, lang, dir: lang === "en" ? "ltr" : "rtl" };
+  const site: Site = { config, pages: [localized], nav: {}, data: {} };
+  return { site, page: localized, trail, pager };
 }
 
 type VNode = { type: unknown; props: { children?: unknown; [key: string]: unknown } };
@@ -89,13 +90,19 @@ test("renders nothing when the trail has only the current page", () => {
 test("renders the trail: ancestors as links, the last item as the current page, not a link", () => {
   const out = html(breadcrumb(props([guides, gettingStarted, { title: "Install", url: "/example/guide/install/" }])));
 
-  assert.match(out, /^<nav class="breadcrumb" aria-label="Breadcrumb">/);
+  assert.match(out, /^<nav class="breadcrumb" aria-label="Breadcrumbs">/);
   assert.match(out, /<a href="\/example\/guide\/">Guides<\/a>/);
   assert.match(out, /<a href="\/example\/guide\/getting-started\/">Getting started<\/a>/);
   assert.match(out, /<span aria-current="page">Install<\/span>/);
   assert.doesNotMatch(out, /<a [^>]*>Install<\/a>/);
   assert.ok(out.indexOf("Guides") < out.indexOf("Getting started"));
   assert.ok(out.indexOf("Getting started") < out.indexOf("Install"));
+});
+
+test("the label follows the page language", () => {
+  const trail: Trail = [guides, { title: "Install", url: "/example/guide/install/" }];
+  assert.match(html(breadcrumb(props(trail, "fa"))), /^<nav class="breadcrumb" aria-label="مسیر یابی">/);
+  assert.match(html(breadcrumb(props(trail, "ar"))), /^<nav class="breadcrumb" aria-label="مسار التنقل">/);
 });
 
 test("separators sit between the crumbs, are decorative, and mirror under dir=rtl in style.css", () => {

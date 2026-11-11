@@ -10,7 +10,11 @@
    A page's language comes from `<html lang>`; `:lang(fa)` also matches `fa-IR`, and the same for
    `:lang(ar)` and its regional tags. Direction itself stays with the `dir` attribute: a page may
    hold a right-to-left quotation or a left-to-right code sample, and the language selector must
-   not overrule that. */
+   not overrule that.
+
+   A directional affordance mirrors only when its meaning is "the way the reader moves": the
+   pager, breadcrumb, and home arrows, painted by their unit stylesheets. Media controls and
+   technical symbols keep their orientation, and `test/rtl-css.test.ts` holds that list. */
 
 :root:lang(fa),
 :root:lang(ar) {
@@ -34,12 +38,24 @@
 
 /* Code is left to right even inside a right-to-left sentence: a tag name, a path, or a flag keeps
    its own direction and `unicode-bidi: isolate` stops it from reordering the words around it.
-   Geist Mono is named here so no body stack inherited from the RTL root can reach code. */
+   Geist Mono is named here so no body stack inherited from the RTL root can reach code. The `dir`
+   selector covers every right-to-left page, not only the ones the language stack styles: a Hebrew
+   page, or a page that sets `dir="rtl"` with a left-to-right language, isolates code the same way.
+   `text-align: start` in a left-to-right block is its left edge. */
 :where(pre, code, kbd):lang(fa),
 :where(pre, code, kbd):lang(ar),
 :lang(fa) :where(pre, code, kbd),
-:lang(ar) :where(pre, code, kbd) {
+:lang(ar) :where(pre, code, kbd),
+[dir="rtl"] :where(pre, code, kbd) {
   direction: ltr;
   font-family: var(--type-font-mono);
+  unicode-bidi: isolate;
+  text-align: start;
+}
+
+/* The Markdown pipeline wraps Latin runs and numerals in right-to-left prose in `<span dir="ltr">`.
+   Code is isolated above; this states the same isolation for those runs, so a number or a path
+   keeps its place between the words around it. */
+[dir="rtl"] :where([dir="ltr"]) {
   unicode-bidi: isolate;
 }

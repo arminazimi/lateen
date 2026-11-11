@@ -67,15 +67,12 @@ carries `hreflang` and `lang` with its language code, and the list is a `nav` wi
 `language` label. The links are ordinary anchors and the list is always in the document: it is
 keyboard operable with no JavaScript and no `client.ts`.
 
+`style.css` is part of the chrome's shared CSS, which every page loads, so the switcher's rules reach
+a built page.
+
 ## Keeping the reader's theme
 
 Every language lives on the same origin, and the theme choice is stored under `lateen-theme`
 (`THEME_KEY`, shared with the theme switch). A switch to another language therefore keeps the
 reader's light, dark, or system choice without a query string or any other hand-off.
 
-## Known gap
-
-The engine does not yet load chrome `style.css` files or chrome `client.ts` islands into a build; only
-components carry CSS and islands today. The switcher is pure HTML, so it works regardless. Until the
-engine includes unit styles, its rules in `style.css` do not reach a built page; the markup is complete
-and accessible without them.

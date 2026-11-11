@@ -3,7 +3,7 @@
 The keyboard shortcuts dialog: a `<dialog>` with a heading and a definition list of every shortcut the theme defines.
 
 - `index.ts` renders the dialog, its close button, and the static list. It starts `hidden` so a visitor without JavaScript never sees it.
-- `client.ts` opens the dialog on `?` (Shift+/), ignoring fields the reader is typing in; Escape or the close button closes it, and focus returns to the element that was focused before it opened.
+- `client.ts` opens the dialog on `?` (Shift+/), ignoring fields the reader is typing in; Escape, the close button, or a press on the backdrop closes it, and focus returns to the element that was focused before it opened.
 - `style.css` draws the dialog and its keycaps with logical properties, so it works in right-to-left pages.
 
 The list is static and names `Ctrl/Cmd+K` for search rather than the platform's one hint. It marks each action that needs JavaScript:

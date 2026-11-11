@@ -7,6 +7,7 @@ import doc from "../layouts/doc.ts";
 import blockActions from "../chrome/block-actions/index.ts";
 import {
   activate,
+  blockId,
   copy,
   isNested,
   MAX_TEXT,
@@ -180,13 +181,23 @@ function block(
   src: string | null,
   text = "A block.",
   parent: BlockElement | null = null,
-): BlockElement & { appended: ActionButton[] } {
+  lang: string | null = null,
+  id: string | null = null,
+): BlockElement & { appended: ActionButton[]; attrs: Record<string, string> } {
+  const attrs: Record<string, string> = {};
+  if (src !== null) attrs["data-src"] = src;
+  if (lang !== null) attrs["data-lang"] = lang;
+  if (id !== null) attrs.id = id;
   const fake = {
     parentElement: parent,
     textContent: text,
     appended: [] as ActionButton[],
+    attrs,
     getAttribute(name: string) {
-      return name === "data-src" ? src : null;
+      return attrs[name] ?? null;
+    },
+    setAttribute(name: string, value: string) {
+      attrs[name] = value;
     },
     appendChild(child: ActionButton) {
       fake.appended.push(child);
@@ -196,14 +207,35 @@ function block(
   return fake;
 }
 
-/** A fake template button that counts clones and records its click listeners. */
-function button(label = "Edit with your agent"): ActionButton & { clones: ActionButton[]; clicks: Array<() => void> } {
+/** A fake template button that counts clones and records its click listeners and attributes. */
+function button(label = "Edit with your agent"): ActionButton & {
+  clones: ActionButton[];
+  clicks: Array<() => void>;
+  attrs: Record<string, string>;
+} {
+  const attrs: Record<string, string> = {};
   const fake = {
     hidden: true,
     textContent: label,
-    dataset: {} as { prompt?: string | undefined; copied?: string | undefined; copyFailed?: string | undefined },
+    dataset: {} as {
+      prompt?: string | undefined;
+      copied?: string | undefined;
+      copyFailed?: string | undefined;
+      blockId?: string | undefined;
+      lang?: string | undefined;
+      file?: string | undefined;
+      source?: string | undefined;
+      text?: string | undefined;
+    },
     clones: [] as ActionButton[],
     clicks: [] as Array<() => void>,
+    attrs,
+    getAttribute(name: string) {
+      return attrs[name] ?? null;
+    },
+    setAttribute(name: string, value: string) {
+      attrs[name] = value;
+    },
     addEventListener(type: "click", listener: () => void) {
       assert.equal(type, "click");
       fake.clicks.push(listener);
@@ -212,6 +244,7 @@ function button(label = "Edit with your agent"): ActionButton & { clones: Action
       const clone = button(fake.textContent ?? "");
       clone.hidden = fake.hidden;
       Object.assign(clone.dataset, fake.dataset);
+      Object.assign(clone.attrs, fake.attrs);
       fake.clones.push(clone);
       return clone;
     },
@@ -301,6 +334,45 @@ test("activate stamps one revealed button per top-level block with its span and 
   );
   assert.equal(stamped.dataset.copied, "Copied");
   assert.equal(stamped.dataset.copyFailed, "Press Ctrl+C");
+});
+
+test("a code block gets one stable id and its action keeps file, language, source, and exact text", () => {
+  const first = block("docs/a.md:3:1-9:12", "  const a = 1;\n", null, "ts");
+  const world = env({ blocks: [first] });
+
+  activate(world);
+
+  const id = blockId("docs/a.md:3:1-9:12");
+  assert.equal(first.getAttribute("id"), id);
+  assert.equal(first.appended.length, 1);
+  const stamped = first.appended[0]!;
+  assert.equal(stamped.dataset.blockId, id);
+  assert.equal(stamped.dataset.lang, "ts");
+  assert.equal(stamped.dataset.file, "docs/a.md");
+  assert.equal(stamped.dataset.source, "docs/a.md:3:1-9:12");
+  assert.equal(stamped.dataset.text, "  const a = 1;\n");
+  assert.equal(stamped.dataset.prompt, 'Edit docs/a.md:3:1-9:12 (ts). Current text: "const a = 1;". Change:');
+  assert.equal(stamped.getAttribute("aria-label"), "Edit with your agent (docs/a.md:3:1-9:12)");
+});
+
+test("an existing block id is kept, and a non-code block gets no id of its own", () => {
+  const code = block("a.md:1:1-1:4", "x", null, "ts", "author-id");
+  const prose = block("a.md:3:1-3:8", "Words.");
+
+  activate(env({ blocks: [code, prose] }));
+
+  assert.equal(code.getAttribute("id"), "author-id");
+  assert.equal(code.appended[0]!.dataset.blockId, "author-id");
+  assert.equal(prose.getAttribute("id"), null);
+  assert.equal(prose.appended[0]!.dataset.blockId, "a.md:3:1-3:8");
+  assert.equal(prose.appended[0]!.dataset.prompt, 'Edit a.md:3:1-3:8. Current text: "Words.". Change:');
+});
+
+test("blockId is id-safe, stable, and different for different spans", () => {
+  assert.equal(blockId("docs/a.md:3:1-9:12"), "code-docs-a-md-3-1-9-12");
+  assert.equal(blockId("C:\\notes\\a.md:2:3"), "code-C-notes-a-md-2-3");
+  assert.equal(blockId("docs/a.md:3:1-9:12"), blockId("docs/a.md:3:1-9:12"));
+  assert.notEqual(blockId("docs/a.md:3:1-9:12"), blockId("docs/a.md:4:1-9:12"));
 });
 
 test("a click writes the prompt and shows the result until the timer restores the label", async () => {

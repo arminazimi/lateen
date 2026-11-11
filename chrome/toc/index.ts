@@ -1,7 +1,9 @@
 import { Fragment, h } from "preact";
 import type { Chrome, Heading } from "@velella/mizzen/contracts";
+import { t } from "../../i18n/index.ts";
 
-const LABEL = "On this page";
+/** Id of the visible heading that names the navigation landmark. */
+const TITLE_ID = "toc-title";
 
 /** Headings the TOC shows: `h2` and `h3` only, in document order. */
 function entries(headings: readonly Heading[]): Heading[] {
@@ -42,16 +44,17 @@ function flatList(items: readonly Heading[]) {
   );
 }
 
-/** On this page: sticky aside on wide screens, collapsible block on narrow ones. */
+/** On this page: sticky navigation landmark on wide screens, collapsible block on narrow ones. */
 const toc: Chrome = ({ page }) => {
   const items = entries(page.headings);
   if (items.length < 2) return null;
+  const label = t(page.lang, "on_this_page");
 
   return h(
     Fragment,
     null,
-    h("aside", { class: "toc", "aria-label": LABEL }, h("h2", null, LABEL), nestedList(items)),
-    h("details", { class: "toc-fold" }, h("summary", null, LABEL), flatList(items)),
+    h("nav", { class: "toc", "aria-labelledby": TITLE_ID }, h("h2", { id: TITLE_ID }, label), nestedList(items)),
+    h("details", { class: "toc-fold" }, h("summary", null, label), flatList(items)),
   );
 };
 

@@ -61,3 +61,22 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+/* Paper has no hover or tooltip and a lone +, ~, or − is thin evidence: print the sentence and
+   drop the compact value it repeats. */
+@media print {
+  .version-badge-icon,
+  .version-badge-value {
+    display: none;
+  }
+
+  .version-badge-sr {
+    position: static;
+    inline-size: auto;
+    block-size: auto;
+    margin: 0;
+    overflow: visible;
+    clip-path: none;
+    white-space: normal;
+  }
+}

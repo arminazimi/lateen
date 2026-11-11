@@ -1,0 +1,12 @@
+# A fixed site the performance budget measures. Its pages are not documentation; they are the
+# representative routes scripts/performance-budget.ts builds and records. Keep `base` empty: the
+# script reads asset URLs from the built HTML as paths from the output folder.
+title: Lateen performance fixture
+description: A fixed site for measuring the theme's shipped JavaScript and CSS.
+lang: en
+base: ""
+search: false
+theme:
+  options:
+    footer:
+      copyright: "Performance fixture"

@@ -27,14 +27,14 @@ const config: SiteConfig = {
 const trail: Trail = [];
 const pager: Pager = {};
 
-function pageWith(headings: Heading[]): Page {
+function pageWith(headings: Heading[], lang = "en"): Page {
   return {
     url: "/example/guide/install/",
     source: pos,
     frontMatter: { title: "Install" },
     title: "Install",
-    lang: "en",
-    dir: "ltr",
+    lang,
+    dir: lang === "en" ? "ltr" : "rtl",
     headings,
     html: "",
     markdown: "",
@@ -42,8 +42,8 @@ function pageWith(headings: Heading[]): Page {
   };
 }
 
-function props(headings: Heading[]): ChromeProps {
-  const page = pageWith(headings);
+function props(headings: Heading[], lang = "en"): ChromeProps {
+  const page = pageWith(headings, lang);
   const site: Site = { config, pages: [page], nav: {}, data: {} };
   return { site, page, trail, pager };
 }
@@ -89,7 +89,7 @@ test("hidden when the page has fewer than two h2/h3 headings", () => {
   assert.equal(toc(props([heading(1, "title", "Title"), heading(2, "one", "One")])), null);
 });
 
-test("lists h2 and h3 from page.headings, nested on the aside and flat in the fold", () => {
+test("lists h2 and h3 from page.headings, nested in the landmark and flat in the fold", () => {
   const out = html(
     toc(
       props([
@@ -102,18 +102,36 @@ test("lists h2 and h3 from page.headings, nested on the aside and flat in the fo
     ),
   );
 
-  assert.match(out, /<aside class="toc" aria-label="On this page">/);
+  assert.match(out, /<nav class="toc" aria-labelledby="toc-title"><h2 id="toc-title">On this page<\/h2>/);
   assert.match(out, /<details class="toc-fold">/);
   assert.match(out, /<summary>On this page<\/summary>/);
   assert.doesNotMatch(out, /#title|#deep/);
   assert.match(
     out,
-    /<aside[\s\S]*<ul><li><a href="#pick">Pick a mode<\/a><ul><li><a href="#gem">Gem<\/a><\/li><\/ul><\/li><li><a href="#build">Build<\/a><\/li><\/ul>/,
+    /<nav[\s\S]*<ul><li><a href="#pick">Pick a mode<\/a><ul><li><a href="#gem">Gem<\/a><\/li><\/ul><\/li><li><a href="#build">Build<\/a><\/li><\/ul>/,
   );
   assert.match(
     out,
     /<details[\s\S]*<ul><li><a href="#pick">Pick a mode<\/a><\/li><li><a href="#gem">Gem<\/a><\/li><li><a href="#build">Build<\/a><\/li><\/ul>/,
   );
+});
+
+test("the label names the navigation landmark from its own heading", () => {
+  const out = html(toc(props([heading(2, "pick", "Pick a mode"), heading(2, "build", "Build")])));
+  const labelId = /aria-labelledby="([^"]+)"/.exec(out)?.[1];
+  assert.ok(labelId, "the landmark is labelled");
+  assert.match(out, new RegExp(`<h2 id="${labelId}">On this page</h2>`));
+});
+
+test("the label follows the page language", () => {
+  const headings = [heading(2, "pick", "Pick a mode"), heading(2, "build", "Build")];
+  assert.match(html(toc(props(headings, "fa"))), /<h2 id="toc-title">در این صفحه<\/h2>/);
+  assert.match(html(toc(props(headings, "ar"))), /<h2 id="toc-title">في هذه الصفحة<\/h2>/);
+});
+
+test("the in-view link is announced by aria-current, and the stylesheet keys its mark off that", () => {
+  const css = readFileSync(new URL("../chrome/toc/style.css", import.meta.url), "utf8");
+  assert.match(css, /\.toc a\[aria-current="true"\] \{/);
 });
 
 test("style.css uses only token names from tokens/names.json for var(--*) references", () => {

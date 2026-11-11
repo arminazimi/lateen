@@ -160,7 +160,7 @@ test("site data wins over the computed URL, keyed by page URL as a string", () =
 
 test("site data also reads the engine's array of edit links and an object with editUrl", () => {
   const list = {
-    "edit-links": [{ url: "/example/guide/install/", source: "guide/install.md", editUrl: "https://github.com/o/r/edit/main/guide/install.md" }],
+    "edit-links": [{ url: "/example/guide/install/", source: "docs/guide/install.md", editUrl: "https://github.com/o/r/edit/main/guide/install.md" }],
   };
   assert.match(render(props(pageWith(), github, {}, list)), /href="https:\/\/github\.com\/o\/r\/edit\/main\/guide\/install\.md"/);
 
@@ -181,6 +181,24 @@ test("data with no entry for the page falls back to the repository", () => {
   const data = { "edit-links": { "/other/": "https://github.com/o/r/edit/main/other.md" } };
 
   assert.match(render(props(pageWith(), github, {}, data)), /velella-sh\/lateen\/edit\/main/);
+});
+
+test("an entry whose source names another file is skipped, so the destination keeps the canonical source", () => {
+  const page = pageWith();
+  const data = {
+    "edit-links": [
+      { url: page.url, source: "docs/guide/other.md", editUrl: "https://github.com/o/r/edit/main/docs/guide/other.md" },
+      { url: page.url, source: "./docs/guide/install.md", editUrl: "https://github.com/o/r/edit/main/docs/guide/install.md" },
+    ],
+  };
+
+  assert.match(render(props(page, github, {}, data)), /edit\/main\/docs\/guide\/install\.md"/);
+  assert.equal(editLinkFromData(data["edit-links"], page.url, page.source.file), "https://github.com/o/r/edit/main/docs/guide/install.md");
+
+  const onlyStale = {
+    "edit-links": [{ url: page.url, source: "docs/guide/other.md", editUrl: "https://github.com/o/r/edit/main/docs/guide/other.md" }],
+  };
+  assert.match(render(props(page, github, {}, onlyStale)), /velella-sh\/lateen\/edit\/main\/docs\/guide\/install\.md"/);
 });
 
 test("heading helper: GitHub's new-issue URL carries the page, source line, and heading id", () => {

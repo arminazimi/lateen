@@ -1,5 +1,5 @@
 import { h } from "preact";
-import type { VNode } from "preact";
+import type { ComponentChildren, VNode } from "preact";
 import type { Component } from "@velella/mizzen/contracts";
 
 /** Markdown directive that turns the nested list in its body into a file tree. */
@@ -14,6 +14,14 @@ export interface FileTreeEntry {
   note: string;
   children: FileTreeEntry[];
 }
+
+/** The props from `:::file-tree{label="…" id="…"}`. */
+export type FileTreeProps = {
+  /** The tree's accessible name. */
+  label?: string;
+  /** Id of the tree. Give one when a page has more than one file tree. */
+  id?: string;
+};
 
 type Open = { entry: FileTreeEntry; label: string; labelDone: boolean };
 
@@ -86,6 +94,63 @@ function isHighlighted(entry: FileTreeEntry): boolean {
   return /<(strong|b|mark)[\s>]/i.test(entry.name);
 }
 
+const NAMED_ENTITIES: Readonly<Record<string, string>> = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  nbsp: " ",
+};
+
+/** The text of a rendered name: tags dropped and entities decoded, so a copied path holds no markup. */
+export function plainText(html: string): string {
+  let text = html;
+  for (;;) {
+    const next = text.replace(/<[^>]*>/g, " ");
+    if (next === text) break;
+    text = next;
+  }
+  return text
+    .replace(/&(#[xX][0-9a-fA-F]+|#\d+|[a-zA-Z]+);/g, (match, ref: string) => {
+      if (ref[0] === "#") {
+        const code = ref[1] === "x" || ref[1] === "X" ? parseInt(ref.slice(2), 16) : parseInt(ref.slice(1), 10);
+        return Number.isFinite(code) && code <= 0x10ffff ? String.fromCodePoint(code) : match;
+      }
+      return NAMED_ENTITIES[ref.toLowerCase()] ?? match;
+    })
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** A path segment without its folder slash: `dist/` becomes `dist`. */
+export function entryPath(prefix: string, name: string): string {
+  const segment = plainText(name).replace(/\/+$/, "");
+  if (segment === "") return prefix;
+  return prefix === "" ? segment : `${prefix}/${segment}`;
+}
+
+/** A value reduced to letters, digits, `-` and `_`, so it can go in an id. */
+function slugOf(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}_-]+/gu, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/** The tree's id: the `id` prop when given, otherwise `file-tree`. */
+export function idBase(raw: unknown): string {
+  const given = slugOf(typeof raw === "string" ? raw : "");
+  return given === "" ? "file-tree" : given;
+}
+
+/** The id of one tree node, from the full path of the entry. */
+export function nodeId(base: string, path: string): string {
+  return `${base}-${slugOf(path) || "node"}`;
+}
+
 function icon(folder: boolean): VNode {
   return h(
     "svg",
@@ -104,58 +169,70 @@ function icon(folder: boolean): VNode {
 }
 
 /** One row, as a treeitem with its position in the level and, for a folder, its nested group. */
-function item(entry: FileTreeEntry, level: number, index: number, count: number): VNode {
+function item(entry: FileTreeEntry, level: number, index: number, count: number, base: string, prefix: string): ComponentChildren {
   const folder = isFolder(entry);
   const hasChildren = entry.children.length > 0;
   const classes = ["file-tree-item", folder ? "is-folder" : "is-file"];
   if (isHighlighted(entry)) classes.push("is-highlighted");
 
+  const path = entryPath(prefix, entry.name);
+  const id = nodeId(base, path);
+  const nameId = `${id}-name`;
+  const noteId = `${id}-note`;
+
   return h(
     "li",
     {
       class: classes.join(" "),
+      id,
       role: "treeitem",
+      tabindex: 0,
       "aria-level": level,
       "aria-setsize": count,
       "aria-posinset": index + 1,
       "aria-expanded": hasChildren ? "true" : undefined,
+      "aria-labelledby": nameId,
+      ...(entry.note === "" ? {} : { "aria-describedby": noteId }),
+      "data-path": path,
+      "data-copy-value": path,
     },
     h(
       "div",
       { class: "file-tree-row" },
       icon(folder),
-      h("span", { class: "file-tree-name", dangerouslySetInnerHTML: { __html: entry.name } }),
+      h("span", { class: "file-tree-name", id: nameId, dangerouslySetInnerHTML: { __html: entry.name } }),
       entry.note !== ""
-        ? h("span", { class: "file-tree-note", dangerouslySetInnerHTML: { __html: entry.note } })
+        ? h("span", { class: "file-tree-note", id: noteId, dangerouslySetInnerHTML: { __html: entry.note } })
         : null,
     ),
-    hasChildren ? group(entry.children, level + 1) : null,
+    hasChildren ? group(entry.children, level + 1, base, path) : null,
   );
 }
 
 /** A list of sibling rows: the tree itself at the top, a `group` under each folder. */
-function group(entries: FileTreeEntry[], level: number, root?: string): VNode {
+function group(entries: FileTreeEntry[], level: number, base: string, prefix: string, root?: string): ComponentChildren {
   return h(
     "ul",
     root === undefined
       ? { class: "file-tree-group", role: "group" }
-      : { class: "file-tree", role: "tree", "aria-label": root },
-    ...entries.map((entry, i) => item(entry, level, i, entries.length)),
+      : { class: "file-tree", role: "tree", id: base, "aria-label": root },
+    ...entries.map((entry, i) => item(entry, level, i, entries.length, base, prefix)),
   );
 }
 
 /**
  * Renders a nested Markdown list as a file tree. Folders get a folder icon, files a file icon, a
- * `#` comment renders muted, and bold entries are highlighted. Without a list the body is passed
- * through so the page still reads.
+ * `#` comment renders muted, and bold entries are highlighted. Every row has an id and a
+ * `data-copy-value` path with no markup in it. Without a list the body is passed through so the
+ * page still reads.
  */
-const fileTree: Component<{ label?: string }> = ({ props, html }) => {
+const fileTree: Component<FileTreeProps> = ({ props, html }) => {
   const entries = parseEntries(html);
   if (entries.length === 0) {
     return h("div", { class: "file-tree", dangerouslySetInnerHTML: { __html: html } });
   }
   const label = typeof props.label === "string" && props.label !== "" ? props.label : DEFAULT_LABEL;
-  return group(entries, 1, label);
+  return group(entries, 1, idBase(props.id), "", label);
 };
 
 export default fileTree;

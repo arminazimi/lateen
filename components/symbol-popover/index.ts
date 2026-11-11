@@ -25,6 +25,8 @@ export type SymbolPopoverProps = {
   signature?: string;
   /** An optional reference page: root-relative or `http`/`https`. Anything else is ignored. */
   href?: string;
+  /** Id of the chip. Give one when the same symbol appears more than once on a page. */
+  id?: string;
 };
 
 /**
@@ -44,6 +46,29 @@ export function referenceHref(value: unknown): string | undefined {
   return SAFE_HREF.test(href) ? href : undefined;
 }
 
+/** A value reduced to letters, digits, `-` and `_`, so it can go in an id. */
+function slugOf(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}_-]+/gu, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/** The chip's id: the `id` prop when given, otherwise the symbol's name. */
+export function chipIdOf(raw: unknown, name: string): string {
+  const given = slugOf(textOf(raw));
+  if (given !== "") return given;
+  const slug = slugOf(name);
+  return slug === "" ? "symbol" : `symbol-${slug}`;
+}
+
+/** What a copy action takes: the signature when there is one, otherwise the name, never the tooltip's link. */
+export function copyValueOf(name: string, signature: string): string {
+  return signature === "" ? name : signature;
+}
+
 /**
  * A named symbol in running text. The chip shows the name; hovering or focusing it reveals the
  * signature and, when the directive gives one, a link to the reference page. The popover is hidden
@@ -57,17 +82,31 @@ const symbolPopover: Component<SymbolPopoverProps> = ({ props, page }) => {
 
   const signature = textOf(props.signature);
   const href = referenceHref(props.href);
+  const id = chipIdOf(props.id, name);
+  const tooltipId = `${id}-tooltip`;
   const tooltip =
     signature === "" && href === undefined
       ? null
       : h(
           "span",
-          { class: TOOLTIP_CLASS, role: "tooltip" },
+          { class: TOOLTIP_CLASS, role: "tooltip", id: tooltipId },
           signature === "" ? null : h("code", { class: SIGNATURE_CLASS }, signature),
           href === undefined ? null : h("a", { class: LINK_CLASS, href }, t(page.lang, "symbol_reference")),
         );
 
-  return h("span", { class: SYMBOL_CLASS, tabindex: 0, "data-symbol": name }, name, tooltip);
+  return h(
+    "span",
+    {
+      class: SYMBOL_CLASS,
+      id,
+      tabindex: 0,
+      "data-symbol": name,
+      "data-copy-value": copyValueOf(name, signature),
+      ...(tooltip === null ? {} : { "aria-describedby": tooltipId }),
+    },
+    name,
+    tooltip,
+  );
 };
 
 export default symbolPopover;

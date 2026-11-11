@@ -46,6 +46,7 @@ test("renders v<version> and each variant's icon and class", () => {
     const out = render({ version: "0.3", variant });
     assert.ok(out, `${variant} renders`);
     assert.match(out, new RegExp(`class="version-badge version-badge-${variant}"`));
+    assert.match(out, new RegExp(`data-variant="${variant}"`));
     assert.match(out, /class="version-badge-value"[^>]*>v0\.3</);
     assert.ok(out.includes(`>${ICONS[variant]}<`), `${variant} shows its icon`);
     assert.match(out, new RegExp(`class="version-badge-sr">${stringsOf("en")[LABEL_KEYS[variant]]!.replace("{version}", "0\\.3")}<`));
@@ -154,4 +155,9 @@ test("style.css keeps the version value left to right and uses logical spacing",
   assert.match(css, /\.version-badge-value\s*\{[^}]*unicode-bidi:\s*isolate/s);
   assert.match(css, /\.version-badge\s*\{[^}]*padding-inline:/s);
   assert.doesNotMatch(css, /\b(margin|padding|border)-(left|right)\b/);
+});
+
+test("style.css prints the full sentence in place of the compact icon and value", () => {
+  assert.match(css, /@media print\s*\{[^}]*\.version-badge-icon,[^}]*\.version-badge-value\s*\{[^}]*display:\s*none/s);
+  assert.match(css, /@media print[\s\S]*\.version-badge-sr\s*\{[^}]*clip-path:\s*none/s);
 });

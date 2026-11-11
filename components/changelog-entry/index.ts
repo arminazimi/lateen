@@ -41,6 +41,9 @@ export const BODY_CLASS = "changelog-entry-body";
 /** Class on the paragraph shown when the author gives no body. */
 export const EMPTY_CLASS = "changelog-entry-empty";
 
+/** Class on the word "Version" before the heading text, for assistive tech only. */
+export const SR_CLASS = "changelog-entry-sr";
+
 /** Props from the directive: `:::changelog-entry{version="1.2.0" date="2026-11-09" categories="added,fixed"}`. */
 export type ChangelogEntryProps = {
   /** The release version, such as `1.2.0` or `v1.2.0`. Missing or blank falls back to "Unreleased". */
@@ -197,24 +200,36 @@ function categoryList(categories: readonly Category[], lang: string) {
 
 /**
  * One release in a changelog: a version heading that links to itself, a machine-readable date, the categories
- * the release touches, and the entry text. Missing version or date values render clear fallback text instead of
- * an empty heading or a bare "v". An empty body keeps the heading and shows a short "no details" paragraph, so a
- * stub entry is visibly a stub rather than an empty section.
+ * the release touches, and the entry text. The heading reads "Version 1.2.0" to assistive tech, and the section
+ * carries the authored version as `data-version`. Missing version or date values render clear fallback text
+ * instead of an empty heading or a bare "v". An empty body keeps the heading and shows a short "no details"
+ * paragraph, so a stub entry is visibly a stub rather than an empty section.
  */
 export default function changelogEntry({ props, page, html }: ComponentProps<ChangelogEntryProps>) {
   const lang = page.lang;
   const id = idOf(props.version);
   const textId = versionTextId(props.version);
   const version = versionTextOf(props.version, lang);
+  const authored = typeof props.version === "string" ? props.version.trim() : "";
   const categories = categoriesOf(props.categories);
 
   return h(
     "section",
-    { class: SECTION_CLASS, id, "aria-labelledby": textId },
+    {
+      class: SECTION_CLASS,
+      id,
+      ...(authored === "" ? {} : { "data-version": authored }),
+      "aria-labelledby": textId,
+    },
     h(
       "h2",
       { class: HEADING_CLASS, "aria-labelledby": textId },
-      h("span", { id: textId, class: VERSION_CLASS }, version),
+      h(
+        "span",
+        { id: textId, class: VERSION_CLASS },
+        authored === "" ? null : h("span", { class: SR_CLASS }, `${t(lang, "changelog_version")} `),
+        version,
+      ),
       h(
         "a",
         { class: ANCHOR_CLASS, href: `#${id}`, "aria-label": t(lang, "changelog_anchor", { version }) },

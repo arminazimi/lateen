@@ -1,17 +1,19 @@
 # Trust panel
 
-A chip under the page title that opens a panel with the page's trust level, the examples it tested,
-its drift status, its last reviewer, and why it has that level. The chip is a native `<details>`
+A chip under the page title that opens a panel with the page's trust state, the examples it tested,
+its drift status, its last reviewer, and why it has that state. The chip is a native `<details>`
 summary, so the panel opens with Enter, Space, or a click and closes with Escape without JavaScript;
 the island only adds the focus return to the chip.
 
 - `index.ts` renders the component. It reads the page's entry from `site.data.trust`, keyed by
-  `page.url`, or from the directive's props for a manual panel. It renders nothing when neither has
-  a level it knows.
+  `page.url`, or from the directive's props for a manual panel. It renders nothing when neither names
+  a state it knows, so a page with no trust record never gets a chip.
 - `style.css` draws the chip and the panel with tokens and logical properties. The panel sits under
-  the chip on a wide screen and in the flow on a narrow one, so it works under RTL too.
+  the chip on a wide screen and in the flow on a narrow one, so it works under RTL too. Long reasons
+  wrap (`overflow-wrap: anywhere`) and the panel never grows wider than the viewport, so a long
+  translation stays readable at narrow widths and zoom.
 - `client.ts` is the island: Escape closes the open panel and puts focus back on the chip.
-- `test/component-trust-panel.test.ts` covers the missing-data case, every level, all three rows,
+- `test/component-trust-panel.test.ts` covers the missing-data case, every state, all three rows,
   the action links, localisation, escaping, the island, and the stylesheet's tokens.
 
 ## Data
@@ -32,14 +34,26 @@ nested one wins:
 ```yaml
 pages:
   "/guide/install/":
-    level: review-due
+    level: unreviewed
     reasons: Reviewed more than 90 days ago.
 ```
 
-`level` is `verified`, `review due`, or `at risk`, without regard to case or surrounding spaces
-(`review-due` and `review due` are the same). A missing or unrecognised level hides the panel.
+`level` names the state, strongest first:
+
+| State | What it means |
+| --- | --- |
+| `verified` | All recorded evidence is present and clean: examples pass, drift is empty, and a reviewer signed off. |
+| `partial` | Some recorded evidence is missing, failing, or out of date. |
+| `unreviewed` | The evidence has not been reviewed, so no reviewer is recorded. |
+| `unknown` | No evidence is recorded for the page. |
+
+The names are matched without regard to case or surrounding spaces, and spaces and `_` read as `-`.
+The first trust score's names still work: `review-due` reads as `unreviewed` and `at-risk` as
+`partial`. A missing or unrecognised level hides the panel rather than guessing a state.
+
 `reasons` is a list of sentences, or one string split on line breaks or `|`. `lastReviewer` is
-optional.
+optional. When an entry records no reasons, the panel shows the state's own explanation from the
+i18n table, so every state is inspectable and never just a badge.
 
 The examples row reads `site.data.examples`, keyed by page URL (`passed`, `failed`). The drift row
 reads `site.data.drift`, keyed by page URL (a list of findings); zero findings say so, a missing

@@ -6,7 +6,11 @@ import schemaTable, {
   MISSING_CLASS,
   TABLE_CLASS,
   WRAPPER_CLASS,
+  ancestorPaths,
+  copyValueOf,
   directive,
+  fieldId,
+  idBase,
   lookup,
   schemaRows,
   type SchemaRow,
@@ -232,6 +236,61 @@ test("the component writes a header row with the five columns", () => {
 test("the component uses the label prop as the accessible name", () => {
   const tree = render({ data: "widget", label: "Config keys" }, { widget });
   assert.equal(tree.props["aria-label"], "Config keys");
+});
+
+test("the table has a deterministic id from its data path, and an explicit id wins", () => {
+  assert.equal(idBase(undefined, "widget"), "schema-widget");
+  assert.equal(idBase(undefined, "guides/steps"), "schema-guides-steps");
+  assert.equal(idBase(undefined, ""), "schema-table");
+  assert.equal(idBase("Widget options", "widget"), "widget-options");
+  const tree = render({ data: "widget" }, { widget });
+  assert.equal(tree.props.id, "schema-widget");
+  assert.equal(tree.props["data-schema"], "widget");
+  assert.equal(render({ data: "widget", id: "config" }, { widget }).props.id, "config");
+});
+
+test("every field row has an id, its dotted path, and a copy value", () => {
+  assert.equal(fieldId("schema-widget", "owner.email"), "schema-widget-field-owner-email");
+  const rows = nodes(render({ data: "widget" }, { widget })).filter((node) => node.type === "tr" && node.props["data-field"]);
+  assert.deepEqual(
+    rows.slice(0, 2).map((row) => [row.props.id, row.props["data-field"], row.props["data-copy-value"]]),
+    [
+      ["schema-widget-field-id", "id", "id: string"],
+      ["schema-widget-field-size", "size", "size: integer"],
+    ],
+  );
+  const ownerEmail = rows.find((row) => row.props["data-field"] === "owner.email");
+  assert.equal(ownerEmail?.props["data-copy-value"], "owner.email: string");
+});
+
+test("a nested row's cells name the parent's header as well as their column", () => {
+  const rows = nodes(render({ data: "widget" }, { widget })).filter((node) => node.type === "tr");
+  const owner = rows.find((row) => row.props["data-field"] === "owner");
+  const email = rows.find((row) => row.props["data-field"] === "owner.email");
+  assert.equal(owner?.props.headers, undefined);
+
+  const header = nodes(email as Tree).find((node) => node.type === "th");
+  assert.equal(header?.props.id, "schema-widget-field-owner-email-name");
+  assert.equal(header?.props.headers, "schema-widget-field-owner-name schema-widget-col-name");
+
+  const cells = nodes(email as Tree).filter((node) => node.type === "td");
+  assert.deepEqual(
+    cells.map((cell) => cell.props.headers),
+    [
+      "schema-widget-field-owner-name schema-widget-field-owner-email-name schema-widget-col-type",
+      "schema-widget-field-owner-name schema-widget-field-owner-email-name schema-widget-col-required",
+      "schema-widget-field-owner-name schema-widget-field-owner-email-name schema-widget-col-default",
+      "schema-widget-field-owner-name schema-widget-field-owner-email-name schema-widget-col-description",
+    ],
+  );
+});
+
+test("ancestorPaths and copyValueOf describe a field without table decoration", () => {
+  assert.deepEqual(ancestorPaths("a.b.c"), ["a", "a.b"]);
+  assert.deepEqual(ancestorPaths("a"), []);
+  const [row] = schemaRows({ properties: { id: { type: "string" } } });
+  assert.ok(row);
+  assert.equal(copyValueOf(row), "id: string");
 });
 
 test("a data path that is missing renders a note, not a table", () => {

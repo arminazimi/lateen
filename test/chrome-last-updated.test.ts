@@ -12,6 +12,7 @@ import lastUpdated, {
   asOfOf,
   contributorsOf,
   dateOf,
+  datesOf,
   isoDate,
   localeOf,
   relativeDate,
@@ -93,7 +94,7 @@ test("a front matter date shows the relative date from the build's as-of date", 
   assert.match(
     out,
     new RegExp(
-      `<p class="${CLASS}"><span class="${DATE_CLASS}">Updated <time datetime="2026-03-04" title="March 4, 2026" aria-label="March 4, 2026">2 days ago</time></span></p>`,
+      `<p class="${CLASS}"><span class="${DATE_CLASS}" data-date-source="source">Updated <time datetime="2026-03-04" title="March 4, 2026" aria-label="March 4, 2026">2 days ago</time></span></p>`,
     ),
   );
 });
@@ -134,6 +135,51 @@ test("a Date from the front matter parser reads as its ISO calendar date", () =>
   assert.match(out, /datetime="2026-03-04"/);
 });
 
+test("a review date is labelled as a review, with the same accessible exact value", () => {
+  const out = render(pageWith(), { ...reviewers({ date: "2026-03-04" }), ...build("2026-03-06") });
+
+  assert.ok(out);
+  assert.match(
+    out,
+    new RegExp(
+      `<span class="${DATE_CLASS}" data-date-source="review">Reviewed <time datetime="2026-03-04" title="March 4, 2026" aria-label="March 4, 2026">2 days ago</time></span>`,
+    ),
+  );
+});
+
+test("source and review dates show side by side, and a review on the source's day is dropped", () => {
+  const both = render(pageWith({ last_modified_at: "2026-03-01" }), reviewers({ date: "2026-03-04" }));
+
+  assert.ok(both);
+  assert.match(both, /data-date-source="source">Updated <time datetime="2026-03-01"/);
+  assert.match(both, /data-date-source="review">Reviewed <time datetime="2026-03-04"/);
+
+  const sameDay = render(pageWith({ last_modified_at: "2026-03-04" }), reviewers({ date: "2026-03-04" }));
+  assert.ok(sameDay);
+  assert.equal([...sameDay.matchAll(/<time /g)].length, 1);
+  assert.doesNotMatch(sameDay, /Reviewed/);
+});
+
+test("a date after the build's as-of date stays absolute, so bad data never reads as upcoming or fresh", () => {
+  const out = render(pageWith({ last_modified_at: "2026-03-08" }), build("2026-03-06"));
+
+  assert.ok(out);
+  assert.match(out, /title="March 8, 2026" aria-label="March 8, 2026">March 8, 2026<\/time>/);
+  assert.doesNotMatch(out, /in 2 days/);
+});
+
+test("an unreadable date falls back or is left out, never becoming a relative claim", () => {
+  const fallback = render(pageWith({ last_modified_at: "2026-02-30", updated: "2026-03-04" }), build("2026-03-06"));
+  assert.ok(fallback);
+  assert.match(fallback, /datetime="2026-03-04"/);
+  assert.match(fallback, />2 days ago<\/time>/);
+
+  const invalidReview = render(pageWith({ last_modified_at: "2026-03-04" }), reviewers({ date: "2026-02-31" }));
+  assert.ok(invalidReview);
+  assert.equal([...invalidReview.matchAll(/<time /g)].length, 1);
+  assert.doesNotMatch(invalidReview, /Reviewed/);
+});
+
 test("contributors come from author and the contributors array, sorted and deduplicated", () => {
   const data = reviewers({
     date: "2026-03-04",
@@ -161,7 +207,7 @@ test("the line renders nothing when both the date and the contributors are missi
   assert.equal(render(pageWith(), reviewers({ date: "2026-02-30" })), null);
 });
 
-test("dateOf, asOfOf, and contributorsOf read the data defensively", () => {
+test("dateOf, datesOf, asOfOf, and contributorsOf read the data defensively", () => {
   const page = pageWith();
   const site = (data: Readonly<Record<string, unknown>>) => props(page, data).site;
 
@@ -169,6 +215,12 @@ test("dateOf, asOfOf, and contributorsOf read the data defensively", () => {
   assert.equal(dateOf(page, site(reviewers({ date: "2026-02-30" }))), undefined);
   assert.equal(dateOf(page, site({ reviewers: { [PAGE_URL]: "2026-03-04" } })), undefined);
   assert.equal(dateOf(page, site({ reviewers: [] })), undefined);
+
+  assert.deepEqual(datesOf(pageWith({ last_modified_at: "2026-03-01" }), site(reviewers({ date: "2026-03-04" }))), [
+    { date: "2026-03-01", source: "source" },
+    { date: "2026-03-04", source: "review" },
+  ]);
+  assert.deepEqual(datesOf(page, site(reviewers({ date: "2026-02-30" }))), []);
 
   assert.equal(asOfOf(site(build("2026-03-06"))), "2026-03-06");
   assert.equal(asOfOf(site({ build: { asOf: "2026-03-06" } })), "2026-03-06");
@@ -214,6 +266,16 @@ test("the relative date and the calendar are localised for Persian and Arabic", 
   assert.equal(localeOf("fa-IR"), "fa");
   assert.equal(localeOf("ar-SA"), "ar");
   assert.equal(localeOf("de"), "en");
+});
+
+test("the review label is localised in Persian and Arabic", () => {
+  const fa = render(pageWith({}, "fa"), reviewers({ date: "2026-03-04" }));
+  assert.ok(fa);
+  assert.ok(fa.includes(`${stringsOf("fa").reviewed} `));
+
+  const ar = render(pageWith({}, "ar"), reviewers({ date: "2026-03-04" }));
+  assert.ok(ar);
+  assert.ok(ar.includes(`${stringsOf("ar").reviewed} `));
 });
 
 test("contributor names are escaped, never markup", () => {

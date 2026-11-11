@@ -159,10 +159,11 @@ test("labels are escaped, so markup in a label stays text", () => {
   assert.match(out, /&lt;b&gt;npm&lt;\/b&gt;/);
 });
 
-test("a group with no code blocks renders an empty tab list and no panels", () => {
+test("a group with no code blocks keeps its body whole, so no content is dropped", () => {
   const out = render({}, "<p>No code here.</p>");
   assert.doesNotMatch(out, /class="code-tabs-panel"/);
   assert.doesNotMatch(out, /role="tab"/);
+  assert.match(out, /<div class="code-tabs-body"><p>No code here.<\/p><\/div>/);
 });
 
 test("blocks() returns each pre block in order and ignores the text between them", () => {
@@ -304,8 +305,15 @@ test("activate() moves focus with the arrow keys, wraps, and stops the default s
   assert.equal(tabs[1]?.focused, true);
   assert.equal(right.prevented, true);
   assert.equal(panels[1]?.hidden, false);
+  assert.equal(tabs[1]?.attrs.get("aria-selected"), "true", "the focused tab is the selected one");
+  assert.deepEqual(
+    tabs.map((tab) => tab.attrs.get("tabindex")),
+    ["-1", "0", "-1"],
+    "only the selected tab is in the tab order",
+  );
   list.fire("keydown", { key: "ArrowLeft", target: tabs[1] });
   assert.equal(tabs[0]?.focused, true);
+  assert.equal(tabs[0]?.attrs.get("aria-selected"), "true");
 });
 
 test("activate() in a right-to-left group moves the other way on arrow keys", () => {
@@ -330,6 +338,35 @@ test("activate() changes nothing when tabs and panels do not pair up, so the blo
   assert.equal(list.hidden, false, "the list stays as the server wrote it");
   assert.equal(group.attrs.get("data-enhanced"), undefined);
   assert.equal(panels[0]?.hidden, true, "no panel is hidden by the island");
+});
+
+test("activate() leaves every block stacked when wiring a panel fails", () => {
+  const { group, list, panels } = fakeGroup(2);
+  panels[1]!.setAttribute = () => {
+    throw new Error("broken panel");
+  };
+  assert.doesNotThrow(() => activate(group, false));
+  assert.equal(list.hidden, true, "the tab list stays hidden");
+  assert.equal(group.attrs.get("data-enhanced"), undefined, "the titles stay visible");
+  assert.deepEqual(
+    panels.map((panel) => panel.hidden),
+    [false, false],
+    "every block stays readable",
+  );
+});
+
+test("activate() leaves every block stacked when the tab list cannot take a listener", () => {
+  const { group, list, panels } = fakeGroup(2);
+  list.addEventListener = () => {
+    throw new Error("no listeners");
+  };
+  activate(group, false);
+  assert.equal(list.hidden, true);
+  assert.equal(group.attrs.get("data-enhanced"), undefined);
+  assert.deepEqual(
+    panels.map((panel) => panel.hidden),
+    [false, false],
+  );
 });
 
 test("activate() does nothing when the group has no tab list", () => {

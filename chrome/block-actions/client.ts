@@ -21,6 +21,18 @@ const FULL_SPAN = /^(.*):(\d+):(\d+)-(\d+):(\d+)$/;
 const POINT_WITH_COLUMN = /^(.*):(\d+):(\d+)$/;
 const POINT = /^(.*):(\d+)$/;
 
+/**
+ * A stable DOM id for a code block from its source span: `code-docs-a-md-3-1-9-12`. It is the same
+ * rule as `blockId` in `components/code/index.ts`, so a block keeps one id whether the server stamped
+ * it or this island did.
+ */
+export function blockId(src: string): string {
+  const slug = src
+    .replace(/[^\p{L}\p{N}_-]+/gu, "-")
+    .replace(/^-+|-+$/g, "");
+  return `code-${slug || "block"}`;
+}
+
 /** Longest block text the prompt carries; longer text is cut at a word-safe point with an ellipsis. */
 export const MAX_TEXT = 160;
 
@@ -97,6 +109,7 @@ export interface BlockElement {
   /** Upper-case tag name, as the DOM gives it. A fake without one is treated as a block that can hold a button. */
   readonly tagName?: string;
   getAttribute(name: string): string | null;
+  setAttribute(name: string, value: string): void;
   appendChild(child: ActionButton): unknown;
 }
 
@@ -104,7 +117,18 @@ export interface BlockElement {
 export interface ActionButton {
   hidden: boolean;
   textContent: string | null;
-  readonly dataset: { prompt?: string | undefined; copied?: string | undefined; copyFailed?: string | undefined };
+  readonly dataset: {
+    prompt?: string | undefined;
+    copied?: string | undefined;
+    copyFailed?: string | undefined;
+    blockId?: string | undefined;
+    lang?: string | undefined;
+    file?: string | undefined;
+    source?: string | undefined;
+    text?: string | undefined;
+  };
+  getAttribute(name: string): string | null;
+  setAttribute(name: string, value: string): void;
   addEventListener(type: "click", listener: () => void): void;
   cloneNode(deep: boolean): ActionButton;
 }
@@ -173,6 +197,11 @@ export function copy(button: ActionButton, label: string, env: ActivateEnv): Pro
   );
 }
 
+/** The span with its language beside it, so a prompt keeps both when it leaves the page. */
+function sourceWithLang(source: string, lang: string): string {
+  return lang === "" ? source : `${source} (${lang})`;
+}
+
 /** Clones the template's button into each top-level block, unless there is no clipboard to write to. */
 export function activate(env: ActivateEnv): void {
   if (env.clipboard === undefined) return;
@@ -182,12 +211,25 @@ export function activate(env: ActivateEnv): void {
   for (const block of topLevel(env.blocks)) {
     const source = block.getAttribute("data-src");
     if (source === null) continue;
+    const span = parseSpan(source);
+    const lang = block.getAttribute("data-lang")?.trim() ?? "";
+    const text = block.textContent ?? "";
+    const existing = block.getAttribute("id");
+    const id = existing ?? (lang === "" ? undefined : blockId(source));
+    if (existing === null && id !== undefined) block.setAttribute("id", id);
+
     const button = sample.cloneNode(true);
     button.hidden = false;
-    button.dataset.prompt = promptFor(env.template.dataset.prompt ?? "", source, summarizeText(block.textContent ?? ""));
+    const label = button.textContent ?? "";
+    button.setAttribute("aria-label", `${label} (${source})`);
+    button.dataset.prompt = promptFor(env.template.dataset.prompt ?? "", sourceWithLang(source, lang), summarizeText(text));
     button.dataset.copied = env.template.dataset.copied;
     button.dataset.copyFailed = env.template.dataset.copyFailed;
-    const label = button.textContent ?? "";
+    button.dataset.blockId = id ?? source;
+    button.dataset.lang = lang;
+    button.dataset.file = span?.file ?? "";
+    button.dataset.source = source;
+    button.dataset.text = text;
     button.addEventListener("click", () => {
       void copy(button, label, env);
     });

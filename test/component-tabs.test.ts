@@ -248,6 +248,7 @@ test("the component renders a hidden tab list and one labelled panel per heading
   const out = render({ group: "install" });
   assert.match(out, /^<div class="tabs" data-tabs-group="install">/);
   assert.match(out, /<div role="tablist" hidden>/);
+  assert.doesNotMatch(out, /<div role="tabpanel"[^>]*hidden/, "every section shows without JavaScript");
 
   const buttons = [...out.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)];
   assert.deepEqual(
@@ -259,6 +260,11 @@ test("the component renders a hidden tab list and one labelled panel per heading
   assert.match(out, /role="tabpanel" id="install-panel-2" aria-labelledby="install-tab-2"/);
   assert.match(out, /<h3 class="tabs-title" id="install-title-2">Windows<\/h3>/);
   assert.match(out, /<div class="tabs-body"><p>winget install mizzen<\/p><\/div>/);
+  assert.ok(
+    out.indexOf("brew install mizzen") < out.indexOf("winget install mizzen") &&
+      out.indexOf("winget install mizzen") < out.indexOf("curl -fsSL"),
+    "sections keep their reading order",
+  );
 });
 
 test("the component keeps a body with no heading whole, with no tab list", () => {
@@ -330,6 +336,21 @@ test("activate() does nothing when the group has no tab list", () => {
     querySelectorAll: () => [],
   };
   assert.doesNotThrow(() => activate(group, false));
+});
+
+test("activate() leaves every section stacked when wiring a panel fails", () => {
+  const { group, list, panels } = fakeGroup(["macOS", "Windows", "Linux"], { enhanced: false });
+  panels[1]!.setAttribute = () => {
+    throw new Error("broken panel");
+  };
+  assert.doesNotThrow(() => activate(group, false));
+  assert.equal(list.hidden, true, "the tab list stays hidden");
+  assert.equal(group.attrs.get("data-enhanced"), undefined, "the titles stay visible");
+  assert.deepEqual(
+    panels.map((panel) => panel.hidden),
+    [false, false, false],
+    "every section stays readable",
+  );
 });
 
 test("langSearch() writes ?tab= as the ?lang= the shared sync module reads", () => {
@@ -436,4 +457,21 @@ test("every class the component writes has a rule in style.css", () => {
 test("style.css also styles the engine's role-based tab markup", () => {
   assert.match(styleCss, /\.tabs > \[role="tablist"\] > \[role="tab"\]/);
   assert.match(styleCss, /\.tabs > \[role="tabpanel"\]/);
+});
+
+test("tab motion goes through the motion tokens, which prefers-reduced-motion turns off", () => {
+  let transitions = 0;
+  for (const name of ["tabs", "os-tabs", "code-tabs"]) {
+    const css = readFileSync(new URL(`../components/${name}/style.css`, import.meta.url), "utf8");
+    for (const match of css.matchAll(/(?:transition|animation)(?:-[a-z]+)?\s*:\s*([^;]+);/gi)) {
+      const value = match[1] ?? "";
+      transitions++;
+      assert.match(value, /var\(--motion-[a-z]+\)/, `${name}/style.css must time through a motion token`);
+      assert.doesNotMatch(value, /\b\d+(?:\.\d+)?m?s\b/, `${name}/style.css must not hard-code a duration`);
+    }
+  }
+  assert.ok(transitions >= 3, "each tab component animates through a motion token");
+
+  const tokensCss = readFileSync(new URL("../styles/tokens.css", import.meta.url), "utf8");
+  assert.match(tokensCss, /@media \(prefers-reduced-motion: reduce\)\s*\{[^}]*--motion-fast:\s*0ms/s);
 });
