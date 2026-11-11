@@ -20,10 +20,10 @@ The icon and the sentence a screen reader hears both come from the variant, so t
 | Name | Type | Default | What it does |
 | --- | --- | --- | --- |
 | `version` | string | none | The version shown after `v`, such as `0.3`. Missing or blank renders nothing. |
-| `variant` | `added`, `changed`, or `removed` | `added` | The icon and the screen-reader sentence. An unknown value is `added`. |
+| `variant` | `added`, `changed`, or `removed` | `added` | The icon and the screen-reader sentence. Matching trims spaces and ignores case. An omitted or blank value is `added`; any other value is the neutral `unknown` state. |
 | `block` | bare word | inline | Its presence puts the badge on its own line instead of inline. |
 
-The screen reader hears "Added in version 0.3" (or the matching sentence) in the page's language.
+The screen reader hears "Added in version 0.3" (or the matching sentence) in the page's language. A badge with an unrecognized variant has no such sentence: it shows a muted `?` and `v0.3`, and a screen reader hears `v0.3`, so the version stays available without claiming a change.
 
 ## Example
 
@@ -35,6 +35,8 @@ The screen reader hears "Added in version 0.3" (or the matching sentence) in the
 
 ::version-badge{version=0.4 variant=added block}
 
+::version-badge{version=0.3 variant=purple}
+
 ```markdown
 ::version-badge{version=0.3}
 
@@ -43,10 +45,13 @@ The screen reader hears "Added in version 0.3" (or the matching sentence) in the
 ::version-badge{version=0.3 variant=removed}
 
 ::version-badge{version=0.4 variant=added block}
+
+::version-badge{version=0.3 variant=purple}
 ```
 
 ## Notes
 
 - The directive is block-level in Markdown: put it on its own line, with a blank line before and after. It renders inline; add `block` for its own line.
 - Write the version without the `v`; the badge adds it.
+- Use an unrecognized variant (such as the `purple` example) only to show that the badge does not invent a change. The root still carries `data-version` and `data-variant="unknown"` for tools and agents.
 - A version badge is a label, not a link. Link to the release notes in the sentence around it.
