@@ -43,7 +43,7 @@
 }
 
 .toc a[aria-current="true"] {
-  color: var(--color-accent);
+  color: var(--color-accent-hover);
   border-inline-start-color: var(--color-accent);
 }
 
