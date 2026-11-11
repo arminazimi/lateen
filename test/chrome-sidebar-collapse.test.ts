@@ -388,3 +388,30 @@ test("the stable keys of equal titles stay apart, so one group cannot overwrite 
   assert.match(out, /data-sidebar-group="[^"]+" data-sidebar-legacy="B\/Notes" data-sidebar-site="\/example"><summary>/);
   assert.doesNotMatch(out, /data-sidebar-legacy="B\/Notes"[^>]* open/);
 });
+
+test("equal titles and descendant urls get distinct keys and independent state", () => {
+  const same: NavTree = {
+    main: [
+      { title: "Notes", children: [{ title: "A", url: "/notes/same/" }] },
+      { title: "Notes", children: [{ title: "A", url: "/notes/same/" }] },
+    ],
+  };
+  const out = html(sidebar(propsAt(same, "/notes/same/")));
+  const keys = [...out.matchAll(/data-sidebar-group="([^"]+)"/g)].map((match) => match[1]!);
+  assert.equal(keys.length, 2);
+  assert.notEqual(keys[0], keys[1]);
+
+  const storage = fakeStore();
+  const first = new FakeGroup(keys[0]!, true);
+  const second = new FakeGroup(keys[1]!, true);
+  activate({ storage, root: rootOf([first, second]) });
+  first.toggle(false);
+  assert.equal(first.open, false);
+  assert.equal(second.open, true);
+
+  const firstAgain = new FakeGroup(keys[0]!, true);
+  const secondAgain = new FakeGroup(keys[1]!, true);
+  activate({ storage, root: rootOf([firstAgain, secondAgain]) });
+  assert.equal(firstAgain.open, false);
+  assert.equal(secondAgain.open, true, "the first group's state must not overwrite the second's");
+});

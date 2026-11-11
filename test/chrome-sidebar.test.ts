@@ -223,6 +223,18 @@ test("identical group titles at one level get distinct stable keys", () => {
   assert.equal(new Set(nestedKeys).size, nestedKeys.length);
 });
 
+test("groups with identical titles and descendant urls still get distinct keys", () => {
+  const duplicated: NavTree = {
+    main: [
+      { title: "Notes", children: [{ title: "A", url: "/notes/same/" }] },
+      { title: "Notes", children: [{ title: "A", url: "/notes/same/" }] },
+    ],
+  };
+  const keys = groupKeys(html(sidebar(props(duplicated, "/notes/same/"))));
+  assert.equal(keys.length, 2);
+  assert.notEqual(keys[0], keys[1]);
+});
+
 test("the same navigation structure keeps its keys when titles are translated", () => {
   const english: NavTree = {
     main: [{ title: "Guide", children: [{ title: "Install", url: "/guide/install/" }] }],

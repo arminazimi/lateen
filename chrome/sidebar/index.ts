@@ -50,9 +50,12 @@ function marks(item: NavItem, url: string): boolean {
   return item.match !== undefined && under(url, item.match);
 }
 
-/** FNV-1a over the group's depth and descendant urls: a stable, bounded identity that survives retitling and translation. */
-function groupId(pages: readonly NavLink[], depth: number): string {
-  const urls = `${depth}\n${[...new Set(pages.map((page) => page.url))].sort(byCodePoint).join("\n")}`;
+/**
+ * FNV-1a over the group's structural path, depth, and descendant urls: a stable, bounded identity
+ * that survives retitling and translation while keeping two different groups with the same urls apart.
+ */
+function groupId(pages: readonly NavLink[], depth: number, path: string): string {
+  const urls = `${path}\n${depth}\n${[...new Set(pages.map((page) => page.url))].sort(byCodePoint).join("\n")}`;
   let hash = 0x811c9dc5;
   for (let i = 0; i < urls.length; i += 1) {
     hash ^= urls.charCodeAt(i);
@@ -106,7 +109,15 @@ function collapsedNode(group: NavGroup, pages: readonly NavLink[], url: string) 
  * page is open; the others start closed. `data-sidebar-group` is the stable key the client remembers the
  * state under; `data-sidebar-legacy` is the title-based key older versions used, read once for migration.
  */
-function groupNode(group: NavGroup, key: string, legacy: string, url: string, depth: number, site: string) {
+function groupNode(
+  group: NavGroup,
+  key: string,
+  legacy: string,
+  url: string,
+  depth: number,
+  site: string,
+  path: string,
+) {
   const current = marks(group, url);
   return h(
     "details",
@@ -122,7 +133,7 @@ function groupNode(group: NavGroup, key: string, legacy: string, url: string, de
       null,
       h(`h${Math.min(depth, 6)}`, current ? { "aria-current": "true" } : {}, group.title),
     ),
-    h("ul", null, entries(group.children, url, depth + 1, legacy, site)),
+    h("ul", null, entries(group.children, url, depth + 1, legacy, site, path)),
   );
 }
 
@@ -133,9 +144,10 @@ function entries(
   depth: number,
   parentLegacy: string | undefined,
   site: string,
+  parentPath: string,
 ): ComponentChildren[] {
   const nodes = [];
-  for (const item of items) {
+  for (const [index, item] of items.entries()) {
     if (!isGroup(item)) {
       nodes.push(h("li", null, linkNode(item, url)));
       continue;
@@ -147,7 +159,8 @@ function entries(
       continue;
     }
     const legacy = parentLegacy === undefined ? item.title : `${parentLegacy}/${item.title}`;
-    nodes.push(h("li", null, groupNode(item, groupId(pages, depth), legacy, url, depth, site)));
+    const path = `${parentPath}/${index}`;
+    nodes.push(h("li", null, groupNode(item, groupId(pages, depth, path), legacy, url, depth, site, path)));
   }
   return nodes;
 }
@@ -156,7 +169,7 @@ function entries(
 function blocks(items: readonly NavItem[], url: string, site: string): ComponentChildren[] {
   const out = [];
   let leading = [];
-  for (const item of items) {
+  for (const [index, item] of items.entries()) {
     if (!isGroup(item)) {
       leading.push(h("li", null, linkNode(item, url)));
       continue;
@@ -171,7 +184,8 @@ function blocks(items: readonly NavItem[], url: string, site: string): Component
       out.push(h("ul", null, h("li", null, collapsedNode(item, pages, url))));
       continue;
     }
-    out.push(groupNode(item, groupId(pages, 2), item.title, url, 2, site));
+    const path = `${index}`;
+    out.push(groupNode(item, groupId(pages, 2, path), item.title, url, 2, site, path));
   }
   if (leading.length > 0) out.push(h("ul", null, leading));
   return out;
