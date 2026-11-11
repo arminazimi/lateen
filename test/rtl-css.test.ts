@@ -157,14 +157,15 @@ test("Persian and Arabic pages drop letter spacing, including on elements that s
   }
 });
 
-test("code is left to right and isolated inside RTL text", () => {
+test("technical inline content is left to right and isolated inside RTL text", () => {
   const code = rule("pre");
   assert.ok(code, "no rule for pre");
-  for (const element of ["pre", "code", "kbd"]) {
+  for (const element of ["pre", "code", "kbd", "samp", "var"]) {
     assert.ok(code.selector.includes(element), `the code rule does not name ${element}`);
   }
   assert.match(code.selector, /:lang\(fa\)/);
   assert.match(code.selector, /:lang\(ar\)/);
+  assert.match(code.selector, /:not\(\[dir\]\)/, "an authored direction should not be overruled");
   assert.match(code.body, /direction:\s*ltr/);
   assert.match(code.body, /unicode-bidi:\s*isolate/);
   assert.match(code.body, /font-family:\s*var\(--type-font-mono\)/);
@@ -183,6 +184,18 @@ test("inline Latin runs in right-to-left prose are isolated", () => {
   );
   assert.ok(isolation, "no rule isolates the pipeline's <span dir=\"ltr\"> runs");
   assert.match(isolation.selector, /\[dir="rtl"\]/);
+});
+
+test("every explicit direction island is isolated and keeps its authored direction", () => {
+  const islands = blocks(css).find(
+    (block) => block.selector.includes('[dir="auto"]') && /unicode-bidi:\s*isolate/.test(block.body),
+  );
+  assert.ok(islands, "no rule isolates dir=\"auto\" and dir=\"ltr\"/dir=\"rtl\" runs");
+  for (const direction of ["ltr", "rtl"]) {
+    assert.ok(islands.selector.includes(`[dir="${direction}"]`), `the island rule does not name dir="${direction}"`);
+  }
+  // The rule adds isolation only; direction stays with the attribute (and the browser's detection).
+  assert.doesNotMatch(islands.body, /(?:^|;)\s*direction\s*:/, "the island rule overrules an authored direction");
 });
 
 test("rtl.css uses no raw color or raw length outside a token", () => {
@@ -312,6 +325,37 @@ test("the mixed inline fixture reads right to left and keeps its technical runs 
   assert.ok(sentence.includes("beacon init --force"), sentence);
   assert.equal(document.querySelector("#path-code")?.textContent, "/etc/beacon/beacon.yml");
   assert.equal(document.querySelector("#version")?.textContent, "1.2.3");
+});
+
+test("the technical inline fixture keeps every run in its own direction", () => {
+  const window = rendered("technical-inline.html");
+  const document = window.document;
+
+  assert.equal(document.documentElement.lang, "fa-IR");
+  assert.equal(document.documentElement.dir, "rtl");
+  assert.equal(direction(window, "#samples"), "rtl");
+  assert.equal(direction(window, "#regional"), "rtl");
+
+  for (const id of ["sample", "variable", "url", "number", "ltr-run", "forced-ltr", "regional-code"]) {
+    assert.equal(direction(window, `#${id}`), "ltr", `#${id} should read left to right`);
+  }
+  // A nested run and an authored `dir="rtl"` keep the direction they state.
+  assert.equal(direction(window, "#rtl-run"), "rtl");
+  assert.equal(direction(window, "#forced-rtl"), "rtl");
+
+  // Every explicit island is isolated, including a string of only neutral characters.
+  for (const id of ["url", "number", "neutral-run", "ltr-run", "rtl-run", "forced-rtl"]) {
+    const element = document.querySelector(`#${id}`);
+    assert.ok(element, `the fixture has no #${id}`);
+    assert.equal(window.getComputedStyle(element).unicodeBidi, "isolate", `#${id} should be isolated`);
+  }
+
+  // The quoted values keep their exact characters and punctuation; nothing is reordered in the DOM.
+  assert.equal(document.querySelector("#sample")?.textContent, "beacon: ready");
+  assert.equal(document.querySelector("#variable")?.textContent, "retry_limit");
+  assert.equal(document.querySelector("#url")?.textContent, "https://example.com/api?q=1&v=2");
+  assert.equal(document.querySelector("#number")?.textContent, "1,024.50");
+  assert.equal(document.querySelector("#neutral-run")?.textContent, "— 12 —");
 });
 
 test("the mixed block fixture keeps its technical blocks left to right", () => {
