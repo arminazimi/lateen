@@ -1,5 +1,5 @@
 import { h } from "preact";
-import type { Component } from "@velella/mizzen/contracts";
+import type { Component, Page } from "@velella/mizzen/contracts";
 import { t } from "../../i18n/index.ts";
 
 /** The Markdown directive this component handles: `::status-banner{status=deprecated}`. */
@@ -39,6 +39,8 @@ export type StatusBannerProps = {
   replacement?: string;
   /** The version the status applies to, such as `0.2.0`. */
   version?: string;
+  /** An optional id base for the banner; reduced to letters, digits, `-` and `_`. */
+  id?: string;
 };
 
 /**
@@ -86,6 +88,50 @@ export function replacementOf(value: unknown): string | undefined {
   return SAFE_URL.test(url) ? url : undefined;
 }
 
+/** A value reduced to letters, digits, `-` and `_`, so an author's id cannot break the markup. */
+function slugOf(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}_-]+/gu, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/**
+ * The banner's id base: the author's `id` when it has any usable characters, otherwise
+ * `status-banner-<status>`, so a single ordinary banner keeps its long-standing fragment id.
+ */
+export function idBase(raw: unknown, status: StatusBannerStatus): string {
+  const given = slugOf(typeof raw === "string" ? raw : "");
+  return given === "" ? `status-banner-${status}` : given;
+}
+
+/**
+ * Per-page ids already taken, keyed by the Page and the page HTML they were counted against, so one
+ * page's ids cannot leak into another page or build.
+ */
+const pageIds = new WeakMap<Page, { html: string; ids: Set<string> }>();
+
+/**
+ * An id unique on its page: the base, then `<base>-2`, `<base>-3`, in page order. The banner's label
+ * id (`<id>-label`) is reserved too, so an author id cannot collide with another banner's label.
+ */
+function uniqueId(page: Page, base: string): string {
+  let state = pageIds.get(page);
+  if (state === undefined || state.html !== page.html) {
+    state = { html: page.html, ids: new Set() };
+    pageIds.set(page, state);
+  }
+  let id = base;
+  for (let n = 2; state.ids.has(id) || state.ids.has(`${id}-label`); n += 1) {
+    id = `${base}-${n}`;
+  }
+  state.ids.add(id);
+  state.ids.add(`${id}-label`);
+  return id;
+}
+
 /** The status's inline icon. It is decorative: the label beside it carries the meaning for a screen reader. */
 function icon(status: StatusBannerStatus) {
   return h(
@@ -109,7 +155,8 @@ function icon(status: StatusBannerStatus) {
  * A page-level banner for a deprecated, experimental, or old-version page: an icon, the status as
  * visible text, one line of guidance, the version when given, and a link to the replacement when
  * given. The severity is on the element, and the icon and label carry the meaning on their own, so
- * colour is never the only signal. Renders nothing for an unknown status.
+ * colour is never the only signal. Each banner gets an id unique on its page, so a repeated status
+ * stays distinct. Renders nothing for an unknown status.
  */
 const statusBanner: Component<StatusBannerProps> = ({ props, page }) => {
   const status = statusOf(props.status);
@@ -117,20 +164,23 @@ const statusBanner: Component<StatusBannerProps> = ({ props, page }) => {
 
   const version = versionOf(props.version);
   const replacement = replacementOf(props.replacement);
+  const id = uniqueId(page, idBase(props.id, status));
+  const labelId = `${id}-label`;
 
   return h(
     "div",
     {
       class: classNameOf(status),
-      id: `status-banner-${status}`,
+      id,
       role: "note",
-      "aria-labelledby": `status-banner-${status}-label`,
+      "aria-labelledby": labelId,
+      "data-status": status,
       "data-severity": SEVERITIES[status],
     },
     icon(status),
     h(
       "strong",
-      { class: "status-banner-label", id: `status-banner-${status}-label` },
+      { class: "status-banner-label", id: labelId },
       t(page.lang, LABEL_KEYS[status]),
     ),
     h("span", { class: "status-banner-hint" }, t(page.lang, HINT_KEYS[status])),

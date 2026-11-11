@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import type { ComponentProps } from "@velella/mizzen/contracts";
+import type { ComponentProps, Page } from "@velella/mizzen/contracts";
 import { renderToString } from "preact-render-to-string";
 import { stringsOf } from "../i18n/index.ts";
 import statusBanner, {
@@ -20,9 +20,26 @@ import statusBanner, {
 
 /** Render the banner the way the render host calls it: directive props and the page's language. */
 function render(props: StatusBannerProps, lang = "en"): string | null {
-  const input = { props, html: "", page: { lang }, site: {} } as unknown as ComponentProps<StatusBannerProps>;
+  return renderOn(props, { lang } as unknown as Page);
+}
+
+/** Render on a page object the test controls, so several banners share one page and its ids. */
+function renderOn(props: StatusBannerProps, page: Page): string | null {
+  const input = { props, html: "", page, site: {} } as unknown as ComponentProps<StatusBannerProps>;
   const node = statusBanner(input);
   return node === null ? null : renderToString(node as never);
+}
+
+/** Every id in a rendered banner, in document order. */
+function idsOf(out: string): string[] {
+  return [...out.matchAll(/\bid="([^"]+)"/g)].map((match) => match[1]!);
+}
+
+/** The root banner's own id and the label id it names. */
+function relationshipOf(out: string): { id: string; labelId: string } {
+  const match = /id="([^"]+)"[^>]*role="note"[^>]*aria-labelledby="([^"]+)"/.exec(out);
+  assert.ok(match, `expected a note with a label: ${out}`);
+  return { id: match[1]!, labelId: match[2]! };
 }
 
 const names = JSON.parse(readFileSync(new URL("../tokens/names.json", import.meta.url), "utf8")) as Record<
@@ -107,6 +124,113 @@ test("several statuses on one page keep distinct names and add no heading or ale
     assert.ok(!labels.has(label), `${status} has its own visible label`);
     labels.add(label);
     assert.doesNotMatch(out, /role="alert"|role="heading"|<h[1-6]/);
+  }
+});
+
+test("repeated same-status banners get unique root and label ids, each naming its own label", () => {
+  const shared = { lang: "en" } as unknown as Page;
+  const one = renderOn({ status: "deprecated" }, shared)!;
+  const two = renderOn({ status: "deprecated" }, shared)!;
+
+  assert.equal(relationshipOf(one).id, "status-banner-deprecated");
+  assert.equal(relationshipOf(one).labelId, "status-banner-deprecated-label");
+  assert.equal(relationshipOf(two).id, "status-banner-deprecated-2");
+  assert.equal(relationshipOf(two).labelId, "status-banner-deprecated-2-label");
+  assert.ok(two.includes(`<strong class="status-banner-label" id="status-banner-deprecated-2-label">`));
+
+  const all = [...idsOf(one), ...idsOf(two)];
+  assert.equal(new Set(all).size, all.length, "no duplicate ids across the two banners");
+});
+
+test("mixed statuses keep their ordinary ids and only repeats are numbered", () => {
+  const shared = { lang: "en" } as unknown as Page;
+  const deprecated = renderOn({ status: "deprecated" }, shared)!;
+  const experimental = renderOn({ status: "experimental" }, shared)!;
+  const again = renderOn({ status: "deprecated" }, shared)!;
+  const old = renderOn({ status: "old-version" }, shared)!;
+
+  assert.equal(relationshipOf(deprecated).id, "status-banner-deprecated");
+  assert.equal(relationshipOf(experimental).id, "status-banner-experimental");
+  assert.equal(relationshipOf(again).id, "status-banner-deprecated-2");
+  assert.equal(relationshipOf(old).id, "status-banner-old-version");
+
+  const all = [...idsOf(deprecated), ...idsOf(experimental), ...idsOf(again), ...idsOf(old)];
+  assert.equal(new Set(all).size, all.length);
+});
+
+test("an author id is the base, sanitized, and repeated ids are numbered", () => {
+  const shared = { lang: "en" } as unknown as Page;
+  const one = renderOn({ status: "experimental", id: " Notice " }, shared)!;
+  const two = renderOn({ status: "experimental", id: "notice" }, shared)!;
+  const blank = renderOn({ status: "experimental", id: "   " }, shared)!;
+
+  assert.equal(relationshipOf(one).id, "notice");
+  assert.equal(relationshipOf(one).labelId, "notice-label");
+  assert.equal(relationshipOf(two).id, "notice-2");
+  assert.equal(relationshipOf(two).labelId, "notice-2-label");
+  assert.equal(relationshipOf(blank).id, "status-banner-experimental");
+
+  const all = [...idsOf(one), ...idsOf(two), ...idsOf(blank)];
+  assert.equal(new Set(all).size, all.length);
+});
+
+test("an author id cannot inject markup or duplicate another banner's root or label", () => {
+  const shared = { lang: "en" } as unknown as Page;
+  const ordinary = renderOn({ status: "deprecated" }, shared)!;
+  const injected = renderOn({ status: "deprecated", id: 'a"><script>alert(1)</script>' }, shared)!;
+  const sameRoot = renderOn({ status: "experimental", id: "status-banner-deprecated" }, shared)!;
+  const sameLabel = renderOn({ status: "experimental", id: "status-banner-deprecated-label" }, shared)!;
+
+  assert.match(ordinary, /id="status-banner-deprecated"/);
+  assert.doesNotMatch(injected, /<script|onload=/i);
+  assert.match(relationshipOf(injected).id, /^[^"<>\s]+$/);
+  assert.equal(relationshipOf(injected).id, "a-script-alert-1-script");
+  assert.equal(relationshipOf(sameRoot).id, "status-banner-deprecated-2");
+  assert.equal(relationshipOf(sameLabel).id, "status-banner-deprecated-label-2");
+
+  const all = [...idsOf(ordinary), ...idsOf(injected), ...idsOf(sameRoot), ...idsOf(sameLabel)];
+  assert.equal(new Set(all).size, all.length);
+});
+
+test("Unicode ids survive, and RTL pages keep each relationship and left-to-right values", () => {
+  const shared = { lang: "fa", dir: "rtl" } as unknown as Page;
+  const one = renderOn(
+    { status: "old-version", id: "وضعیت بالا", version: "۰.۲.۰", replacement: "/fa/guide/new/" },
+    shared,
+  )!;
+  const two = renderOn(
+    { status: "old-version", id: "وضعیت بالا", version: "۰.۲.۰", replacement: "/fa/guide/new/" },
+    shared,
+  )!;
+
+  assert.equal(relationshipOf(one).id, "وضعیت-بالا");
+  assert.equal(relationshipOf(two).id, "وضعیت-بالا-2");
+  for (const out of [one, two]) {
+    const { id, labelId } = relationshipOf(out);
+    assert.equal(labelId, `${id}-label`);
+    assert.ok(out.includes(`<strong class="status-banner-label" id="${labelId}">`));
+    assert.match(out, /<span class="status-banner-version-value" dir="ltr">۰\.۲\.۰<\/span>/);
+    assert.match(out, /<a class="status-banner-replacement" href="\/fa\/guide\/new\/">/);
+    assert.doesNotMatch(out, /dir="rtl"/, "the page direction is not hard-coded on the banner");
+  }
+  const all = [...idsOf(one), ...idsOf(two)];
+  assert.equal(new Set(all).size, all.length);
+});
+
+test("instance ids are deterministic on a fresh page", () => {
+  const pair = (): string[] => {
+    const fresh = { lang: "en" } as unknown as Page;
+    return [renderOn({ status: "deprecated" }, fresh)!, renderOn({ status: "deprecated" }, fresh)!];
+  };
+  assert.deepEqual(pair(), pair());
+});
+
+test("the root exposes the normalized status beside the severity", () => {
+  for (const status of STATUSES) {
+    const out = render({ status: status.toUpperCase() })!;
+    assert.match(out, new RegExp(`data-status="${status}"`));
+    assert.match(out, new RegExp(`data-severity="${SEVERITIES[status]}"`));
+    assert.ok(out.includes(`>${stringsOf("en")[LABEL_KEYS[status]]!}</strong>`), "the visible label stays localized");
   }
 });
 

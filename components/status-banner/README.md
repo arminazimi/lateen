@@ -10,14 +10,18 @@ link to the replacement.
   `status_experimental_hint`, `status_old_version_hint`), and the labels from `status_deprecated`,
   `status_experimental`, `status_old_version`, plus `status_since` and `status_replaced_by`, in the
   page's language.
+- Each banner's id is an optional author `id`, reduced to letters, digits, `-`, and `_`, or else
+  `status-banner-<status>`. Ids are made unique per page in page order: the first banner of a status
+  keeps its plain id, and repeats get `-2`, `-3`, and so on, with each banner's label id following its
+  own root. The root also carries `data-status` (the normalized status) beside `data-severity`.
 - `style.css` draws the banner with an accent on the inline start edge, so it moves under RTL, and
   keeps the version and replacement values left to right.
 - `test/component-status-banner.test.ts` covers the three variants, icons, labels, guidance, severity,
-  the replacement link, old-version, unknown statuses, several banners on one page, escaping, and the
-  stylesheet's tokens.
+  the replacement link, old-version, unknown statuses, repeated and mixed statuses, explicit ids,
+  Unicode, RTL, escaping, and the stylesheet's tokens.
 
-Syntax: `::status-banner{status=deprecated replacement="/guide/new/" version="0.2.0"}`. Each banner is
-a `note` named by its label, with an id per status, so several statuses on one page stay distinct and
-none is announced as an alert. See `site/components/status-banner.md` for the full reference. For a
-banner above the title driven by front matter (`status`, `since`, `replaced_by`), use the separate
-`page-status` component.
+Syntax: `::status-banner{status=deprecated replacement="/guide/new/" version="0.2.0" id="notice"}`.
+Each banner is a `note` named by its own label, with an id unique on the page, so repeated or mixed
+statuses stay distinct and none is announced as an alert. See `site/components/status-banner.md` for
+the full reference. For a banner above the title driven by front matter (`status`, `since`,
+`replaced_by`), use the separate `page-status` component.
