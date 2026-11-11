@@ -5,11 +5,14 @@ import { t } from "../../i18n/index.ts";
 /** The Markdown directive this component handles: `::symbol-popover{name="…"}`. */
 export const directive = "symbol-popover";
 
-/** Class on the inline chip. `style.css` draws it and reveals its tooltip. */
+/** Class on the disclosure root, or on the static chip when there is nothing to disclose. */
 export const SYMBOL_CLASS = "symbol-popover";
 
-/** Class on the popover that holds the signature and the reference link. */
-export const TOOLTIP_CLASS = "symbol-popover-tooltip";
+/** Class on the chip: the `<summary>` of the disclosure, or the static chip's label. */
+export const CHIP_CLASS = "symbol-popover-chip";
+
+/** Class on the panel that holds the signature and the reference link. */
+export const PANEL_CLASS = "symbol-popover-panel";
 
 /** Class on the signature, shown as code text. */
 export const SIGNATURE_CLASS = "symbol-popover-signature";
@@ -21,16 +24,14 @@ export const LINK_CLASS = "symbol-popover-link";
 export type SymbolPopoverProps = {
   /** The symbol's name, shown on the chip. Required: without it the component renders nothing. */
   name?: string;
-  /** The signature shown in the popover, as code text: `runExample(input: Input): Promise<Result>`. */
+  /** The signature shown in the panel, as code text: `runExample(input: Input): Promise<Result>`. */
   signature?: string;
   /** An optional reference page: root-relative or `http`/`https`. Anything else is ignored. */
   href?: string;
-  /** Id of the chip. Give one when the same symbol appears more than once on a page. */
-  id?: string;
 };
 
 /**
- * A URL the popover may link to: root-relative (`/reference/runner/`, but not protocol-relative
+ * A URL the panel may link to: root-relative (`/reference/runner/`, but not protocol-relative
  * `//host`) or `http`/`https`. Anything else (`javascript:`, a relative path) renders no link.
  */
 const SAFE_HREF = /^(?:\/(?![/\\])|https?:\/\/)[^\s"'<>\\]*$/i;
@@ -46,33 +47,19 @@ export function referenceHref(value: unknown): string | undefined {
   return SAFE_HREF.test(href) ? href : undefined;
 }
 
-/** A value reduced to letters, digits, `-` and `_`, so it can go in an id. */
-function slugOf(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}_-]+/gu, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-/** The chip's id: the `id` prop when given, otherwise the symbol's name. */
-export function chipIdOf(raw: unknown, name: string): string {
-  const given = slugOf(textOf(raw));
-  if (given !== "") return given;
-  const slug = slugOf(name);
-  return slug === "" ? "symbol" : `symbol-${slug}`;
-}
-
-/** What a copy action takes: the signature when there is one, otherwise the name, never the tooltip's link. */
+/** What a copy action takes: the signature when there is one, otherwise the name, never the reference label. */
 export function copyValueOf(name: string, signature: string): string {
   return signature === "" ? name : signature;
 }
 
 /**
- * A named symbol in running text. The chip shows the name; hovering or focusing it reveals the
- * signature and, when the directive gives one, a link to the reference page. The popover is hidden
- * with CSS by default, so a page without JavaScript still shows it on hover and keyboard focus.
+ * A named symbol in running text: a native `<details>` disclosure. The chip is its `<summary>`, so
+ * a tap, click, Enter, or Space opens it, and the signature and reference link are ordinary content
+ * inside. Native details means no JavaScript is needed to open or read it, and no element inside a
+ * tooltip is interactive because there is no tooltip role at all.
+ *
+ * The island only adds Escape and outside dismissal, with focus returning to the chip. The
+ * disclosure needs no ids, so repeated names or explicit ids cannot collide in a relationship.
  * A symbol inside an ordinary fenced code block needs engine markers (not in scope here); the
  * directive on its own line is the supported form.
  */
@@ -82,30 +69,26 @@ const symbolPopover: Component<SymbolPopoverProps> = ({ props, page }) => {
 
   const signature = textOf(props.signature);
   const href = referenceHref(props.href);
-  const id = chipIdOf(props.id, name);
-  const tooltipId = `${id}-tooltip`;
-  const tooltip =
-    signature === "" && href === undefined
-      ? null
-      : h(
-          "span",
-          { class: TOOLTIP_CLASS, role: "tooltip", id: tooltipId },
-          signature === "" ? null : h("code", { class: SIGNATURE_CLASS }, signature),
-          href === undefined ? null : h("a", { class: LINK_CLASS, href }, t(page.lang, "symbol_reference")),
-        );
+  const copyValue = copyValueOf(name, signature);
+
+  if (signature === "" && href === undefined) {
+    return h(
+      "span",
+      { class: `${SYMBOL_CLASS} ${CHIP_CLASS}`, "data-symbol": name, "data-copy-value": copyValue },
+      name,
+    );
+  }
 
   return h(
-    "span",
-    {
-      class: SYMBOL_CLASS,
-      id,
-      tabindex: 0,
-      "data-symbol": name,
-      "data-copy-value": copyValueOf(name, signature),
-      ...(tooltip === null ? {} : { "aria-describedby": tooltipId }),
-    },
-    name,
-    tooltip,
+    "details",
+    { class: SYMBOL_CLASS, "data-symbol": name },
+    h("summary", { class: CHIP_CLASS, "data-copy-value": copyValue }, name),
+    h(
+      "div",
+      { class: PANEL_CLASS },
+      signature === "" ? null : h("code", { class: SIGNATURE_CLASS }, signature),
+      href === undefined ? null : h("a", { class: LINK_CLASS, href }, t(page.lang, "symbol_reference")),
+    ),
   );
 };
 
