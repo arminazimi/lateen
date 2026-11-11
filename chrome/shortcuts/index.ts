@@ -1,9 +1,15 @@
-import { h } from "preact";
+import { Fragment, h } from "preact";
 import type { Chrome } from "@velella/mizzen/contracts";
 import { t } from "../../i18n/index.ts";
 
 /** Id the dialog's heading carries; `aria-labelledby` points at it. */
 export const SHORTCUTS_TITLE_ID = "shortcuts-title";
+
+/** Id the preference checkbox carries, so its label points at it. */
+export const SHORTCUTS_TOGGLE_ID = "shortcuts-toggle";
+
+/** Id the preference hint carries, so the checkbox's `aria-describedby` points at it. */
+export const SHORTCUTS_HINT_ID = "shortcuts-hint";
 
 /** One row of the shortcut list: the keys, the string key of what they do, and whether they need a script. */
 interface Shortcut {
@@ -40,54 +46,100 @@ function keysOf(shortcut: Shortcut) {
 }
 
 /**
- * The keyboard shortcuts dialog: a heading and a definition list of every shortcut the theme defines.
- * It starts `hidden` and `client.ts` opens it on `?` and closes it on Escape, so a visitor without
- * JavaScript sees no control that would do nothing. `layouts/base.ts` places it on every page.
+ * The preference row: one checkbox for all three unmodified character shortcuts, and a hint that names
+ * them and the modified key that keeps working. It starts checked, because the static page is the
+ * "enabled" state; `client.ts` corrects it from storage.
+ */
+function preference(lang: string) {
+  return h(
+    "div",
+    { class: "shortcuts-preference" },
+    h("input", {
+      type: "checkbox",
+      id: SHORTCUTS_TOGGLE_ID,
+      class: "shortcuts-toggle",
+      "data-shortcuts-toggle": "",
+      "aria-describedby": SHORTCUTS_HINT_ID,
+      checked: true,
+    }),
+    h(
+      "div",
+      { class: "shortcuts-preference-text" },
+      h("label", { class: "shortcuts-preference-label", for: SHORTCUTS_TOGGLE_ID }, t(lang, "shortcuts_preference")),
+      h("p", { class: "shortcuts-preference-hint", id: SHORTCUTS_HINT_ID }, t(lang, "shortcuts_preference_hint")),
+    ),
+  );
+}
+
+/**
+ * The keyboard shortcuts dialog: a visible launcher, a heading, a definition list of every shortcut the
+ * theme defines, and the preference that turns the unmodified ones off. The launcher and dialog start
+ * `hidden`; `client.ts` reveals both, opens the dialog on `?` and on the launcher, and closes it on
+ * Escape, so a visitor without JavaScript sees no control that would do nothing. `layouts/base.ts`
+ * places this unit on every page.
  *
- * The list is static, so it names `Ctrl/Cmd+K` rather than the platform's one hint; the search
- * button itself carries the platform-specific hint once `client.ts` runs.
+ * The list is static, so it names `Ctrl/Cmd+K` rather than the platform's one hint; the search button
+ * itself carries the platform-specific hint once `client.ts` runs. The launcher is the way back into
+ * the dialog once the reader has turned `?` off, which is why it sits outside the dialog.
  */
 const shortcuts: Chrome = ({ page }) => {
   const lang = page.lang;
   return h(
-    "dialog",
-    { class: "shortcuts", "data-shortcuts": "", "aria-labelledby": SHORTCUTS_TITLE_ID, hidden: true },
+    Fragment,
+    null,
     h(
-      "div",
-      { class: "shortcuts-panel" },
+      "button",
+      {
+        type: "button",
+        class: "shortcuts-open",
+        hidden: true,
+        "data-shortcuts-open": "",
+        "aria-haspopup": "dialog",
+      },
+      h("kbd", { class: "shortcut-key", "aria-hidden": "true" }, "?"),
+      h("span", { class: "shortcuts-open-label" }, t(lang, "shortcuts_title")),
+    ),
+    h(
+      "dialog",
+      { class: "shortcuts", "data-shortcuts": "", "aria-labelledby": SHORTCUTS_TITLE_ID, hidden: true },
       h(
         "div",
-        { class: "shortcuts-header" },
-        h("h2", { class: "shortcuts-title", id: SHORTCUTS_TITLE_ID }, t(lang, "shortcuts_title")),
+        { class: "shortcuts-panel" },
         h(
-          "button",
-          {
-            type: "button",
-            class: "shortcuts-close",
-            "aria-label": t(lang, "shortcuts_close"),
-            "data-shortcuts-close": "",
-          },
-          h("span", { "aria-hidden": "true" }, "×"),
-        ),
-      ),
-      h(
-        "dl",
-        { class: "shortcuts-list" },
-        ...SHORTCUTS.map((shortcut) =>
+          "div",
+          { class: "shortcuts-header" },
+          h("h2", { class: "shortcuts-title", id: SHORTCUTS_TITLE_ID }, t(lang, "shortcuts_title")),
           h(
-            "div",
-            { class: "shortcut" },
-            keysOf(shortcut),
+            "button",
+            {
+              type: "button",
+              class: "shortcuts-close",
+              "aria-label": t(lang, "shortcuts_close"),
+              "data-shortcuts-close": "",
+            },
+            h("span", { "aria-hidden": "true" }, "×"),
+          ),
+        ),
+        h(
+          "dl",
+          { class: "shortcuts-list" },
+          ...SHORTCUTS.map((shortcut) =>
             h(
-              "dd",
-              { class: "shortcut-action" },
-              t(lang, shortcut.label),
-              shortcut.needsScript
-                ? h("span", { class: "shortcut-needs-js" }, t(lang, "shortcuts_needs_js"))
-                : null,
+              "div",
+              { class: "shortcut" },
+              keysOf(shortcut),
+              h(
+                "dd",
+                { class: "shortcut-action" },
+                t(lang, shortcut.label),
+                shortcut.needsScript
+                  ? h("span", { class: "shortcut-needs-js" }, t(lang, "shortcuts_needs_js"))
+                  : null,
+              ),
             ),
           ),
         ),
+        preference(lang),
       ),
     ),
   );

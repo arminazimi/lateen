@@ -12,6 +12,7 @@ import {
   type ShortcutEnv,
   type ShortcutEvent,
 } from "../chrome/search/shortcut.ts";
+import { OFF, STORAGE_KEY, type ShortcutStorage } from "../chrome/shortcuts/preference.ts";
 
 interface FakeEvent extends ShortcutEvent {
   prevented: boolean;
@@ -37,10 +38,11 @@ function keyEvent(
 }
 
 /** A document that records its keydown listeners, so a test can fire a key. */
-function fakeEnv(platform: string) {
+function fakeEnv(platform: string, storage?: ShortcutStorage) {
   const listeners: Array<(event: ShortcutEvent) => void> = [];
   const env: ShortcutEnv = {
     platform,
+    ...(storage === undefined ? {} : { storage }),
     addEventListener(type: string, listener: (event: ShortcutEvent) => void) {
       assert.equal(type, "keydown");
       listeners.push(listener);
@@ -187,4 +189,70 @@ test("an unrelated key does not open search or cancel its default", () => {
 
   assert.equal(event.prevented, false);
   assert.equal(button.clicks, 0);
+});
+
+test("a stored preference turns `/` off and leaves the modified shortcut working", () => {
+  const button = fakeButton();
+  const storage: ShortcutStorage = { getItem: () => OFF, setItem: () => {} };
+  const { env, fire } = fakeEnv("Win32", storage);
+  activateShortcuts({ button }, env);
+
+  const slash = keyEvent("/", { target: { tagName: "BODY" } });
+  fire(slash);
+  assert.equal(slash.prevented, false, "`/` should type normally");
+  assert.equal(button.clicks, 0);
+
+  const command = keyEvent("k", { ctrl: true, target: { tagName: "BODY" } });
+  fire(command);
+  assert.equal(command.prevented, true);
+  assert.equal(button.clicks, 1, "Ctrl+K is never gated");
+
+  const meta = keyEvent("k", { meta: true, target: { tagName: "BODY" } });
+  fire(meta);
+  assert.equal(meta.prevented, false, "the other platform's command key is not the shortcut");
+});
+
+test("storage that refuses to read, or holds an unknown value, leaves `/` working", () => {
+  const blocked: ShortcutStorage = {
+    getItem(): string | null {
+      throw new Error("storage is blocked");
+    },
+    setItem(): void {
+      throw new Error("storage is blocked");
+    },
+  };
+  const corrupt: ShortcutStorage = { getItem: () => "something-else", setItem: () => {} };
+
+  for (const storage of [blocked, corrupt]) {
+    const button = fakeButton();
+    const { env, fire } = fakeEnv("Win32", storage);
+    activateShortcuts({ button }, env);
+
+    const slash = keyEvent("/", { target: { tagName: "BODY" } });
+    fire(slash);
+    assert.equal(slash.prevented, true);
+    assert.equal(button.clicks, 1);
+  }
+});
+
+test("the preference is read on every press, so turning it back on restores `/`", () => {
+  let stored: string | null = OFF;
+  const storage: ShortcutStorage = { getItem: () => stored, setItem: () => {} };
+  const button = fakeButton();
+  const { env, fire } = fakeEnv("Linux x86_64", storage);
+  activateShortcuts({ button }, env);
+
+  fire(keyEvent("/", { target: { tagName: "BODY" } }));
+  assert.equal(button.clicks, 0);
+
+  stored = null;
+  const slash = keyEvent("/", { target: { tagName: "BODY" } });
+  fire(slash);
+  assert.equal(slash.prevented, true);
+  assert.equal(button.clicks, 1);
+});
+
+test("the preference key is the one the shortcuts dialog writes", () => {
+  assert.equal(STORAGE_KEY, "lateen-shortcuts");
+  assert.equal(OFF, "off");
 });
