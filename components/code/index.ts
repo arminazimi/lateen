@@ -134,6 +134,18 @@ function langFromBody(html: string): string | undefined {
   return /class="[^"]*\blanguage-([\w+#-]+)/.exec(html)?.[1];
 }
 
+/**
+ * A stable DOM id for a block from its source span: `code-docs-a-md-3-1-9-12`. Letters, digits,
+ * `_` and `-` survive; everything else becomes `-`, so an id is safe in CSS and in a URL fragment.
+ * The span is unique within a page, so two blocks never share an id.
+ */
+export function blockId(src: string): string {
+  const slug = src
+    .replace(/[^\p{L}\p{N}_-]+/gu, "-")
+    .replace(/^-+|-+$/g, "");
+  return `code-${slug || "block"}`;
+}
+
 export type CodeProps = {
   /** Language of the fence. */
   lang?: string;
@@ -149,8 +161,9 @@ export type CodeProps = {
 export default function code({ props, html, page, site }: ComponentProps<CodeProps>) {
   const lang = props.lang?.trim() || langFromBody(html) || "text";
   const text = sourceText(html);
-  const pos = page?.source;
-  const src = props.src ?? (pos ? `${pos.file}:${pos.line}` : undefined);
+  // No page-start fallback: the engine stamps the directive's own span on the root, so each block
+  // keeps a precise, unique source identity instead of all blocks sharing the page's first line.
+  const src = props.src;
   // A fence marked `mermaid` is a diagram, not text; `mermaidComponents` in the engine sends fences
   // straight to the mermaid component, and this keeps `:::code{lang=mermaid}` working too.
   if (lang === "mermaid") {
@@ -163,7 +176,7 @@ export default function code({ props, html, page, site }: ComponentProps<CodePro
   const inner = /<code[^>]*>([\s\S]*)<\/code>/.exec(out)?.[1] ?? "";
   return h(
     "pre",
-    { class: CODE_CLASS, tabindex: 0, "data-lang": lang, ...(src ? { "data-src": src } : {}) },
+    { class: CODE_CLASS, tabindex: 0, "data-lang": lang, ...(src ? { id: blockId(src), "data-src": src } : {}) },
     h("code", { dangerouslySetInnerHTML: { __html: inner } }),
   );
 }
@@ -171,21 +184,35 @@ export default function code({ props, html, page, site }: ComponentProps<CodePro
 /** A plain Markdown fence as the engine writes it: `<pre data-src><code class="language-x">…</code></pre>`. */
 const FENCE = /<pre((?:\s+data-src="[^"]*")?)><code(?:\s+class="language-([\w+#-]+)")?>([\s\S]*?)<\/code><\/pre>/g;
 
+/** A stable id on any highlighted `<pre class="code">` that has a source span but no id yet. */
+const IDENTIFY = /<pre class="code"((?:\s+[^>]*)?)>/g;
+
 /**
  * Highlights the plain fences in a rendered body, so a fence and the `:::code` directive look the same.
  * Each fence becomes the markup {@link code} writes, with its language as `data-lang` and its `data-src` kept.
- * A `mermaid` fence is left alone: the engine sends it to the diagram component.
+ * Every highlighted block that has a span but no id gets {@link blockId}, including a directive block whose
+ * span the engine stamped after the component ran. A `mermaid` fence is left alone: the engine sends it to
+ * the diagram component.
  */
 export function highlightFences(html: string): string {
   if (!html.includes("<pre")) return html;
   const hl = get();
-  return html.replace(FENCE, (match, srcAttr: string, lang: string | undefined, body: string) => {
-    if (lang === "mermaid") return match;
-    const name = lang ?? "text";
-    const grammar = ALIASES[name] ?? name;
-    const known = hl.getLoadedLanguages().includes(grammar);
-    const out = hl.codeToHtml(sourceText(body), { lang: known ? grammar : "text", themes: { light: "lateen-light", dark: "lateen-dark" }, defaultColor: false });
-    const inner = /<code[^>]*>([\s\S]*)<\/code>/.exec(out)?.[1] ?? "";
-    return `<pre class="${CODE_CLASS}" tabindex="0" data-lang="${name}"${srcAttr}><code>${inner}</code></pre>`;
-  });
+  return html
+    .replace(FENCE, (match, srcAttr: string, lang: string | undefined, body: string) => {
+      if (lang === "mermaid") return match;
+      const name = lang ?? "text";
+      const grammar = ALIASES[name] ?? name;
+      const known = hl.getLoadedLanguages().includes(grammar);
+      const out = hl.codeToHtml(sourceText(body), { lang: known ? grammar : "text", themes: { light: "lateen-light", dark: "lateen-dark" }, defaultColor: false });
+      const inner = /<code[^>]*>([\s\S]*)<\/code>/.exec(out)?.[1] ?? "";
+      const src = /data-src="([^"]*)"/.exec(srcAttr)?.[1];
+      const idAttr = src === undefined ? "" : ` id="${blockId(src)}"`;
+      return `<pre class="${CODE_CLASS}" tabindex="0"${idAttr} data-lang="${name}"${srcAttr}><code>${inner}</code></pre>`;
+    })
+    .replace(IDENTIFY, (match, attrs: string) => {
+      if (/\sid=/.test(attrs)) return match;
+      const src = /data-src="([^"]*)"/.exec(attrs)?.[1];
+      if (src === undefined) return match;
+      return `<pre class="${CODE_CLASS}" id="${blockId(src)}"${attrs}>`;
+    });
 }

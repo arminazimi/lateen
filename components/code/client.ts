@@ -169,6 +169,14 @@ function attach(doc: CopyDocument, block: CopyBlock, env: CopyEnv): void {
   button.setAttribute("class", BUTTON_CLASS);
   button.setAttribute("aria-label", LABEL);
 
+  // The source, language, and stable block id ride on the control, so a copy keeps its context.
+  const lang = block.getAttribute("data-lang");
+  if (lang !== null) button.setAttribute("data-lang", lang);
+  const source = block.getAttribute("data-src");
+  if (source !== null) button.setAttribute("data-src", source);
+  const identity = block.getAttribute("id") ?? source;
+  if (identity !== null) button.setAttribute("data-block-id", identity);
+
   const copyIcon = icon(doc, COPY_PATH);
   const checkIcon = icon(doc, CHECK_PATH);
   checkIcon.setAttribute("hidden", "");
