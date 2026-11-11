@@ -33,7 +33,36 @@ export const STALE_KEY = "output_stale";
 export type OutputBlockProps = {
   /** Accessible name of the group; "Output" when absent. */
   label?: string;
+  /** JSON array of variable names this output was produced with, in addition to the ones its text mentions: `["project"]`. */
+  deps?: string;
 };
+
+/** The variable-name contract a declaration must follow: letters, digits, `.`, `_`, and `-`. */
+const VARIABLE_NAME = /^[A-Za-z0-9_.-]+$/;
+
+/**
+ * The explicit dependency names in the `deps` prop, in order, once each. The value is a JSON array of
+ * strings; anything that is not a JSON array gives none, and an item that is not a variable name is
+ * dropped so one malformed declaration cannot hide the valid ones beside it.
+ */
+export function parseDependencies(raw: string | undefined): string[] {
+  if (typeof raw !== "string" || raw.trim() === "") return [];
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(value)) return [];
+  const names: string[] = [];
+  for (const item of value) {
+    if (typeof item !== "string") continue;
+    const name = item.trim();
+    if (name === "" || !VARIABLE_NAME.test(name) || names.includes(name)) continue;
+    names.push(name);
+  }
+  return names;
+}
 
 /** The plain text of a rendered body, or `""` when it holds nothing but whitespace. */
 export function outputText(html: string): string {
@@ -49,11 +78,8 @@ export function outputText(html: string): string {
  *
  * A body that names variables records them in `data-output-deps`, and the variables form island marks the
  * block stale when the reader changes one: nobody can run the command again from here, so the recorded text
- * is never rewritten into output it did not print.
- *
- * shortcut: only a body that mentions a variable is known to depend on it, so an output whose text does not
- * repeat the value is never marked stale; give such an output a body that names the variable, or upgrade this
- * when the engine can tie a command to the block that follows it.
+ * is never rewritten into output it did not print. An output that never repeats its inputs, such as an exit
+ * status or a timing result, declares them in `deps`; the declared names join the ones the text mentions.
  */
 export default function outputBlock({ props, html, page }: ComponentProps<OutputBlockProps>) {
   const text = outputText(html);
@@ -61,7 +87,7 @@ export default function outputBlock({ props, html, page }: ComponentProps<Output
 
   const lang = page.lang;
   const label = props.label?.trim() || t(lang, LABEL_KEY);
-  const dependencies = variableNamesOf(text);
+  const dependencies = [...new Set([...variableNamesOf(text), ...parseDependencies(props.deps)])];
 
   return h(
     "div",

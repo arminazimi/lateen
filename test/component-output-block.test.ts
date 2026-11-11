@@ -12,6 +12,7 @@ import outputBlock, {
   directive,
   LABEL_KEY,
   outputText,
+  parseDependencies,
   STALE_CLASS,
   STALE_KEY,
   STATUS_CLASS,
@@ -30,6 +31,7 @@ import {
   type CopyParent,
   type CopyStatus,
 } from "../components/output-block/client.ts";
+import { markStale } from "../components/variables-form/client.ts";
 
 /** The props the render host passes: directive attributes, the page, and the rendered body. */
 function input(html: string, lang = "en", props: OutputBlockProps = {}): ComponentProps<OutputBlockProps> {
@@ -139,6 +141,85 @@ test("an output with no variable carries no stale state and no note", () => {
   assert.doesNotMatch(out, /data-output-deps|data-output-stale-note|data-stale-text|output-block-stale/);
 });
 
+test("a declared dependency marks an output that never echoes it, with the stale note", () => {
+  const out = render(OUTPUT, "en", { deps: '["project"]' });
+
+  assert.deepEqual(dependenciesOf(out), ["project"]);
+  assert.match(out, new RegExp(`<span class="${STALE_CLASS}" role="status" data-output-stale-note="true">`));
+  assert.ok(out.includes(`data-stale-text="${stringsOf("en").output_stale}"`));
+  assert.match(out, /<code>Written 12 pages\nin 340 ms<\/code>/, "the recorded output is not rewritten");
+});
+
+test("declared and inferred names merge in order, once each", () => {
+  const out = render("<p>Created {{project}} in {{dir}}</p>", "en", { deps: '["project","pages"]' });
+
+  assert.deepEqual(dependenciesOf(out), ["project", "dir", "pages"]);
+});
+
+test("escaped names stay literal and never become dependencies", () => {
+  const out = render("<p>\\{{hidden}} and {{shown}}</p>", "en", { deps: '["\\{{escaped}}"]' });
+
+  assert.deepEqual(dependenciesOf(out), ["shown"]);
+  assert.match(out, /<code>\\\{\{hidden\}\} and \{\{shown\}\}<\/code>/);
+});
+
+test("parseDependencies keeps the valid names in a malformed declaration", () => {
+  assert.deepEqual(parseDependencies(undefined), []);
+  assert.deepEqual(parseDependencies("  "), []);
+  assert.deepEqual(parseDependencies("project"), []);
+  assert.deepEqual(parseDependencies('{"name":"project"}'), []);
+  assert.deepEqual(parseDependencies('["project", 3, null, "", "bad name", "{{braced}}", "pages", "project"]'), [
+    "project",
+    "pages",
+  ]);
+  assert.deepEqual(parseDependencies('[{"name":"project"}]'), []);
+});
+
+test("a malformed deps prop fails soft and leaves the inferred names alone", () => {
+  const out = render("<p>{{project}} done</p>", "en", { deps: "{not json" });
+
+  assert.deepEqual(dependenciesOf(out), ["project"]);
+
+  const plain = render(OUTPUT, "en", { deps: '{"name":"project"}' });
+  assert.doesNotMatch(plain, /data-output-deps|data-output-stale-note|data-stale-text/);
+});
+
+test("changing a declared dependency marks the output stale and shows its note", () => {
+  const out = render(OUTPUT, "en", { deps: '["project"]' });
+  const block = fakeOutputBlock(out);
+
+  const root = { querySelectorAll: () => [block.element] };
+  assert.equal(markStale(root, "project"), 1);
+  assert.equal(block.element.getAttribute("data-output-stale"), "true");
+  assert.equal(block.note.textContent, stringsOf("en").output_stale);
+
+  assert.equal(markStale(root, "other"), 0, "an unrelated variable leaves it alone");
+});
+
+test("with a declared dependency the copy still returns the recorded text", async () => {
+  const out = render(OUTPUT, "en", { deps: '["project"]' });
+  const recorded = outputText(OUTPUT);
+  const button = fakeButton(/data-output="([^"]*)"/.exec(out)?.[1] ?? "");
+  const env = fakeEnv({
+    writeText(text) {
+      env.written.push(text);
+      return Promise.resolve();
+    },
+  });
+
+  await copy(button, fakeStatus(), env);
+
+  assert.equal(button.dataset.output, recorded);
+  assert.deepEqual(env.written, [recorded]);
+});
+
+test("without JavaScript a declared dependency leaves the output visible and the button hidden", () => {
+  const out = render(OUTPUT, "en", { deps: '["project"]' });
+
+  assert.match(out, /<code>Written 12 pages\nin 340 ms<\/code>/);
+  assert.match(out, /class="output-block-copy" hidden/);
+});
+
 test("without JavaScript the output is fully visible and the button stays hidden", () => {
   const out = render(OUTPUT);
 
@@ -149,6 +230,34 @@ test("without JavaScript the output is fully visible and the button stays hidden
 /** The `aria-label` of the group, as the rendered HTML carries it. */
 function labelsOf(html: string): string | undefined {
   return /role="group" aria-label="([^"]*)"/.exec(html)?.[1];
+}
+
+/** The names in `data-output-deps`, as the rendered HTML carries them, in order. */
+function dependenciesOf(html: string): string[] {
+  const raw = /data-output-deps="([^"]*)"/.exec(html)?.[1];
+  if (raw === undefined) return [];
+  const entries = JSON.parse(raw.replaceAll("&quot;", '"')) as Array<{ name: string }>;
+  return entries.map((entry) => entry.name);
+}
+
+/** The parts of a rendered output the stale island touches, read back from its markup. */
+function fakeOutputBlock(html: string) {
+  const attrs = new Map<string, string>();
+  const deps = /data-output-deps="([^"]*)"/.exec(html)?.[1];
+  const staleText = /data-stale-text="([^"]*)"/.exec(html)?.[1];
+  if (deps !== undefined) attrs.set("data-output-deps", deps.replaceAll("&quot;", '"'));
+  if (staleText !== undefined) attrs.set("data-stale-text", staleText);
+  const note = { nodeType: 3, textContent: "", getAttribute: () => null };
+  const element = {
+    nodeType: 1,
+    textContent: outputText(html),
+    getAttribute: (name: string) => attrs.get(name) ?? null,
+    setAttribute: (name: string, value: string) => {
+      attrs.set(name, value);
+    },
+    querySelector: () => note,
+  };
+  return { element, note };
 }
 
 /** A button with the attributes the frame renders and a click listener the test can fire. */
