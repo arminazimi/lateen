@@ -1,5 +1,5 @@
-/* Tested chip: the pass or fail result of a page's examples, next to a code block. The icon's shape,
-   the visible label, and the counts carry the meaning, so colour is never the only signal. */
+/* Tested chip: the pass, partial, or fail result of a page's examples, next to a code block. The
+   icon's shape, the visible label, and the counts carry the meaning, so colour is never the only signal. */
 
 .tested-chip {
   display: inline-flex;
@@ -27,6 +27,14 @@
   color: var(--color-success);
 }
 
+.tested-chip-partial {
+  border-color: var(--color-warning);
+}
+
+.tested-chip-partial .tested-chip-icon {
+  color: var(--color-warning);
+}
+
 .tested-chip-failed {
   border-color: var(--color-danger);
 }
@@ -51,6 +59,10 @@
 
 .tested-chip-count-failed {
   color: var(--color-danger);
+}
+
+.tested-chip-count-not-run {
+  color: var(--color-muted);
 }
 
 /* Counts line up when chips stack, and the number stays left to right inside right-to-left text. */
