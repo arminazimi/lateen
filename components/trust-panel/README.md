@@ -1,9 +1,9 @@
 # Trust panel
 
 A chip under the page title that opens a panel with the page's trust state, the examples it tested,
-its drift status, its last reviewer, and why it has that state. The chip is a native `<details>`
-summary, so the panel opens with Enter, Space, or a click and closes with Escape without JavaScript;
-the island only adds the focus return to the chip.
+its drift status, its build and review provenance, its last reviewer, and why it has that state. The
+chip is a native `<details>` summary, so the panel opens with Enter, Space, or a click and closes with
+Escape without JavaScript; the island only adds the focus return to the chip.
 
 - `index.ts` renders the component. It reads the page's entry from `site.data.trust`, keyed by
   `page.url`, or from the directive's props for a manual panel. It renders nothing when neither names
@@ -13,8 +13,8 @@ the island only adds the focus return to the chip.
   wrap (`overflow-wrap: anywhere`) and the panel never grows wider than the viewport, so a long
   translation stays readable at narrow widths and zoom.
 - `client.ts` is the island: Escape closes the open panel and puts focus back on the chip.
-- `test/component-trust-panel.test.ts` covers the missing-data case, every state, all three rows,
-  the action links, localisation, escaping, the island, and the stylesheet's tokens.
+- `test/component-trust-panel.test.ts` covers the missing-data case, every state, every evidence row,
+  provenance, the action links, localisation, escaping, the island, and the stylesheet's tokens.
 
 ## Data
 
@@ -29,6 +29,9 @@ nested one wins:
     - 3 of 3 examples passed
     - No drift findings
   lastReviewer: Ada Lovelace
+  buildId: build-42
+  generatedAt: 2026-03-06
+  reviewedAt: 2026-03-04
 ```
 
 ```yaml
@@ -37,6 +40,31 @@ pages:
     level: unreviewed
     reasons: Reviewed more than 90 days ago.
 ```
+
+`buildId`, `generatedAt`, and `reviewedAt` are optional provenance. When the entry omits them, the panel
+reads the same evidence from the documented build and reviewer shapes: `site.data.build.id` and
+`site.data.build.generatedAt` (or `.date` / `.asOf`), and `site.data.reviewers[url].date`.
+
+```yaml
+# _data/build.yml
+id: build-42
+generatedAt: 2026-03-06
+asOf: 2026-03-06
+```
+
+## Provenance
+
+Valid provenance ties the recorded evidence to the build and review that produced it. The panel exposes
+it as `data-trust-build`, `data-trust-generated`, and `data-trust-reviewed` on the panel root. A build
+generation date and a human review date render as their own rows, labelled with the existing `updated`
+and `reviewed` strings, each with an exact `<time datetime>` value. The build date is not a source-change
+date, and the review date is not a build date, so the two never stand in for each other.
+
+A malformed or impossible date is left out. A date after the build's as-of day is future evidence and is
+left out too, as is a review dated after the generation it describes. When an entry names a build and
+`site.data.build.id` names another, the entry's build provenance is stale and is left out. Missing
+provenance never changes the level: it only removes evidence, so it cannot turn a partial, unreviewed, or
+unknown panel into a verified one.
 
 `level` names the state, strongest first:
 
@@ -62,13 +90,16 @@ entry says the value is not recorded.
 ## Options
 
 The action links are optional and come from `theme.options.trust`. `{url}`, `{title}`, and
-`{source}` are filled from the page; a root-relative URL gets the site's `base`.
+`{source}` are filled from the page; `{build}`, `{generated}`, and `{reviewed}` are filled from the
+panel's valid provenance. Every value is percent-encoded, a root-relative URL gets the site's `base`,
+and a template that asks for provenance the page does not have is left out rather than losing the
+build context it promises.
 
 ```yaml
 theme:
   options:
     trust:
-      contextPackUrl: "https://example.com/context?page={url}"
+      contextPackUrl: "https://example.com/context?page={url}&build={build}"
       suggestEditUrl: "https://github.com/example/docs/edit/main/{source}"
 ```
 

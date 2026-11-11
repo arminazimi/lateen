@@ -1,7 +1,7 @@
 /* Trust panel: a chip under the page title that opens a native disclosure with the page's state,
-   examples, drift, last reviewer, and why it has that state. The chip is the <summary>, so the panel
-   opens and closes without JavaScript. Logical properties and inline edges keep it working under
-   RTL, and every colour and length comes from a token, so dark mode follows. */
+   examples, drift, build and review provenance, last reviewer, and why it has that state. The chip is
+   the <summary>, so the panel opens and closes without JavaScript. Logical properties and inline edges
+   keep it working under RTL, and every colour and length comes from a token, so dark mode follows. */
 
 .trust-panel {
   position: relative;
