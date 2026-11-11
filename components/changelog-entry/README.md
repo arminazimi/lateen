@@ -15,6 +15,7 @@ the release touches, and the entry text. It is a container directive, so the bod
 | Name | Type | Default | What it does |
 | --- | --- | --- | --- |
 | `version` | string | `Unreleased` | The release version, such as `1.2.0` or `v1.2.0`. |
+| `id` | string | the version slug | A stable id for the section and its self-link. Anything that cannot go in an id becomes a dash, and repeats on one page get a numeric suffix. |
 | `date` | string | `Date unknown` | An ISO date, `YYYY-MM-DD`; a date-time keeps its date part. |
 | `categories` | string | none | Comma-separated names or a JSON array: `added`, `changed`, `fixed`, `removed`, `security`. Unknown names are dropped and repeats are removed, in author order. |
 
@@ -39,10 +40,17 @@ the release touches, and the entry text. It is a container directive, so the bod
 - The section id is `v` plus a slug of the version: lower case, dots become dashes, and any other run of
   characters becomes one dash. `1.2.0` becomes `v1-2-0`; a leading `v` is not doubled. The id is
   deterministic, so links to a release survive a rebuild. The heading also reads "Version 1.2.0" to
-  assistive tech, and the section carries the authored version as `data-version` for machine context.
-- A missing or blank version renders the heading text "Unreleased" and the id `vunversioned`. It never
-  renders a bare `v`. Two unversioned entries on one page share an id, so give every entry a version when a
-  page has more than one.
+  assistive tech, and the section carries the authored version as `data-version` for machine context. The
+  visible text and `data-version` are always the authored value, so prerelease, build, and Unicode versions
+  keep their exact spelling even when their slug is lossy.
+- Every entry on a page has its own section id, version-text id, and self-link. The first entry to claim an
+  id keeps it; the next ones get `-2`, `-3` in page order. A unique ordinary version therefore keeps the id
+  it always published, and duplicate, unversioned, or slug-equivalent releases no longer share a fragment.
+  Give an entry an explicit `id` when the generated one is not readable enough, such as for a version with no
+  Latin characters, which falls back to `vunversioned`. An explicit id is escaped to the characters an id may
+  hold, and repeats of it are disambiguated the same way.
+- A missing or blank version renders the heading text "Unreleased" and the id `vunversioned`; a later one
+  gets `vunversioned-2`. It never renders a bare `v`.
 - A date that is missing, not a calendar date, or not written as an ISO date renders "Date unknown". Only a
   real date gets a `<time datetime>` element; the visible text uses the page's calendar, as the rest of the
   theme does.

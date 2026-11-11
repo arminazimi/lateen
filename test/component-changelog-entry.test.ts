@@ -15,6 +15,7 @@ import changelogEntry, {
   SR_CLASS,
   VERSION_CLASS,
   categoriesOf,
+  givenIdOf,
   idOf,
   slugOf,
   type ChangelogEntryProps,
@@ -57,7 +58,11 @@ function pageFor(lang = "en"): Page {
 const site: Site = { config, pages: [pageFor()], nav: {}, data: {} };
 
 function render(props: ChangelogEntryProps, body = "<p>Body text.</p>", lang = "en"): string {
-  const page = pageFor(lang);
+  return renderOn(pageFor(lang), props, body);
+}
+
+/** Renders on a given page, so tests can put several entries on the same page and see their ids disambiguate. */
+function renderOn(page: Page, props: ChangelogEntryProps, body = "<p>Body text.</p>"): string {
   return html(changelogEntry({ props, page, site, html: body }));
 }
 
@@ -209,6 +214,127 @@ test("the ids are deterministic: lower case, dots to dashes, a leading v strippe
   assert.equal(idOf(""), "vunversioned");
   assert.equal(idOf(undefined), "vunversioned");
   assert.equal(idOf("1.2.0"), idOf("1.2.0"));
+});
+
+/** The section id of a rendered entry. */
+function sectionId(out: string): string {
+  const match = /<section class="[^"]*" id="([^"]*)"/.exec(out);
+  assert.ok(match, "expected a section id");
+  return match[1]!;
+}
+
+test("repeated versions keep the published id first and disambiguate in page order", () => {
+  const page = pageFor();
+  const first = renderOn(page, { version: "1.2.0", date: "2026-11-09" });
+  const second = renderOn(page, { version: "1.2.0", date: "2026-11-09" });
+  const third = renderOn(page, { version: "1.2.0", date: "2026-11-09" });
+
+  assert.equal(sectionId(first), "v1-2-0");
+  assert.equal(sectionId(second), "v1-2-0-2");
+  assert.equal(sectionId(third), "v1-2-0-3");
+
+  for (const out of [first, second, third]) {
+    const id = sectionId(out);
+    assert.ok(out.includes(`href="#${id}"`), `self-link of ${id}`);
+    assert.ok(out.includes(`<span id="changelog-version-${id}"`), `version text id of ${id}`);
+    assert.ok(out.includes(`aria-labelledby="changelog-version-${id}"`), `labels of ${id}`);
+    assert.match(out, /data-version="1\.2\.0"/);
+    assert.match(out, />1\.2\.0<\/span>/);
+  }
+});
+
+test("versions with equivalent slugs get distinct ids and keep their authored text", () => {
+  const page = pageFor();
+  const first = renderOn(page, { version: "1.2.0" });
+  const second = renderOn(page, { version: "1.2_0" });
+  const third = renderOn(page, { version: "V1.2.0" });
+
+  assert.deepEqual([sectionId(first), sectionId(second), sectionId(third)], ["v1-2-0", "v1-2-0-2", "v1-2-0-3"]);
+  assert.match(first, /data-version="1\.2\.0"/);
+  assert.match(second, /data-version="1\.2_0"/);
+  assert.match(third, /data-version="V1\.2\.0"/);
+  assert.match(second, />1\.2_0<\/span>/);
+  assert.match(third, />V1\.2\.0<\/span>/);
+});
+
+test("a generated suffix never collides with a version that already looks suffixed", () => {
+  const page = pageFor();
+  renderOn(page, { version: "1.2.0" });
+  assert.equal(sectionId(renderOn(page, { version: "1.2.0" })), "v1-2-0-2");
+  const natural = renderOn(page, { version: "1.2.0-2" });
+  assert.equal(sectionId(natural), "v1-2-0-2-2");
+  assert.match(natural, /data-version="1\.2\.0-2"/);
+});
+
+test("an explicit id names the section and its self-link, and the version stays authored", () => {
+  const out = render({ version: "1.2.0", id: "release-2026-11" });
+  assert.match(
+    out,
+    /<section class="changelog-entry" id="release-2026-11" data-version="1\.2\.0" aria-labelledby="changelog-version-release-2026-11">/,
+  );
+  assert.match(out, /href="#release-2026-11"/);
+  assert.match(out, /<span id="changelog-version-release-2026-11" class="changelog-entry-version-text">.*1\.2\.0<\/span>/);
+});
+
+test("an explicit id is escaped, and repeated explicit ids are disambiguated", () => {
+  const escaped = render({ id: ' my "release" <1> ' });
+  assert.equal(sectionId(escaped), "my-release-1");
+  assert.doesNotMatch(sectionId(escaped), /["<>\s]/);
+
+  const page = pageFor();
+  assert.equal(sectionId(renderOn(page, { version: "1.0.0", id: "release" })), "release");
+  assert.equal(sectionId(renderOn(page, { version: "2.0.0", id: "release" })), "release-2");
+  assert.equal(givenIdOf(" release.1 "), "release.1");
+  assert.equal(givenIdOf("نسخه ۲"), "نسخه-۲");
+  assert.equal(givenIdOf("<b>x</b>"), "b-x-b");
+  assert.equal(givenIdOf("   "), undefined);
+  assert.equal(givenIdOf("???"), undefined);
+  assert.equal(givenIdOf(undefined), undefined);
+  assert.equal(sectionId(render({ version: "1.2.0", id: "???" })), "v1-2-0");
+});
+
+test("Unicode and prerelease versions keep their authored text and still get unique ids", () => {
+  const page = pageFor();
+  const first = renderOn(page, { version: "نسخه ۲.۰.۰" });
+  const second = renderOn(page, { version: "نسخه ۳.۰.۰" });
+  assert.match(first, /data-version="نسخه ۲\.۰\.۰"/);
+  assert.match(second, /data-version="نسخه ۳\.۰\.۰"/);
+  assert.match(first, />نسخه ۲\.۰\.۰<\/span>/);
+  assert.notEqual(sectionId(first), sectionId(second));
+  assert.ok(second.includes(`href="#${sectionId(second)}"`));
+
+  const prerelease = render({ version: "v2.0.0-rc.1+build.5" });
+  assert.equal(sectionId(prerelease), "v2-0-0-rc-1-build-5");
+  assert.match(prerelease, /data-version="v2\.0\.0-rc\.1\+build\.5"/);
+  assert.match(prerelease, />v2\.0\.0-rc\.1\+build\.5<\/span>/);
+});
+
+test("unversioned entries stay unique and never render a bare v", () => {
+  const page = pageFor();
+  const first = renderOn(page, { version: "   " });
+  const second = renderOn(page, {});
+  assert.equal(sectionId(first), "vunversioned");
+  assert.equal(sectionId(second), "vunversioned-2");
+  assert.ok(second.includes('href="#vunversioned-2"'));
+  for (const out of [first, second]) {
+    assert.doesNotMatch(out, /id="v"/);
+    assert.doesNotMatch(out, /data-version=/);
+    assert.match(out, />Unreleased<\/span>/);
+  }
+});
+
+test("a duplicated entry on a right-to-left page keeps its date and category evidence", () => {
+  const page = pageFor("fa");
+  const first = renderOn(page, { version: "1.2.0", date: "2026-11-09", categories: "added,security" });
+  const second = renderOn(page, { version: "1.2.0", date: "2026-11-09", categories: "added,security" });
+  assert.equal(sectionId(first), "v1-2-0");
+  assert.equal(sectionId(second), "v1-2-0-2");
+  for (const out of [first, second]) {
+    assert.match(out, /datetime="2026-11-09">۱۸ آبان ۱۴۰۵<\/time>/);
+    assert.equal(out.match(new RegExp(`<li class="${CATEGORY_CLASS} `, "g"))?.length, 2);
+    assert.match(out, />افزوده‌شده<\/span>/);
+    assert.match(out, />1\.2\.0<\/span>/);
+  }
 });
 
 test("a Persian page shows the Jalali date and Persian category labels", () => {

@@ -1,5 +1,5 @@
 import { h } from "preact";
-import type { ComponentProps } from "@velella/mizzen/contracts";
+import type { ComponentProps, Page } from "@velella/mizzen/contracts";
 import { calendarDate } from "../../src/dates.ts";
 import { t } from "../../i18n/index.ts";
 
@@ -48,6 +48,8 @@ export const SR_CLASS = "changelog-entry-sr";
 export type ChangelogEntryProps = {
   /** The release version, such as `1.2.0` or `v1.2.0`. Missing or blank falls back to "Unreleased". */
   version?: string;
+  /** A stable id for the section and its self-link. Missing falls back to the version slug. */
+  id?: string;
   /** The release date as `YYYY-MM-DD`; the date part of an ISO date-time is used too. */
   date?: string;
   /** Categories separated by commas, or a JSON array of strings: `added`, `changed`, `fixed`, `removed`, `security`. */
@@ -91,14 +93,47 @@ export function slugOf(version: unknown): string {
   return slug === "" ? "unversioned" : slug;
 }
 
-/** The section id of an entry: `v` followed by {@link slugOf}, such as `v1-2-0`. */
+/** The base section id of an entry: `v` followed by {@link slugOf}, such as `v1-2-0`. */
 export function idOf(version: unknown): string {
   return `v${slugOf(version)}`;
 }
 
-/** The id of the span that holds the version text; unique per entry as long as versions are. */
-export function versionTextId(version: unknown): string {
-  return `changelog-version-${idOf(version)}`;
+/**
+ * The id of the span that holds the version text, from the entry's section id. The section id is already
+ * unique on its page, so the text id is too.
+ */
+export function versionTextId(sectionId: string): string {
+  return `changelog-version-${sectionId}`;
+}
+
+/** The id an author gave, escaped to the characters an id may hold; undefined when nothing usable is left. */
+export function givenIdOf(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const id = raw
+    .trim()
+    .replace(/[^\p{L}\p{N}_.:-]+/gu, "-")
+    .replace(/^-+|-+$/g, "");
+  return id === "" ? undefined : id;
+}
+
+/** The ids claimed on a page, and the page HTML they were counted against. */
+const pageIds = new WeakMap<Page, { html: string; used: Set<string> }>();
+
+/**
+ * An id unique on its page: the base for the first entry to claim it, then `<base>-2`, `<base>-3` in page
+ * order. Keyed by the Page and reset when its HTML changes, so one page's ids cannot leak into another page
+ * or build, and a unique ordinary version keeps the id it published.
+ */
+export function uniqueIdOf(page: Page, base: string): string {
+  let state = pageIds.get(page);
+  if (state === undefined || state.html !== page.html) {
+    state = { html: page.html, used: new Set() };
+    pageIds.set(page, state);
+  }
+  let id = base;
+  for (let n = 2; state.used.has(id); n += 1) id = `${base}-${n}`;
+  state.used.add(id);
+  return id;
 }
 
 /** The category names in a `categories` value, in author order, deduplicated, with unknown values dropped. */
@@ -203,12 +238,14 @@ function categoryList(categories: readonly Category[], lang: string) {
  * the release touches, and the entry text. The heading reads "Version 1.2.0" to assistive tech, and the section
  * carries the authored version as `data-version`. Missing version or date values render clear fallback text
  * instead of an empty heading or a bare "v". An empty body keeps the heading and shows a short "no details"
- * paragraph, so a stub entry is visibly a stub rather than an empty section.
+ * paragraph, so a stub entry is visibly a stub rather than an empty section. Repeated, slug-equivalent, and
+ * unversioned entries still get unique ids, because the first entry to claim an id keeps it and the rest get a
+ * numeric suffix in page order; an `id` prop overrides the version slug as the base.
  */
 export default function changelogEntry({ props, page, html }: ComponentProps<ChangelogEntryProps>) {
   const lang = page.lang;
-  const id = idOf(props.version);
-  const textId = versionTextId(props.version);
+  const id = uniqueIdOf(page, givenIdOf(props.id) ?? idOf(props.version));
+  const textId = versionTextId(id);
   const version = versionTextOf(props.version, lang);
   const authored = typeof props.version === "string" ? props.version.trim() : "";
   const categories = categoriesOf(props.categories);
