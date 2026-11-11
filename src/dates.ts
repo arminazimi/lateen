@@ -1,7 +1,9 @@
 /**
  * Calendar dates for the theme's "last updated" line. Persian pages show the Jalali (Persian) calendar,
- * Arabic pages the Hijri (Islamic) calendar, and English pages the Gregorian calendar. Formatting uses
- * `Intl.DateTimeFormat`, so no dependency is needed.
+ * Arabic pages the Hijri (Islamic) calendar, and English pages the Gregorian calendar. A BCP 47
+ * `-u-ca-` or `-u-nu-` preference that the runtime supports overrides those defaults; other locales
+ * keep their own month names on the Gregorian calendar. Formatting uses `Intl.DateTimeFormat`, so no
+ * dependency is needed.
  */
 
 /**
@@ -12,15 +14,46 @@
 interface DateStyle {
   locale: string;
   calendar: string;
-  numberingSystem: "arab" | "arabext" | "latn";
+  numberingSystem: string;
 }
 
 const GREGORIAN: DateStyle = { locale: "en-US", calendar: "gregory", numberingSystem: "latn" };
 
 const STYLES: Record<string, DateStyle> = {
   ar: { locale: "ar-SA", calendar: "islamic", numberingSystem: "arab" },
+  en: GREGORIAN,
   fa: { locale: "fa-IR", calendar: "persian", numberingSystem: "arabext" },
 };
+
+/** Calendars and numbering systems this runtime can format; anything else is an unsupported preference. */
+const CALENDARS: ReadonlySet<string> = new Set(Intl.supportedValuesOf("calendar"));
+const NUMBERING_SYSTEMS: ReadonlySet<string> = new Set(Intl.supportedValuesOf("numberingSystem"));
+
+/**
+ * The style for `lang`, honoring `-u-ca-` and `-u-nu-` preferences that this runtime supports.
+ * Malformed tags use the default style, and an unsupported preference falls back to the language's
+ * safe default, so a bad tag never throws.
+ */
+function dateStyle(lang: string): DateStyle {
+  let locale: Intl.Locale;
+  try {
+    locale = new Intl.Locale(lang);
+  } catch {
+    return GREGORIAN;
+  }
+
+  // An unknown but valid language keeps its own month names, on the deterministic Gregorian/Latin fallback.
+  const base = STYLES[locale.language] ?? { locale: locale.baseName, calendar: "gregory", numberingSystem: "latn" };
+  const calendar = locale.calendar;
+  const numberingSystem = locale.numberingSystem;
+
+  return {
+    locale: base.locale,
+    calendar: calendar !== undefined && CALENDARS.has(calendar) ? calendar : base.calendar,
+    numberingSystem:
+      numberingSystem !== undefined && NUMBERING_SYSTEMS.has(numberingSystem) ? numberingSystem : base.numberingSystem,
+  };
+}
 
 /** Formatting is pinned to UTC, so the build machine's time zone cannot move a date a day. */
 const TIME_ZONE = "UTC";
@@ -49,7 +82,7 @@ export function calendarDate(iso: string, lang: string): CalendarDate | undefine
   // Date.UTC rolls over invalid days (2026-02-30 becomes 2026-03-02), so the parts must come back unchanged.
   if (utc.getUTCFullYear() !== year || utc.getUTCMonth() !== month - 1 || utc.getUTCDate() !== day) return undefined;
 
-  const style = STYLES[lang.split("-")[0] ?? ""] ?? GREGORIAN;
+  const style = dateStyle(lang);
   const text = new Intl.DateTimeFormat(style.locale, {
     calendar: style.calendar,
     numberingSystem: style.numberingSystem,
