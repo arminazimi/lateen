@@ -1,7 +1,8 @@
-/* Footnote popover: the note a reference points at, shown below the reference on hover or focus.
-   The island moves this root beside the reference and marks that element `data-footnote-anchor`,
-   which gives the absolutely positioned tooltip its containing block. Every edge is logical, so
-   the tooltip opens toward the inline direction of a Persian or Arabic page too. */
+/* Footnote popover: the note a reference points at, shown below the reference while a pointer or
+   keyboard focus rests on it. The island moves this root beside the reference and marks that
+   element `data-footnote-anchor`, which gives the absolutely positioned tooltip its containing
+   block. Every edge is logical, so the tooltip opens toward the inline direction of a Persian or
+   Arabic page too. */
 
 [data-footnote-anchor] {
   position: relative;
@@ -39,7 +40,7 @@
   display: none;
 }
 
-/* A printed page keeps the note in its own section; the hover tooltip has no place on paper. */
+/* A printed page keeps the note in its own section; a pointer preview has no place on paper. */
 @media print {
   .footnote-popover {
     display: none;

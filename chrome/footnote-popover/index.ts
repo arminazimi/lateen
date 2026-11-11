@@ -12,7 +12,8 @@ export function hasFootnoteRefs(html: string): boolean {
 /**
  * The mount point for the footnote popover. GFM renders a reference as
  * `<sup><a … data-footnote-ref>1</a></sup>` and the notes in a `<section data-footnotes>`, so a
- * component cannot wrap either one: the island finds both and fills this span on hover or focus.
+ * component cannot wrap either one: the island finds both and fills this span when a pointer enters
+ * the reference or it takes focus.
  *
  * It renders nothing on a page with no reference, and it starts `hidden`, so a visitor without
  * JavaScript sees no empty box and the reference stays a plain link to the note.

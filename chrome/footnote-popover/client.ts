@@ -1,8 +1,8 @@
 /*
  * Footnote popover island: every GFM footnote reference (`[data-footnote-ref]`) shows its note in a
- * small tooltip on hover or focus, and Escape closes it. The reference stays a plain link, so a
- * visitor without JavaScript (or without this island) still reaches the note, and the definition's
- * back-link is never touched.
+ * small tooltip on pointer contact (mouse, pen, or touch) or focus, and Escape closes it. The
+ * reference stays a plain link, so a visitor without JavaScript (or without this island) still
+ * reaches the note, and the definition's back-link is never touched.
  */
 
 /** A footnote definition element, as the island reads it. */
@@ -26,6 +26,7 @@ export interface FootnoteKeyEvent {
 export interface FootnoteDocument {
   getElementById(id: string): FootnoteTarget | null;
   addEventListener(type: "keydown", listener: (event: FootnoteKeyEvent) => void): void;
+  removeEventListener(type: "keydown", listener: (event: FootnoteKeyEvent) => void): void;
 }
 
 /** The parent the popover is placed in, beside the reference it describes. */
@@ -35,13 +36,17 @@ export interface FootnoteAnchor {
   appendChild(child: FootnotePopover): FootnotePopover;
 }
 
+/** The interactions that reveal or dismiss a preview; a pointer covers mouse, pen, and touch alike. */
+export type FootnoteEventType = "pointerenter" | "pointerleave" | "pointercancel" | "focus" | "blur";
+
 /** One footnote reference, the `<a data-footnote-ref>` inside GFM's `<sup>`. */
 export interface FootnoteRef {
   getAttribute(name: string): string | null;
   setAttribute(name: string, value: string): void;
   removeAttribute(name: string): void;
   readonly parentNode: FootnoteAnchor | null;
-  addEventListener(type: "mouseenter" | "mouseleave" | "focus" | "blur", listener: () => void): void;
+  addEventListener(type: FootnoteEventType, listener: () => void): void;
+  removeEventListener(type: FootnoteEventType, listener: () => void): void;
 }
 
 /** The tooltip root the layout renders once, hidden until a reference asks for it. */
@@ -80,15 +85,22 @@ export function definitionText(doc: FootnoteDocument, href: string): string | un
 }
 
 /**
- * Wires every reference to the popover and returns whether anything was wired. With no reference it
- * does nothing, so a page without footnotes loads no listeners. Hover and focus both show the note,
- * leaving the reference hides it, and Escape hides it from anywhere in the document. Nothing here
- * calls `preventDefault`: a click still follows the reference to the definition, and the caller can
- * keep tabbing, since the popover takes no focus and traps none.
+ * Wires every reference to one popover and returns a cleanup that removes the listeners and puts
+ * the page back as it was. Entering a reference with any pointer (mouse, pen, or touch) or focusing
+ * it shows its note; leaving it, cancelling the pointer, or blurring hides the note again, and
+ * Escape hides it from anywhere. When focus and the pointer sit on different references, the one
+ * engaged last stays shown, so no stale note or `aria-describedby` is left behind. The note is
+ * copied beside the reference it describes, and the reference keeps its own description alongside
+ * the tooltip's. Without a reference nothing is wired. Nothing here calls `preventDefault`, adds a
+ * click handler, or takes focus, so a tap or click still navigates to the note, the back-link still
+ * returns, and tab order is unchanged.
  */
-export function activate(refs: readonly FootnoteRef[], popover: FootnotePopover, doc: FootnoteDocument): boolean {
-  if (refs.length === 0) return false;
+export function activate(refs: readonly FootnoteRef[], popover: FootnotePopover, doc: FootnoteDocument): () => void {
+  if (refs.length === 0) return () => undefined;
 
+  let pointer: FootnoteRef | undefined;
+  let focused: FootnoteRef | undefined;
+  let active: FootnoteRef | undefined;
   let shown: FootnoteRef | undefined;
   let previousDescription: string | null = null;
 
@@ -102,38 +114,98 @@ export function activate(refs: readonly FootnoteRef[], popover: FootnotePopover,
     popover.textContent = "";
   };
 
-  const show = (ref: FootnoteRef): void => {
-    const href = ref.getAttribute("href");
-    if (href === null) return;
-    const text = definitionText(doc, href);
-    if (text === undefined) return;
-    const anchor = ref.parentNode;
-    if (anchor === null) return;
+  /** The reference to preview: the one engaged last, or whichever is still engaged after it leaves. */
+  const current = (): FootnoteRef | undefined => {
+    if (active !== undefined && (active === pointer || active === focused)) return active;
+    return focused ?? pointer;
+  };
+
+  /** Points the popover at the current reference, or puts it away when there is none. */
+  const sync = (): void => {
+    const ref = current();
+    const href = ref?.getAttribute("href");
+    const text = href == null ? undefined : definitionText(doc, href);
+    if (ref === undefined || text === undefined) {
+      hide();
+      return;
+    }
 
     if (shown !== ref) {
       hide();
+      shown = ref;
       previousDescription = ref.getAttribute("aria-describedby");
-      if (popover.id !== "") ref.setAttribute("aria-describedby", popover.id);
+      if (popover.id !== "") {
+        // Keep the reference's own description and add the tooltip to it, never a duplicate id.
+        const ids = (previousDescription ?? "").split(/\s+/).filter((id) => id !== "");
+        if (!ids.includes(popover.id)) ids.push(popover.id);
+        ref.setAttribute("aria-describedby", ids.join(" "));
+      }
+    }
+
+    const anchor = ref.parentNode;
+    if (anchor === null) {
+      hide();
+      return;
     }
     popover.textContent = text;
     anchor.setAttribute("data-footnote-anchor", "true");
     anchor.appendChild(popover);
     popover.hidden = false;
-    shown = ref;
+  };
+
+  /** A reference stopped being hovered or focused; fall back to the other, if any. */
+  const release = (ref: FootnoteRef, reason: "pointer" | "focus"): void => {
+    if (reason === "pointer") {
+      if (pointer === ref) pointer = undefined;
+    } else if (focused === ref) {
+      focused = undefined;
+    }
+    if (active === ref) active = focused ?? pointer;
+    sync();
+  };
+
+  const escape = (event: FootnoteKeyEvent): void => {
+    if (event.key !== "Escape") return;
+    // Dismiss until the reader engages a reference again; focus itself is never moved.
+    pointer = undefined;
+    focused = undefined;
+    active = undefined;
+    hide();
+  };
+
+  const listeners: Array<[FootnoteRef, FootnoteEventType, () => void]> = [];
+  const attach = (ref: FootnoteRef, type: FootnoteEventType, listener: () => void): void => {
+    ref.addEventListener(type, listener);
+    listeners.push([ref, type, listener]);
   };
 
   for (const ref of refs) {
-    ref.addEventListener("mouseenter", () => show(ref));
-    ref.addEventListener("mouseleave", hide);
-    ref.addEventListener("focus", () => show(ref));
-    ref.addEventListener("blur", hide);
+    attach(ref, "pointerenter", () => {
+      pointer = ref;
+      active = ref;
+      sync();
+    });
+    attach(ref, "pointerleave", () => release(ref, "pointer"));
+    attach(ref, "pointercancel", () => release(ref, "pointer"));
+    attach(ref, "focus", () => {
+      focused = ref;
+      active = ref;
+      sync();
+    });
+    attach(ref, "blur", () => release(ref, "focus"));
   }
 
-  doc.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") hide();
-  });
+  doc.addEventListener("keydown", escape);
 
-  return true;
+  return () => {
+    for (const [ref, type, listener] of listeners) ref.removeEventListener(type, listener);
+    listeners.length = 0;
+    doc.removeEventListener("keydown", escape);
+    pointer = undefined;
+    focused = undefined;
+    active = undefined;
+    hide();
+  };
 }
 
 /** The browser globals the island needs, without pulling DOM types into the theme's typecheck. */
