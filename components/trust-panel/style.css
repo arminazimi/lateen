@@ -1,7 +1,7 @@
-/* Trust panel: a chip under the page title that opens a native disclosure with the page's examples,
-   drift, last reviewer, and why it has its level. The chip is the <summary>, so the panel opens and
-   closes without JavaScript. Logical properties and inline edges keep it working under RTL, and every
-   colour and length comes from a token, so dark mode follows. */
+/* Trust panel: a chip under the page title that opens a native disclosure with the page's state,
+   examples, drift, last reviewer, and why it has that state. The chip is the <summary>, so the panel
+   opens and closes without JavaScript. Logical properties and inline edges keep it working under
+   RTL, and every colour and length comes from a token, so dark mode follows. */
 
 .trust-panel {
   position: relative;
@@ -64,12 +64,16 @@
   color: var(--color-success);
 }
 
-.trust-panel-review-due .trust-panel-icon {
+.trust-panel-partial .trust-panel-icon {
   color: var(--color-warning);
 }
 
-.trust-panel-at-risk .trust-panel-icon {
-  color: var(--color-danger);
+.trust-panel-unreviewed .trust-panel-icon {
+  color: var(--color-info);
+}
+
+.trust-panel-unknown .trust-panel-icon {
+  color: var(--color-muted);
 }
 
 .trust-panel-level {
@@ -82,7 +86,9 @@
   inset-inline-start: 0;
   z-index: var(--layer-popover);
   inline-size: max-content;
-  max-inline-size: var(--type-measure-min);
+  /* Long localised sentences and unbreakable tokens wrap instead of running off the viewport. */
+  max-inline-size: min(var(--type-measure-min), calc(100vw - var(--space-6)));
+  overflow-wrap: anywhere;
   padding-block: var(--space-3);
   padding-inline: var(--space-4);
   border: 1px solid var(--color-border-strong);
@@ -97,7 +103,7 @@
 
 .trust-panel-rows {
   display: grid;
-  grid-template-columns: max-content 1fr;
+  grid-template-columns: max-content minmax(0, 1fr);
   gap: var(--space-1) var(--space-3);
   margin: 0;
 }
@@ -149,7 +155,8 @@
 }
 
 /* On a narrow screen the panel sits in the flow instead of over the content, so it cannot run off
-   the inline edge and the chip's row can wrap. */
+   the inline edge and the chip's row can wrap. The rows stack too, so a long localised label never
+   squeezes its value. */
 @media (max-width: 40rem) {
   .trust-panel {
     position: static;
@@ -161,5 +168,10 @@
     inline-size: auto;
     max-inline-size: none;
     margin-block-start: var(--space-2);
+  }
+
+  .trust-panel-rows {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-1);
   }
 }

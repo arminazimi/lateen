@@ -2,8 +2,11 @@ import { h } from "preact";
 import type { Component, Page, Site, SiteConfig } from "@velella/mizzen/contracts";
 import { t } from "../../i18n/index.ts";
 
-/** The trust levels the panel understands; the engine's trust score produces them (N12). */
-export const LEVELS = ["verified", "review-due", "at-risk"] as const;
+/**
+ * The trust states the panel understands, strongest first. `verified` means all evidence is recorded
+ * and clean; `partial`, `unreviewed`, and `unknown` name what is missing instead of rounding it up.
+ */
+export const LEVELS = ["verified", "partial", "unreviewed", "unknown"] as const;
 
 export type TrustLevel = (typeof LEVELS)[number];
 
@@ -45,9 +48,9 @@ export const ACTION_CLASS = "trust-panel-action";
 
 /** Props from the directive, for a manual panel: `::trust-panel{level=verified reasons="…" lastReviewer="…"}`. */
 export type TrustPanelProps = {
-  /** `verified`, `review due`, or `at risk`; any other value renders nothing. */
+  /** `verified`, `partial`, `unreviewed`, or `unknown`; any other value renders nothing. */
   level?: string;
-  /** Why the page has this level. A string is split on line breaks or `|`. */
+  /** Why the page has this state. A string is split on line breaks or `|`. */
   reasons?: string;
   /** Who reviewed the page last. */
   lastReviewer?: string;
@@ -55,9 +58,9 @@ export type TrustPanelProps = {
 
 /** One page's trust entry, as `site.data.trust` or the directive writes it. */
 export interface TrustEntry {
-  /** The page's level. */
+  /** The page's trust state. */
   readonly level: TrustLevel;
-  /** Why the page has this level, in display order. */
+  /** Why the page has this state, in display order. */
   readonly reasons: readonly string[];
   /** Who reviewed the page last, when the site records one. */
   readonly lastReviewer?: string;
@@ -79,18 +82,37 @@ interface TrustOptions {
   readonly suggestEditUrl?: unknown;
 }
 
-/** Stroke paths for each level's icon, drawn on a 16×16 grid. The shapes differ, so colour is never the only signal. */
+/** Stroke paths for each state's icon, drawn on a 16×16 grid. The shapes differ, so colour is never the only signal. */
 export const ICONS: Readonly<Record<TrustLevel, readonly string[]>> = {
   verified: ["m3.5 8.25 3 3 6-6"],
-  "review-due": ["M8 2.25a5.75 5.75 0 1 0 0 11.5 5.75 5.75 0 0 0 0-11.5Z", "M8 5v3.25l2.25 1.25"],
-  "at-risk": ["M8 2.6 14 13H2L8 2.6Z", "M8 6.5v3", "M8 11.25h.01"],
+  partial: ["M8 2.25a5.75 5.75 0 0 1 0 11.5", "M8 2.25v11.5"],
+  unreviewed: ["M8 2.25a5.75 5.75 0 1 0 0 11.5 5.75 5.75 0 0 0 0-11.5Z", "M5.5 8h5"],
+  unknown: ["M6.1 6a2 2 0 1 1 2.9 1.8c-.6.35-.9.8-.9 1.4v.4", "M8 12.3h.01"],
 };
 
-/** The i18n key of each level's label. */
+/** The i18n key of each state's label. */
 const LEVEL_KEYS: Readonly<Record<TrustLevel, string>> = {
   verified: "trust_level_verified",
-  "review-due": "trust_level_review_due",
-  "at-risk": "trust_level_at_risk",
+  partial: "trust_level_partial",
+  unreviewed: "trust_level_unreviewed",
+  unknown: "trust_level_unknown",
+};
+
+/** The i18n key of the explanation a state shows when the entry records no reasons of its own. */
+const WHY_KEYS: Readonly<Record<TrustLevel, string>> = {
+  verified: "trust_why_verified",
+  partial: "trust_why_partial",
+  unreviewed: "trust_why_unreviewed",
+  unknown: "trust_why_unknown",
+};
+
+/**
+ * The names the first trust score wrote for the states it had. They read as the nearest state in
+ * this vocabulary, so existing `_data/trust.yml` files keep their meaning.
+ */
+const ALIASES: Readonly<Record<string, TrustLevel>> = {
+  "review-due": "unreviewed",
+  "at-risk": "partial",
 };
 
 /** A path on this site (not protocol-relative `//host`) or an https link. Anything else is not a link. */
@@ -113,7 +135,7 @@ export function levelOf(value: unknown): TrustLevel | undefined {
   const text = textOf(value);
   if (text === undefined) return undefined;
   const level = text.toLowerCase().replace(/[\s_]+/g, "-");
-  return (LEVELS as readonly string[]).includes(level) ? (level as TrustLevel) : undefined;
+  return (LEVELS as readonly string[]).includes(level) ? (level as TrustLevel) : ALIASES[level];
 }
 
 /** A list of reasons from an array or a string split on line breaks or `|`. Blank entries are dropped. */
@@ -210,6 +232,15 @@ export function reviewerText(lang: string, reviewer: string | undefined): string
   return reviewer === undefined ? t(lang, "trust_reviewer_none") : t(lang, "trust_reviewed_by", { reviewer });
 }
 
+/**
+ * Why the page has its state, in the page's language: the entry's own reasons, or what the state
+ * means when the site recorded none. The panel always explains itself, so a state is never just a
+ * badge.
+ */
+export function explanationOf(lang: string, state: TrustLevel, reasons: readonly string[]): readonly string[] {
+  return reasons.length > 0 ? reasons : [t(lang, WHY_KEYS[state])];
+}
+
 /** The `theme.options.trust` block, or undefined when the site has none. */
 function trustOptions(config: SiteConfig | undefined): TrustOptions | undefined {
   const options = config?.theme.options?.trust;
@@ -273,7 +304,9 @@ function row(label: string, value: string, className: string) {
  * island only adds Escape-to-close and returns focus to the summary.
  *
  * The entry comes from `site.data.trust`, keyed by `page.url`, or from the directive's props for a manual
- * panel. It renders nothing when neither has a recognisable level. Examples and drift come from
+ * panel. It renders nothing when neither names a state it knows, so missing evidence never becomes a
+ * `verified` claim. Every state explains itself in the panel: the entry's reasons, or the state's
+ * definition when it records none. Examples and drift come from
  * `site.data.examples` and `site.data.drift`; the action links come from `theme.options.trust` and are
  * left out when the site configures none. The doc layout places the panel under the title, so a site
  * does not write a directive; until the engine's `trust.json` output lands, `site.data.trust` is absent
@@ -284,6 +317,7 @@ const trustPanel: Component<TrustPanelProps> = ({ props, page, site }) => {
   if (entry === undefined) return null;
 
   const lang = page.lang;
+  const reasons = explanationOf(lang, entry.level, entry.reasons);
   const options = trustOptions(site.config);
   const contextPack = actionHrefOf(site.config, page, options?.contextPackUrl);
   const suggestEdit = actionHrefOf(site.config, page, options?.suggestEditUrl);
@@ -316,12 +350,8 @@ const trustPanel: Component<TrustPanelProps> = ({ props, page, site }) => {
         ...row(t(lang, "trust_drift"), driftText(lang, driftFor(site, page.url)), "trust-panel-drift"),
         ...row(t(lang, "trust_reviewer"), reviewerText(lang, entry.lastReviewer), "trust-panel-reviewer"),
       ),
-      entry.reasons.length === 0
-        ? null
-        : h("p", { class: REASONS_LABEL_CLASS }, t(lang, "trust_reasons")),
-      entry.reasons.length === 0
-        ? null
-        : h("ul", { class: REASONS_CLASS }, entry.reasons.map((reason) => h("li", null, reason))),
+      h("p", { class: REASONS_LABEL_CLASS }, t(lang, "trust_reasons")),
+      h("ul", { class: REASONS_CLASS }, reasons.map((reason) => h("li", null, reason))),
       links.length === 0 ? null : h("div", { class: ACTIONS_CLASS }, ...links),
     ),
   );
