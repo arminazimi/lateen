@@ -36,8 +36,27 @@ export default function headingAnchor({ id, level, children, label = DEFAULT_LAB
     `h${level}`,
     { id, "aria-labelledby": textIdFor(id) },
     h("span", { id: textIdFor(id), class: TEXT_CLASS }, children),
-    anchorElement(id, label),
+    anchorElement(id, linkName(label, flatText(children), id)),
   );
+}
+
+/**
+ * The link's accessible name: the label plus the heading's own text, so links
+ * read out of context say where they go. An empty heading falls back to its id,
+ * which is unique on the page.
+ */
+function linkName(label: string, text: string, id: string): string {
+  const name = text.replace(/\s+/g, " ").trim() || id;
+  return `${label}: ${name}`;
+}
+
+/** Plain text of rendered children, inline elements included. */
+function flatText(children: ComponentChildren): string {
+  if (children === null || children === undefined || typeof children === "boolean") return "";
+  if (typeof children === "string" || typeof children === "number") return String(children);
+  if (Array.isArray(children)) return children.map(flatText).join("");
+  const props = (children as { props?: { children?: ComponentChildren } }).props;
+  return flatText(props?.children);
 }
 
 /** Id of the span that holds a heading's text, unique per page because the slug is. */
@@ -100,21 +119,27 @@ function anchorHeading(heading: HastNode): void {
   if (heading.children?.some((child) => hasClass(child, ANCHOR_CLASS))) return;
 
   const textId = textIdFor(id);
+  const original = heading.children ?? [];
   const text: HastNode = {
     type: "element",
     tagName: "span",
     properties: { id: textId, className: [TEXT_CLASS] },
-    children: heading.children ?? [],
+    children: original,
   };
   heading.properties = { ...heading.properties, ariaLabelledBy: textId };
-  heading.children = [text, anchorNode(id)];
+  heading.children = [text, anchorNode(id, linkName(DEFAULT_LABEL, original.map(hastText).join(""), id))];
 }
 
-function anchorNode(id: string): HastNode {
+function hastText(node: HastNode): string {
+  if (typeof node.value === "string") return node.value;
+  return (node.children ?? []).map(hastText).join("");
+}
+
+function anchorNode(id: string, label: string): HastNode {
   return {
     type: "element",
     tagName: "a",
-    properties: { className: [ANCHOR_CLASS], href: `#${id}`, ariaLabel: DEFAULT_LABEL },
+    properties: { className: [ANCHOR_CLASS], href: `#${id}`, ariaLabel: label },
     children: [
       {
         type: "element",

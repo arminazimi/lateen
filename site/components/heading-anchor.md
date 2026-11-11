@@ -13,7 +13,7 @@ There is no directive. The theme adds the anchor to headings after the Markdown 
 
 ## Options
 
-None. The anchor's accessible name is "Link to this heading"; translating it is the theme's job.
+None. The anchor's accessible name starts with "Link to this heading" and ends with the heading's plain text, for example "Link to this heading: Syntax". A heading with no text uses its id instead, so names stay unique. Translating the fixed prefix is the theme's job.
 
 ## Example
 
@@ -25,4 +25,5 @@ A h1 is deliberately not anchored: the page title already names the page, and an
 
 - Heading ids come from the slug stage, so they stay stable for Persian and Arabic headings.
 - The icon is hidden from assistive technology and the link has its own label, so the heading's name is read once.
+- The link name includes the heading text, so a links list does not read many identical "Link to this heading" entries. An author-supplied label (`label` on the component) is kept as the prefix.
 - Do not add ids or anchors in the Markdown by hand; the engine owns both.

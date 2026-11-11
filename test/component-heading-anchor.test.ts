@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { h } from "preact";
 import headingAnchor, {
   ANCHOR_CLASS,
   TEXT_CLASS,
@@ -63,7 +64,7 @@ test("the link icon sits outside the labelled text, so it is not in the heading 
   assert.equal(anchor.type, "a");
   assert.equal(anchor.props.class, ANCHOR_CLASS);
   assert.equal(anchor.props.href, "#install");
-  assert.equal(anchor.props["aria-label"], "Link to this heading");
+  assert.equal(anchor.props["aria-label"], "Link to this heading: Install");
   const icon = childrenOf(anchor)[0];
   assert.ok(icon);
   assert.equal(icon.type, "svg");
@@ -73,10 +74,83 @@ test("the link icon sits outside the labelled text, so it is not in the heading 
   assert.equal(span?.props.children, "Install");
 });
 
-test("the link label can be passed in", () => {
+test("the link label can be passed in and prefixes the heading text", () => {
   const vnode = headingAnchor({ id: "x", level: 2, children: "X", label: "Lien vers ce titre" }) as unknown as Vnode;
   const anchor = childrenOf(vnode)[1];
-  assert.equal(anchor?.props["aria-label"], "Lien vers ce titre");
+  assert.equal(anchor?.props["aria-label"], "Lien vers ce titre: X");
+});
+
+test("two headings with the same icon get different link names from their text", () => {
+  const names = ["Install", "Configure"].map(
+    (text) => childrenOf(headingAnchor({ id: text.toLowerCase(), level: 2, children: text }) as unknown as Vnode)[1]
+      ?.props["aria-label"],
+  );
+  assert.deepEqual(names, ["Link to this heading: Install", "Link to this heading: Configure"]);
+
+  const tree: HastNode = {
+    type: "root",
+    children: [heading("h2", "install", "Install"), heading("h2", "configure", "Configure")],
+  };
+  rehype()(tree);
+  const rehypeNames = (tree.children ?? []).map((node) => node.children?.[1]?.properties?.ariaLabel);
+  assert.deepEqual(rehypeNames, names);
+});
+
+test("inline heading content is flattened into the link name and the text span is left intact", () => {
+  const kids = ["Read ", h("code", {}, "npm"), " setup"];
+  const vnode = headingAnchor({ id: "setup", level: 3, children: kids }) as unknown as Vnode;
+  const [span, anchor] = childrenOf(vnode);
+  assert.equal(anchor?.props["aria-label"], "Link to this heading: Read npm setup");
+  assert.deepEqual(span?.props.children, kids);
+
+  const tree: HastNode = {
+    type: "root",
+    children: [
+      {
+        type: "element",
+        tagName: "h3",
+        properties: { id: "setup" },
+        children: [
+          { type: "text", value: "Read " },
+          { type: "element", tagName: "code", properties: {}, children: [{ type: "text", value: "npm" }] },
+          { type: "text", value: " setup" },
+        ],
+      },
+    ],
+  };
+  rehype()(tree);
+  const rehypeAnchor = tree.children?.[0]?.children?.[1];
+  assert.equal(rehypeAnchor?.properties?.ariaLabel, "Link to this heading: Read npm setup");
+  assert.equal(text(tree.children?.[0]?.children?.[0] ?? { type: "text" }), "Read npm setup");
+});
+
+test("an empty heading still gets a unique name from its id", () => {
+  const componentName = childrenOf(headingAnchor({ id: "empty", level: 2 }) as unknown as Vnode)[1]?.props[
+    "aria-label"
+  ];
+  assert.equal(componentName, "Link to this heading: empty");
+
+  const tree: HastNode = {
+    type: "root",
+    children: [{ type: "element", tagName: "h2", properties: { id: "empty" }, children: [] }],
+  };
+  rehype()(tree);
+  assert.equal(tree.children?.[0]?.children?.[1]?.properties?.ariaLabel, componentName);
+});
+
+test("right-to-left heading text keeps its order in the link name", () => {
+  const vnode = headingAnchor({ id: "nasb", level: 2, children: "راهنمای نصب" }) as unknown as Vnode;
+  const anchor = childrenOf(vnode)[1];
+  assert.equal(anchor?.props["aria-label"], "Link to this heading: راهنمای نصب");
+});
+
+test("component and rehype name plain headings the same way", () => {
+  const vnode = headingAnchor({ id: "install", level: 2, children: "Install" }) as unknown as Vnode;
+  const componentName = childrenOf(vnode)[1]?.props["aria-label"];
+
+  const tree: HastNode = { type: "root", children: [heading("h2", "install", "Install")] };
+  rehype()(tree);
+  assert.equal(tree.children?.[0]?.children?.[1]?.properties?.ariaLabel, componentName);
 });
 
 test("rehype adds the anchor to every h2 to h4 with an id", () => {
@@ -96,7 +170,7 @@ test("rehype adds the anchor to every h2 to h4 with an id", () => {
     assert.equal(anchor?.tagName, "a");
     assert.deepEqual(anchor?.properties?.className, [ANCHOR_CLASS]);
     assert.equal(anchor?.properties?.href, "#install");
-    assert.equal(anchor?.properties?.ariaLabel, "Link to this heading");
+    assert.equal(anchor?.properties?.ariaLabel, "Link to this heading: Install");
     assert.equal(anchor?.children?.[0]?.properties?.ariaHidden, "true");
   }
 });
