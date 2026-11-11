@@ -4,6 +4,7 @@ import { h } from "preact";
 import type { ComponentProps } from "@velella/mizzen/contracts";
 import type { MermaidConfig } from "mermaid";
 import { t } from "../../i18n/index.ts";
+import { diagramCacheDir, MERMAID_CACHE_FORMAT, readDiagramCache, writeDiagramCache } from "./cache.ts";
 
 /** Class on the outer `<figure>`; `style.css` styles it. */
 export const MERMAID_CLASS = "mermaid";
@@ -44,9 +45,6 @@ export type RenderOptions = {
  */
 export const RENDER_OPTIONS: RenderOptions = { theme: "base", htmlLabels: false };
 
-/** Bumped when caching or rendering changes what a render produces, so an older entry is never reused. */
-const CACHE_FORMAT = 1;
-
 /** One render per normalized source and options, for the life of the build process. */
 const cache = new Map<string, RenderResult>();
 
@@ -71,7 +69,7 @@ export function normalizeSource(source: string): string {
 /** Stable key for a source and its render options: equal keys mean the same diagram, and so the same SVG. */
 export function diagramKey(source: string, options: RenderOptions = RENDER_OPTIONS): string {
   return createHash("sha1")
-    .update(`${String(CACHE_FORMAT)}\n${options.theme}\n${String(options.htmlLabels)}\n${normalizeSource(source)}`)
+    .update(`${String(MERMAID_CACHE_FORMAT)}\n${options.theme}\n${String(options.htmlLabels)}\n${normalizeSource(source)}`)
     .digest("hex");
 }
 
@@ -147,8 +145,21 @@ export function renderDiagram(source: string, options: RenderOptions = RENDER_OP
   const key = diagramKey(normalized, options);
   const cached = cache.get(key);
   if (cached !== undefined) return cached;
+
+  // The persistent cache is opt-in and best-effort: a miss or a corrupt entry is just a normal render.
+  const dir = diagramCacheDir();
+  if (dir !== null) {
+    const stored = readDiagramCache(dir, key);
+    if (stored !== null) {
+      const result: RenderResult = { ok: true, svg: stored };
+      cache.set(key, result);
+      return result;
+    }
+  }
+
   const result = runRenderer(normalized, options);
   cache.set(key, result);
+  if (dir !== null && result.ok) writeDiagramCache(dir, key, result.svg);
   return result;
 }
 
