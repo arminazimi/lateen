@@ -151,6 +151,8 @@
   "shortcuts_close": "إغلاق اختصارات لوحة المفاتيح",
   "shortcuts_needs_js": "يتطلب JavaScript",
   "shortcuts_open": "إظهار هذا المربع",
+  "shortcuts_preference": "تمكين اختصارات المفتاح الواحد",
+  "shortcuts_preference_hint": "أوقفه لكتابة / و m و ? بشكل طبيعي. لا يزال Ctrl/Cmd+K يفتح البحث.",
   "shortcuts_title": "اختصارات لوحة المفاتيح",
   "skip_to_content": "انتقال إلى المحتوى",
   "skip_to_navigation": "انتقال إلى التنقل",

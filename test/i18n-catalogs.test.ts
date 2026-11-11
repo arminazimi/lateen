@@ -83,3 +83,16 @@ test("no language file repeats a key", () => {
     assert.deepEqual(written, Object.keys(stringsOf(lang)), `${lang} has a duplicate or unparsed key`);
   }
 });
+
+test("the single-key shortcut preference names the same keys in every language", () => {
+  for (const lang of languages) {
+    const table = stringsOf(lang);
+    const label = table.shortcuts_preference ?? "";
+    const hint = table.shortcuts_preference_hint ?? "";
+
+    assert.notEqual(label.trim(), "", `${lang}.shortcuts_preference is empty`);
+    for (const key of ["/", "m", "?", "Ctrl/Cmd+K"]) {
+      assert.ok(hint.includes(key), `${lang}.shortcuts_preference_hint omits ${key}`);
+    }
+  }
+});

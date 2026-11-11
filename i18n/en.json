@@ -151,6 +151,8 @@
   "shortcuts_close": "Close keyboard shortcuts",
   "shortcuts_needs_js": "Needs JavaScript",
   "shortcuts_open": "Show this dialog",
+  "shortcuts_preference": "Enable single-key shortcuts",
+  "shortcuts_preference_hint": "Turn off to type /, m, and ? normally. Ctrl/Cmd+K still opens search.",
   "shortcuts_title": "Keyboard shortcuts",
   "skip_to_content": "Skip to content",
   "skip_to_navigation": "Skip to navigation",

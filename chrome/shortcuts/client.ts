@@ -1,7 +1,8 @@
 /*
  * Keyboard shortcuts dialog: `?` (Shift+/) opens it from anywhere on the page except a field the
  * reader is typing in, Escape or a backdrop press closes it, and focus returns to whatever was
- * focused before it opened.
+ * focused before it opened. The dialog also carries the reader's preference for unmodified character
+ * shortcuts, and a visible launcher button is the way back in while that preference is off.
  *
  * The module is pure: `activate` takes the dialog and a document-like environment, so tests need no
  * browser. The island wires it to the page's `[data-shortcuts]` dialog.
@@ -10,6 +11,8 @@
  * bubble-phase listener on the same document. The search predicate only accepts `/`, `⌘K`, and
  * `Ctrl+K`, so `?` cannot reach search even when no capture listener runs.
  */
+
+import { liveStorage, rememberShortcuts, shortcutsEnabled, type ShortcutStorage } from "./preference.ts";
 
 /** The focused element the dialog returns focus to when it closes. */
 export interface ShortcutsFocus {
@@ -43,6 +46,18 @@ export interface ShortcutsClose {
   addEventListener(type: "click", listener: () => void): void;
 }
 
+/** The dialog's launcher button: the visible way in, and the only one while `?` is off. */
+export interface ShortcutsOpen {
+  hidden: boolean;
+  addEventListener(type: "click", listener: () => void): void;
+}
+
+/** The preference checkbox inside the dialog. */
+export interface ShortcutsToggle {
+  checked: boolean;
+  addEventListener(type: "change", listener: () => void): void;
+}
+
 /** The `<dialog>` element as the script touches it. */
 export interface ShortcutsDialog {
   readonly open: boolean;
@@ -56,11 +71,17 @@ export interface ShortcutsDialog {
 export interface ShortcutsParts {
   readonly dialog: ShortcutsDialog;
   readonly close?: ShortcutsClose;
+  /** The launcher that opens the dialog with a pointer or the keyboard, `?` or not. */
+  readonly open?: ShortcutsOpen;
+  /** The preference that turns the unmodified character shortcuts off. */
+  readonly toggle?: ShortcutsToggle;
 }
 
 /** Everything the island reads from the world; tests pass fakes, the browser supplies its own. */
 export interface ShortcutsEnv {
   readonly document: ShortcutsDocument;
+  /** The preference storage; absent reads the browser's own, and an unreadable one reads as on. */
+  readonly storage?: ShortcutStorage | undefined;
 }
 
 /** Elements that take typed text, where `?` must stay an ordinary character. */
@@ -86,16 +107,37 @@ export function isShortcutsShortcut(event: ShortcutsEvent): boolean {
 }
 
 /**
- * Wires the dialog: `?` opens it and remembers the focused element, the close button, Escape, and a
- * backdrop press close it, and the `close` event puts focus back where it was. The dialog starts
- * `hidden` in the page and is revealed only here, so a visitor without JavaScript never sees it.
+ * Wires the dialog: `?` opens it and remembers the focused element, the launcher and the close button,
+ * Escape, and a backdrop press close it, and the `close` event puts focus back where it was. The
+ * dialog starts `hidden` in the page and is revealed only here, so a visitor without JavaScript never
+ * sees it; the launcher is revealed here too, so it is never a control that would do nothing.
+ *
+ * The preference checkbox starts where the storage left it, and every change is remembered. With the
+ * shortcuts off, `?` becomes an ordinary character; the launcher and Ctrl/Cmd+K still work.
  */
 export function activate(parts: ShortcutsParts, env: ShortcutsEnv): void {
-  const { dialog, close } = parts;
+  const { dialog, close, open, toggle } = parts;
+  const storage = env.storage ?? liveStorage();
   let opener: ShortcutsFocus | null = null;
 
   dialog.hidden = false;
   close?.addEventListener("click", () => dialog.close());
+
+  const show = (): void => {
+    if (dialog.open) return;
+    opener = env.document.activeElement;
+    dialog.showModal();
+  };
+
+  if (open !== undefined) {
+    open.hidden = false;
+    open.addEventListener("click", show);
+  }
+
+  if (toggle !== undefined) {
+    toggle.checked = shortcutsEnabled(storage);
+    toggle.addEventListener("change", () => rememberShortcuts(storage, toggle.checked));
+  }
 
   env.document.addEventListener(
     "keydown",
@@ -103,10 +145,10 @@ export function activate(parts: ShortcutsParts, env: ShortcutsEnv): void {
       if (!isShortcutsShortcut(event)) return;
       if (isTypingTarget(event.target)) return;
       if (dialog.open) return;
+      if (!shortcutsEnabled(storage)) return;
       event.preventDefault();
       event.stopPropagation?.();
-      opener = env.document.activeElement;
-      dialog.showModal();
+      show();
     },
     { capture: true },
   );
@@ -139,11 +181,15 @@ declare const document: ShortcutsDocument & { querySelector(selector: string): u
 if (typeof document !== "undefined") {
   const dialog = document.querySelector("[data-shortcuts]");
   const close = document.querySelector("[data-shortcuts] [data-shortcuts-close]");
+  const open = document.querySelector("[data-shortcuts-open]");
+  const toggle = document.querySelector("[data-shortcuts] [data-shortcuts-toggle]");
   if (dialog) {
     activate(
       {
         dialog: dialog as ShortcutsDialog,
         ...(close ? { close: close as ShortcutsClose } : {}),
+        ...(open ? { open: open as ShortcutsOpen } : {}),
+        ...(toggle ? { toggle: toggle as ShortcutsToggle } : {}),
       },
       { document },
     );

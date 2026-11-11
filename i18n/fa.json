@@ -151,6 +151,8 @@
   "shortcuts_close": "بستن میان‌برهای صفحه‌کلید",
   "shortcuts_needs_js": "به JavaScript نیاز دارد",
   "shortcuts_open": "نمایش این کادر",
+  "shortcuts_preference": "فعال کردن میان‌برهای تک‌کلیده",
+  "shortcuts_preference_hint": "برای تایپ عادی / و m و ? آن را خاموش کنید. Ctrl/Cmd+K همچنان جست‌وجو را باز می‌کند.",
   "shortcuts_title": "میان‌برهای صفحه‌کلید",
   "skip_to_content": "رفتن به محتوا",
   "skip_to_navigation": "رفتن به ناوبری",

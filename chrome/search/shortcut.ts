@@ -1,10 +1,14 @@
 /*
  * Search shortcuts: ⌘K on Apple platforms and Ctrl+K elsewhere open the search dialog from anywhere,
- * and `/` opens it too. A key pressed while the reader is typing in a field stays in that field.
+ * and `/` opens it too. A key pressed while the reader is typing in a field stays in that field, and
+ * `/` steps aside while the reader has turned unmodified character shortcuts off. The modified
+ * command key is never gated: it is how a reader who types `/` all day still reaches search.
  *
  * The module is pure: `client.ts` calls `activateShortcuts` with the search button and the platform,
  * so tests need no browser. That same call puts the platform's hint on the search button.
  */
+
+import { shortcutsEnabled, type ShortcutStorage } from "../shortcuts/preference.ts";
 
 /** The hint the search button shows on Apple platforms. */
 export const MAC_HINT = "⌘K";
@@ -53,6 +57,8 @@ export interface ShortcutParts {
 export interface ShortcutEnv {
   readonly platform: string;
   addEventListener(type: "keydown", listener: (event: ShortcutEvent) => void): void;
+  /** The preference storage; absent reads the browser's own, and an unreadable one reads as on. */
+  readonly storage?: ShortcutStorage | undefined;
 }
 
 /** Elements that take typed text, where `/` and the shortcut must stay ordinary keys. */
@@ -89,12 +95,14 @@ export function isSearchShortcut(event: ShortcutEvent, platform: string): boolea
 
 /**
  * Puts the platform's hint on the search button and opens search on the shortcut from anywhere except
- * a field. The listener is on the document, so a key pressed with focus on the page still counts.
+ * a field. The listener is on the document, so a key pressed with focus on the page still counts. The
+ * unmodified `/` is read from the reader's preference on every press; `⌘K`/`Ctrl+K` never is.
  */
 export function activateShortcuts(parts: ShortcutParts, env: ShortcutEnv): void {
   if (parts.hint !== undefined) parts.hint.textContent = hintFor(env.platform);
   env.addEventListener("keydown", (event) => {
     if (!isSearchShortcut(event, env.platform)) return;
+    if (event.key?.toLowerCase() === "/" && !shortcutsEnabled(env.storage)) return;
     if (isTypingTarget(event.target)) return;
     event.preventDefault();
     parts.button.click();

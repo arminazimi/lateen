@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { test } from "node:test";
+import { beforeEach, test } from "node:test";
 import type { ChromeProps, Page, Pager, Site, SiteConfig, SourcePos, Trail } from "@velella/mizzen/contracts";
 import copyMarkdown, { twinUrl } from "../chrome/copy-markdown/index.ts";
 import {
@@ -15,6 +15,14 @@ import {
   type ShortcutEvent,
   type ShortcutHost,
 } from "../chrome/copy-markdown/client.ts";
+import {
+  OFF,
+  rememberShortcuts,
+  resetShortcutsPreference,
+  type ShortcutStorage,
+} from "../chrome/shortcuts/preference.ts";
+
+beforeEach(() => resetShortcutsPreference());
 
 const pos: SourcePos = { file: "docs/guide/install.md", line: 3, column: 1, endLine: 9, endColumn: 1 };
 
@@ -208,7 +216,7 @@ function keyHost(): FakeKeyHost {
 
 /** An environment whose fetch, clipboard, and key listener record their calls. */
 function env(
-  options: { fetchText?: (url: string) => Promise<string>; clipboard?: Clipboard } = {},
+  options: { fetchText?: (url: string) => Promise<string>; clipboard?: Clipboard; storage?: ShortcutStorage } = {},
 ): ActivateEnv & {
   fetched: string[];
   wrote: string[];
@@ -220,6 +228,7 @@ function env(
     wrote: [] as string[],
     status: fakeStatus(),
     keys: keyHost(),
+    ...(options.storage === undefined ? {} : { storage: options.storage }),
     fetchText:
       options.fetchText ??
       ((url: string) => {
@@ -340,6 +349,98 @@ test("the m shortcut stays out of fields the reader is typing in", async () => {
 
   assert.deepEqual(world.fetched, []);
   assert.equal(world.status.textContent, "");
+});
+
+test("a stored preference makes the m key an ordinary letter and keeps the button working", async () => {
+  const button = fakeButton();
+  const world = env({ storage: { getItem: () => OFF, setItem: () => {} } });
+  activate(button, world);
+
+  const result = world.keys.press();
+  await settle();
+
+  assert.equal(result.prevented, false, "`m` should type normally");
+  assert.equal(button.clicks.length, 1, "the pointer path is still wired");
+  assert.deepEqual(world.fetched, []);
+  assert.equal(world.status.textContent, "");
+});
+
+test("blocked or corrupt storage never disables the m key", async () => {
+  const blocked: ShortcutStorage = {
+    getItem(): string | null {
+      throw new Error("storage is blocked");
+    },
+    setItem(): void {
+      throw new Error("storage is blocked");
+    },
+  };
+  const corrupt: ShortcutStorage = { getItem: () => "something-else", setItem: () => {} };
+
+  for (const storage of [blocked, corrupt]) {
+    const button = fakeButton();
+    const world = env({ storage });
+    activate(button, world);
+
+    const result = world.keys.press();
+    await settle();
+
+    assert.equal(result.prevented, true);
+    assert.deepEqual(world.fetched, ["/example/guide/install/index.md"]);
+  }
+});
+
+test("the preference is read on every press, so turning it back on restores the m key", async () => {
+  let stored: string | null = OFF;
+  const storage: ShortcutStorage = { getItem: () => stored, setItem: () => {} };
+  const button = fakeButton();
+  const world = env({ storage });
+  activate(button, world);
+
+  assert.equal(world.keys.press().prevented, false);
+  stored = null;
+  assert.equal(world.keys.press().prevented, true);
+  await settle();
+  assert.deepEqual(world.fetched, ["/example/guide/install/index.md"]);
+});
+
+test("an explicit choice applies to m even when storage is blocked or read-only", async () => {
+  const blocked: ShortcutStorage = {
+    getItem(): string | null {
+      throw new Error("storage is blocked");
+    },
+    setItem(): void {
+      throw new Error("storage is blocked");
+    },
+  };
+  const readOnly: ShortcutStorage = {
+    getItem: () => null,
+    setItem(): void {
+      throw new Error("storage is read-only");
+    },
+  };
+
+  for (const storage of [blocked, readOnly]) {
+    resetShortcutsPreference();
+    const button = fakeButton();
+    const world = env({ storage });
+    activate(button, world);
+
+    rememberShortcuts(storage, false);
+    let result = world.keys.press();
+    await settle();
+    assert.equal(result.prevented, false);
+    assert.deepEqual(world.fetched, []);
+
+    button.clicks[0]!();
+    await settle();
+    assert.deepEqual(world.fetched, ["/example/guide/install/index.md"], "the pointer action still copies");
+
+    rememberShortcuts(storage, true);
+    result = world.keys.press();
+    await settle();
+    assert.equal(result.prevented, true);
+    assert.deepEqual(world.fetched, ["/example/guide/install/index.md", "/example/guide/install/index.md"]);
+  }
 });
 
 test("the shortcut leaves /, ?, and Ctrl/Cmd+K to search and ignores modifiers and repeats", () => {

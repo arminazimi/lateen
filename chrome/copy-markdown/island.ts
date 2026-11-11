@@ -8,6 +8,8 @@
  * `fetch`, and key listener.
  */
 
+import { shortcutsEnabled, type ShortcutStorage } from "../shortcuts/preference.ts";
+
 /** The parts of the copy button the island reads and writes. */
 export interface CopyButton {
   hidden: boolean;
@@ -55,6 +57,8 @@ export interface ShortcutHost {
 /** The environment `activate` needs: the copy APIs, the status region, and a key listener host. */
 export interface ActivateEnv extends CopyEnv {
   keys?: ShortcutHost | undefined;
+  /** The preference storage; absent reads the browser's own, and an unreadable one reads as on. */
+  storage?: ShortcutStorage | undefined;
 }
 
 /** Elements that take typed text, where `m` must stay an ordinary letter. */
@@ -117,7 +121,8 @@ export function copy(button: CopyButton, env: CopyEnv): Promise<void> {
 /**
  * Reveals the button and wires its click and the `m` shortcut, unless the browser lacks the
  * clipboard or `fetch`. The shortcut presses the button, so a key and a pointer run the same code,
- * and it stays out of every field the reader is typing in.
+ * and it stays out of every field the reader is typing in. A reader who turned unmodified character
+ * shortcuts off keeps the button: only the key steps aside.
  */
 export function activate(button: CopyButton, env: ActivateEnv): void {
   if (env.clipboard === undefined || env.fetchText === undefined) return;
@@ -129,6 +134,7 @@ export function activate(button: CopyButton, env: ActivateEnv): void {
   env.keys?.addEventListener("keydown", (event) => {
     if (!isCopyShortcut(event)) return;
     if (isTypingTarget(event.target)) return;
+    if (!shortcutsEnabled(env.storage)) return;
     event.preventDefault();
     button.click();
   });
