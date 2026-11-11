@@ -147,7 +147,7 @@ interface FakeDialog extends Omit<ShortcutsDialog, "open"> {
   open: boolean;
   shows: number;
   closes: number;
-  fire(type: "keydown" | "close", event: ShortcutsEvent): void;
+  fire(type: "keydown" | "close" | "click", event: ShortcutsEvent): void;
 }
 
 function fakeDialog(): FakeDialog {
@@ -332,6 +332,31 @@ test("the close button also returns focus to the opener", () => {
   assert.equal(dialog.closes, 1);
   assert.equal(dialog.open, false);
   assert.equal(opener.focused, 1);
+});
+
+test("a press on the modal backdrop closes the dialog and returns focus to the opener", () => {
+  const { dialog, parts } = partsOf();
+  const opener = fakeFocus("content");
+  const document = fakeDocument(opener);
+  activate(parts, { document });
+
+  document.fire(key("?", { tagName: "BODY" }));
+  dialog.fire("click", { target: dialog, preventDefault() {} });
+
+  assert.equal(dialog.open, false);
+  assert.equal(dialog.closes, 1);
+  assert.equal(opener.focused, 1);
+});
+
+test("a press on the shortcuts sheet is left to the control under it", () => {
+  const { dialog, parts } = partsOf();
+  const document = fakeDocument(fakeFocus("content"));
+  activate(parts, { document });
+
+  document.fire(key("?", { tagName: "BODY" }));
+  dialog.fire("click", { target: fakeFocus("sheet"), preventDefault() {} });
+
+  assert.equal(dialog.open, true);
 });
 
 test("/ still opens search, and ? never does", () => {

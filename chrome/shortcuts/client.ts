@@ -1,6 +1,7 @@
 /*
  * Keyboard shortcuts dialog: `?` (Shift+/) opens it from anywhere on the page except a field the
- * reader is typing in, Escape closes it, and focus returns to whatever was focused before it opened.
+ * reader is typing in, Escape or a backdrop press closes it, and focus returns to whatever was
+ * focused before it opened.
  *
  * The module is pure: `activate` takes the dialog and a document-like environment, so tests need no
  * browser. The island wires it to the page's `[data-shortcuts]` dialog.
@@ -48,7 +49,7 @@ export interface ShortcutsDialog {
   hidden: boolean;
   showModal(): void;
   close(): void;
-  addEventListener(type: "keydown" | "close", listener: (event: ShortcutsEvent) => void): void;
+  addEventListener(type: "keydown" | "close" | "click", listener: (event: ShortcutsEvent) => void): void;
 }
 
 /** The elements the island wires. */
@@ -85,9 +86,9 @@ export function isShortcutsShortcut(event: ShortcutsEvent): boolean {
 }
 
 /**
- * Wires the dialog: `?` opens it and remembers the focused element, the close button and Escape close
- * it, and the `close` event puts focus back where it was. The dialog starts `hidden` in the page and
- * is revealed only here, so a visitor without JavaScript never sees it.
+ * Wires the dialog: `?` opens it and remembers the focused element, the close button, Escape, and a
+ * backdrop press close it, and the `close` event puts focus back where it was. The dialog starts
+ * `hidden` in the page and is revealed only here, so a visitor without JavaScript never sees it.
  */
 export function activate(parts: ShortcutsParts, env: ShortcutsEnv): void {
   const { dialog, close } = parts;
@@ -115,6 +116,11 @@ export function activate(parts: ShortcutsParts, env: ShortcutsEnv): void {
     event.preventDefault();
     event.stopPropagation?.();
     dialog.close();
+  });
+
+  // A press on the modal backdrop lands on the dialog itself; a press on the sheet does not.
+  dialog.addEventListener("click", (event) => {
+    if (event.target === dialog) dialog.close();
   });
 
   // Closing by any route (Escape or the close button) returns focus to the element that opened the

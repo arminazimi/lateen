@@ -472,6 +472,19 @@ test("clicking a section action jumps to the heading and closes the dialog", asy
   assert.equal(dialog.closes, 1);
 });
 
+test("a section action keeps focus on the heading instead of pulling it back to the search button", async () => {
+  const jumped: string[] = [];
+  const { button, results, parts } = partsOf(payloadOf(pageWith()));
+  activate(parts, envWith(apiOf([]), { section: (id) => jumped.push(id) }));
+  button.click();
+  await tick();
+
+  clickAction(results.nodes, "section-requirements");
+
+  assert.deepEqual(jumped, ["requirements"]);
+  assert.equal(button.focused, 0, "the search button does not take focus from the jump target");
+});
+
 test("Enter in the field runs the first item, even when it is an action", async () => {
   const calls: unknown[] = [];
   const { button, dialog, input, parts } = partsOf(payloadOf(pageWith()));
@@ -532,6 +545,25 @@ test("a redraw keeps keyboard focus on the same action", async () => {
   const after = walkAll(results.nodes).find((node) => node.attrs["data-palette-action"] === "section-cache");
   assert.ok(after);
   assert.equal(after.focused, 1, "the matching action keeps focus after the redraw");
+});
+
+test("a query that empties the list moves focus from the removed row back to the field", async () => {
+  const { button, input, results, parts } = partsOf(payloadOf(pageWith()));
+  const env = envWith(apiOf([]));
+  activate(parts, env);
+  button.click();
+  await tick();
+  assert.equal(input.focused, 1, "opening focuses the field");
+
+  const row = walkAll(results.nodes).find((node) => node.attrs["data-palette-action"] === "theme-dark");
+  assert.ok(row);
+  (env.document as unknown as { activeElement?: unknown }).activeElement = row;
+
+  input.type("zzz");
+  await tick();
+
+  assert.equal(results.nodes.length, 0, "no result and no action matches");
+  assert.equal(input.focused, 2, "the field takes focus again, so the next Tab starts from it");
 });
 
 test("the dialog's listbox is built with action buttons and result links only", async () => {

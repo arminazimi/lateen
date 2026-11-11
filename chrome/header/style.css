@@ -134,7 +134,7 @@ html[data-js] .header-search[hidden] {
   display: inline-flex;
 }
 
-/* Narrow screens: logo, title, repository link, and the search and menu buttons; the tabs and theme switch leave. */
+/* Narrow screens: logo, title, repository link, and the search button; the tabs and theme switch leave. */
 @media (max-width: 40rem) {
   .header-inner {
     gap: var(--space-4);
@@ -144,7 +144,10 @@ html[data-js] .header-search[hidden] {
   .header-tabs {
     display: none;
   }
+}
 
+/* The drawer carries navigation below the sidebar breakpoint (`chrome/drawer/style.css`, `layouts/doc.css`), so its menu button appears there, not only on phones. */
+@media (max-width: 767.98px) {
   .header-menu:not([hidden]),
   html[data-js] .header-menu[hidden] {
     display: inline-flex;
