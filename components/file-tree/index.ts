@@ -151,6 +151,15 @@ export function nodeId(base: string, path: string): string {
   return `${base}-${slugOf(path) || "node"}`;
 }
 
+/** A node id unique within its tree: a path used twice gets a numeric suffix. */
+function uniqueNodeId(base: string, path: string, used: Set<string>): string {
+  const id = nodeId(base, path);
+  let unique = id;
+  for (let n = 2; used.has(unique); n += 1) unique = `${id}-${n}`;
+  used.add(unique);
+  return unique;
+}
+
 function icon(folder: boolean): VNode {
   return h(
     "svg",
@@ -169,14 +178,22 @@ function icon(folder: boolean): VNode {
 }
 
 /** One row, as a treeitem with its position in the level and, for a folder, its nested group. */
-function item(entry: FileTreeEntry, level: number, index: number, count: number, base: string, prefix: string): ComponentChildren {
+function item(
+  entry: FileTreeEntry,
+  level: number,
+  index: number,
+  count: number,
+  base: string,
+  prefix: string,
+  used: Set<string>,
+): ComponentChildren {
   const folder = isFolder(entry);
   const hasChildren = entry.children.length > 0;
   const classes = ["file-tree-item", folder ? "is-folder" : "is-file"];
   if (isHighlighted(entry)) classes.push("is-highlighted");
 
   const path = entryPath(prefix, entry.name);
-  const id = nodeId(base, path);
+  const id = uniqueNodeId(base, path, used);
   const nameId = `${id}-name`;
   const noteId = `${id}-note`;
 
@@ -205,18 +222,25 @@ function item(entry: FileTreeEntry, level: number, index: number, count: number,
         ? h("span", { class: "file-tree-note", id: noteId, dangerouslySetInnerHTML: { __html: entry.note } })
         : null,
     ),
-    hasChildren ? group(entry.children, level + 1, base, path) : null,
+    hasChildren ? group(entry.children, level + 1, base, path, undefined, used) : null,
   );
 }
 
 /** A list of sibling rows: the tree itself at the top, a `group` under each folder. */
-function group(entries: FileTreeEntry[], level: number, base: string, prefix: string, root?: string): ComponentChildren {
+function group(
+  entries: FileTreeEntry[],
+  level: number,
+  base: string,
+  prefix: string,
+  root: string | undefined,
+  used: Set<string>,
+): ComponentChildren {
   return h(
     "ul",
     root === undefined
       ? { class: "file-tree-group", role: "group" }
-      : { class: "file-tree", role: "tree", id: base, "aria-label": root },
-    ...entries.map((entry, i) => item(entry, level, i, entries.length, base, prefix)),
+      : { class: "file-tree", role: "tree", id: base, "aria-label": root, "data-file-tree": "" },
+    ...entries.map((entry, i) => item(entry, level, i, entries.length, base, prefix, used)),
   );
 }
 
@@ -232,7 +256,8 @@ const fileTree: Component<FileTreeProps> = ({ props, html }) => {
     return h("div", { class: "file-tree", dangerouslySetInnerHTML: { __html: html } });
   }
   const label = typeof props.label === "string" && props.label !== "" ? props.label : DEFAULT_LABEL;
-  return group(entries, 1, idBase(props.id), "", label);
+  const base = idBase(props.id);
+  return group(entries, 1, base, "", label, new Set<string>());
 };
 
 export default fileTree;
