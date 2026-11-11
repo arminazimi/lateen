@@ -98,6 +98,10 @@ const problems = (check: (declaration: Declaration) => boolean): string[] =>
 const rule = (selector: string): { selector: string; body: string } | undefined =>
   blocks(css).find((block) => block.selector.includes(selector));
 
+/** The rule that forces technical content left to right, separate from its mono face. */
+const ltrRule = (): { selector: string; body: string } | undefined =>
+  blocks(css).find((block) => block.selector.includes("pre") && /direction:\s*ltr/.test(block.body));
+
 test("rtl.css targets Persian and Arabic by language", () => {
   const selectors = blocks(css).map((block) => block.selector).join("\n");
   for (const tag of ["fa", "ar"]) {
@@ -158,8 +162,8 @@ test("Persian and Arabic pages drop letter spacing, including on elements that s
 });
 
 test("technical inline content is left to right and isolated inside RTL text", () => {
-  const code = rule("pre");
-  assert.ok(code, "no rule for pre");
+  const code = ltrRule();
+  assert.ok(code, "no direction rule for technical content");
   for (const element of ["pre", "code", "kbd", "samp", "var"]) {
     assert.ok(code.selector.includes(element), `the code rule does not name ${element}`);
   }
@@ -168,12 +172,21 @@ test("technical inline content is left to right and isolated inside RTL text", (
   assert.match(code.selector, /:not\(\[dir\]\)/, "an authored direction should not be overruled");
   assert.match(code.body, /direction:\s*ltr/);
   assert.match(code.body, /unicode-bidi:\s*isolate/);
-  assert.match(code.body, /font-family:\s*var\(--type-font-mono\)/);
+  assert.doesNotMatch(code.body, /font-family/, "the mono face is a separate rule");
+});
+
+test("technical inline content keeps the mono face even with an authored dir", () => {
+  const technical = blocks(css).find((block) => block.body.includes("font-family: var(--type-font-mono)"));
+  assert.ok(technical, "no mono rule for technical content");
+  for (const element of ["pre", "code", "kbd", "samp", "var"]) {
+    assert.ok(technical.selector.includes(element), `the mono rule does not name ${element}`);
+  }
+  assert.doesNotMatch(technical.selector, /:not\(\[dir\]\)/, "an authored dir must keep the mono face");
 });
 
 test("code stays left to right on every right-to-left page, not only Persian and Arabic", () => {
-  const code = rule("pre");
-  assert.ok(code, "no rule for pre");
+  const code = ltrRule();
+  assert.ok(code, "no direction rule for technical content");
   assert.match(code.selector, /\[dir="rtl"\]/, "the code rule does not follow the dir attribute");
   assert.match(code.body, /text-align:\s*start/, "a left-to-right block should start at its left edge");
 });
@@ -279,6 +292,7 @@ test("only navigation affordances mirror, never media or technical symbols", () 
 
 /** The theme's own direction and affordance styles, applied to a fixture the way a page loads them. */
 const FIXTURE_CSS = [
+  "../styles/tokens.css",
   "../styles/rtl.css",
   "../styles/base.css",
   "../chrome/pager/style.css",
@@ -342,6 +356,9 @@ test("the technical inline fixture keeps every run in its own direction", () => 
   // A nested run and an authored `dir="rtl"` keep the direction they state.
   assert.equal(direction(window, "#rtl-run"), "rtl");
   assert.equal(direction(window, "#forced-rtl"), "rtl");
+  const forcedRtl = document.querySelector("#forced-rtl");
+  assert.ok(forcedRtl, "the fixture has no #forced-rtl");
+  assert.match(window.getComputedStyle(forcedRtl).fontFamily, /Geist Mono/, "authored dir keeps the mono face");
 
   // Every explicit island is isolated, including a string of only neutral characters.
   for (const id of ["url", "number", "neutral-run", "ltr-run", "rtl-run", "forced-rtl"]) {
