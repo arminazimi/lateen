@@ -85,3 +85,22 @@ clean checkout on another Node release does not fail for a byte; it is not a gro
 
 Module counts are checked without that headroom: an island added to a route is a new request and a new
 module to evaluate, whatever its size.
+
+## Mermaid build cache
+
+Mermaid diagrams are rendered in child processes while the site builds. Set
+`LATEEN_MERMAID_CACHE_DIR` to keep those renders between builds:
+
+```bash
+LATEEN_MERMAID_CACHE_DIR=.cache/mermaid node scripts/performance-budget.ts
+```
+
+Entries are keyed by normalized source, render options, and the cache-format version, and each is
+written atomically, so parallel builds can share the directory safely. The cache changes build time
+only: page output, page weight, and these budgets are unchanged. An unset directory, a read-only
+directory, a cache miss, or a corrupt entry falls back to a normal render. Clear it by deleting the
+directory, for example after changing the Mermaid version:
+
+```bash
+rm -rf .cache/mermaid
+```
