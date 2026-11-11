@@ -7,23 +7,29 @@ export const WRAPPER_CLASS = "table-scroll";
 /** Styled table element class. */
 export const TABLE_CLASS = "table";
 
-const DEFAULT_LABEL = "Table";
+/** Marks the scroll region for `client.ts`, which drops the tab stop when the table fits. */
+export const REGION_ATTRIBUTE = "data-table-scroll";
 
 export type TableProps = {
   children?: ComponentChildren;
-  /** Accessible name for the scroll region. */
+  /** Accessible name for the scroll region when the table has no caption. */
   label?: string;
 };
 
-/** Render a table inside a keyboard-focusable horizontal scroll region. */
-export default function table({ children, label = DEFAULT_LABEL }: TableProps) {
+/**
+ * Render a table inside a keyboard-focusable horizontal scroll region. Without JavaScript the region
+ * always keeps its tab stop, so a wide table stays keyboard-scrollable; `client.ts` removes the tab
+ * stop and the named region when the table fits. A caption names the region on the rendered page.
+ */
+export default function table({ children, label }: TableProps) {
+  const name = typeof label === "string" ? label.trim() : "";
   return h(
     "div",
     {
       class: WRAPPER_CLASS,
+      [REGION_ATTRIBUTE]: true,
       tabIndex: 0,
-      role: "region",
-      "aria-label": label,
+      ...(name === "" ? {} : { role: "region", "aria-label": name, "data-label": name }),
     },
     h("table", { class: TABLE_CLASS }, children),
   );
@@ -39,9 +45,10 @@ export type HastNode = {
 };
 
 /**
- * Rehype plugin: wrap every bare `<table>` in a scroll region with
- * `tabindex="0"` and an accessible label (design brief: wide tables scroll
- * inside the article with a visible edge).
+ * Rehype plugin: wrap every bare `<table>` in a scroll region. The wrapper is focusable so a wide
+ * table scrolls from the keyboard without JavaScript; `client.ts` drops the tab stop and the region
+ * role when the table fits. A caption names the region, and a table without one adds no unnamed
+ * landmark.
  */
 export function rehype() {
   return function tableRehype(tree: HastNode): void {
@@ -63,14 +70,15 @@ function wrapTables(node: HastNode): void {
         continue;
       }
       ensureTableClass(child);
+      const caption = captionFor(child);
       children[i] = {
         type: "element",
         tagName: "div",
         properties: {
           className: [WRAPPER_CLASS],
+          dataTableScroll: true,
           tabIndex: 0,
-          role: "region",
-          ariaLabel: labelFor(child),
+          ...(caption === undefined ? {} : { role: "region", ariaLabel: caption }),
         },
         children: [child],
       };
@@ -105,11 +113,12 @@ function hasClass(node: HastNode, name: string): boolean {
   return false;
 }
 
-function labelFor(tableNode: HastNode): string {
+/** The table's caption as plain text, or `undefined` when it has none or an empty one. */
+function captionFor(tableNode: HastNode): string | undefined {
   const caption = tableNode.children?.find((child) => isElement(child, "caption"));
-  if (!caption) return DEFAULT_LABEL;
+  if (!caption) return undefined;
   const text = textContent(caption).trim();
-  return text.length > 0 ? text : DEFAULT_LABEL;
+  return text.length > 0 ? text : undefined;
 }
 
 function textContent(node: HastNode): string {

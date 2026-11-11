@@ -1,11 +1,11 @@
 ---
 title: Table
-description: Markdown tables in a labelled, keyboard-scrollable region, styled by the theme.
+description: Markdown tables in an overflow-aware, keyboard-scrollable region, styled by the theme.
 layout: doc
 permalink: /components/table/
 ---
 
-A table shows data in rows and columns. The theme wraps every Markdown table in a scroll region with an accessible label, so a wide table scrolls inside the article instead of widening the page.
+A table shows data in rows and columns. The theme wraps every Markdown table in a scroll region, so a wide table scrolls inside the article instead of widening the page. A table that fits gains no extra tab stop and no landmark when the theme's island runs; a wide table stays focusable and, when it has a caption, is named.
 
 ## Syntax
 
@@ -22,7 +22,9 @@ There is no directive.
 
 ## Options
 
-None. The table's accessible name comes from its first row, or from the surrounding heading in the theme's wrapper.
+None for Markdown. GFM has no caption syntax, so a Markdown table has no region name and is not announced as a landmark; it still gets the focusable scroll region when it overflows. That keeps a page from collecting repeated generic "Table" landmarks.
+
+When a table does have a caption, as produced by a pipeline or a component, the caption names the region. A component that renders a table directly can pass `label` instead. A table with neither stays keyboard-scrollable but unnamed.
 
 ## Example
 
@@ -37,3 +39,4 @@ None. The table's accessible name comes from its first row, or from the surround
 - The alignment row is required; `---` on its own is enough.
 - Inline code in cells is the clearest way to name a field, a path, or a value.
 - A table is never a layout tool; use [steps](../steps/) or a list for a sequence.
+- Without JavaScript the wrapper stays focusable, so a wide table can still be scrolled with the arrow keys. With JavaScript it drops that tab stop whenever the table fits, and adds it back when the viewport, zoom, or text size makes the table overflow.
