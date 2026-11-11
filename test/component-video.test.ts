@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { renderToString } from "preact-render-to-string";
 import type { ComponentProps } from "@velella/mizzen/contracts";
 import video, {
+  BOX_CLASS,
   DIAGNOSTIC_CLASS,
   FRAME_CLASS,
   IMAGE_CLASS,
@@ -13,16 +14,16 @@ import video, {
   PLAY_CLASS,
   POSTER_CLASS,
   directive,
-  httpsHref,
   posterSrc,
-  providerOf,
   VIDEO_CLASS,
   type VideoProps,
   youtubePoster,
 } from "../components/video/index.ts";
+import { httpsHref, providerOf } from "../components/embed/index.ts";
 import {
   activate,
   activateAll,
+  BOX_SELECTOR,
   PLAY_SELECTOR,
   POSTER_SELECTOR,
   VIDEO_SELECTOR,
@@ -113,12 +114,13 @@ test("the directive is video and the default export is a component", () => {
   assert.equal(typeof video, "function");
 });
 
-test("renders a poster, a hidden play button, and a text link to the provider", () => {
+test("renders a box with a poster, a hidden play button, and a text link to the provider", () => {
   const html = render({ src: WATCH, title: TITLE });
 
   assert.match(html, new RegExp(`^<div class="${VIDEO_CLASS}"`));
   assert.match(html, new RegExp(`data-embed="${EMBED}"`));
   assert.match(html, /data-title="Big Buck Bunny"/);
+  assert.match(html, new RegExp(`<div class="${BOX_CLASS}"`));
   assert.match(html, new RegExp(`<div class="${POSTER_CLASS}"`));
   assert.match(html, new RegExp(`<img class="${IMAGE_CLASS}" src="https://i.ytimg.com/vi/aqz-KE-bpKQ/hqdefault.jpg" alt[ >]`));
   assert.match(html, new RegExp(`<button type="button" class="${PLAY_CLASS}" hidden`));
@@ -129,6 +131,12 @@ test("renders a poster, a hidden play button, and a text link to the provider", 
     html,
   );
   assert.doesNotMatch(html, /<iframe/);
+});
+
+test("the provider link sits under the box, so it stays when the player loads or fails", () => {
+  const html = render({ src: WATCH, title: TITLE });
+  // The box closes before the link opens, so the island hides only the poster, never the link.
+  assert.match(html, new RegExp(`</div></div><a class="${LINK_CLASS}"`));
 });
 
 test("the text link is static markup, so it works when the island never runs", () => {
@@ -207,13 +215,15 @@ test("the play button is revealed when the island runs", () => {
   assert.equal(button.hidden, false);
 });
 
-test("a click inserts the privacy iframe, fills it, and hides the poster", () => {
+test("a click inserts the privacy iframe into the box, fills it, and hides the poster", () => {
   const created: VideoFrame[] = [];
   const videoRoot = new FakeElement({ embed: EMBED, title: TITLE });
+  const box = new FakeElement();
   const button = new FakeElement({}, true);
   const poster = new FakeElement({}, false);
-  videoRoot.set(PLAY_SELECTOR, button);
-  videoRoot.set(POSTER_SELECTOR, poster);
+  videoRoot.set(BOX_SELECTOR, box);
+  box.set(PLAY_SELECTOR, button);
+  box.set(POSTER_SELECTOR, poster);
 
   activate(videoRoot, button, fakeEnv(created));
   button.click();
@@ -227,7 +237,8 @@ test("a click inserts the privacy iframe, fills it, and hides the poster", () =>
   assert.equal(frame.referrerPolicy, "strict-origin-when-cross-origin");
   assert.equal(frame.allow, "encrypted-media; picture-in-picture; fullscreen");
   assert.equal(frame.allowFullscreen, true);
-  assert.deepEqual(videoRoot.children, [frame]);
+  assert.deepEqual(box.children, [frame]);
+  assert.deepEqual(videoRoot.children, []);
   assert.equal(poster.hidden, true);
   assert.equal(videoRoot.dataset.loaded, "true");
 });
@@ -307,8 +318,10 @@ test("style.css uses logical properties only", () => {
   assert.doesNotMatch(css, /(?<![\w-])(min-|max-)?(width|height)\s*:/);
 });
 
-test("style.css keeps the frame at 16:9 and fills the same box with the player", () => {
-  assert.match(css, /\.video\s*\{[^}]*aspect-ratio:\s*16\s*\/\s*9/);
+test("style.css keeps the box at 16:9, fills it with the player, and keeps the link under it", () => {
+  assert.match(css, /\.video\s*\{[^}]*max-inline-size:\s*100%/);
+  assert.match(css, /\.video-box\s*\{[^}]*aspect-ratio:\s*16\s*\/\s*9/);
   assert.match(css, /\.video-frame\s*\{[^}]*position:\s*absolute/);
   assert.match(css, /\.video-play\[hidden\][^{]*\{[^}]*display:\s*none/);
+  assert.doesNotMatch(css, /\.video-link\s*\{[^}]*position:\s*absolute/);
 });

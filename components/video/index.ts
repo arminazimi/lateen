@@ -1,13 +1,16 @@
 import { h } from "preact";
 import type { ComponentProps } from "@velella/mizzen/contracts";
 import { t } from "../../i18n/index.ts";
-import { embedSrc, youtubeId } from "../embed/index.ts";
+import { embedSrc, httpsHref, providerOf, youtubeId } from "../embed/index.ts";
 
 /** The Markdown directive this component handles: `::video`. */
 export const directive = "video";
 
-/** Class on the frame that holds the poster and, after a click, the player. It keeps the fixed 16:9 ratio (`style.css`). */
+/** Class on the component: the 16:9 box plus the provider link under it. */
 export const VIDEO_CLASS = "video";
+
+/** Class on the 16:9 box that holds the poster and, after a click, the player. */
+export const BOX_CLASS = "video-box";
 
 /** Class on the poster and its controls. `client.ts` hides it once the player loads. */
 export const POSTER_CLASS = "video-poster";
@@ -18,7 +21,7 @@ export const IMAGE_CLASS = "video-poster-image";
 /** Class on the play button. It starts `hidden`; `client.ts` reveals it. */
 export const PLAY_CLASS = "video-play";
 
-/** Class on the link that opens the video without JavaScript. */
+/** Class on the link that opens the video without JavaScript and stays after the player loads. */
 export const LINK_CLASS = "video-link";
 
 /** Class on the message shown in place of a video that has no title. */
@@ -40,30 +43,6 @@ export type VideoProps = {
   poster?: string;
 };
 
-/** Providers whose name is worth spelling out; any other host shows as its hostname. */
-const PROVIDERS: Readonly<Record<string, string>> = {
-  "m.youtube.com": "YouTube",
-  "player.vimeo.com": "Vimeo",
-  "vimeo.com": "Vimeo",
-  "www.vimeo.com": "Vimeo",
-  "www.youtube-nocookie.com": "YouTube",
-  "www.youtube.com": "YouTube",
-  "youtu.be": "YouTube",
-  "youtube-nocookie.com": "YouTube",
-  "youtube.com": "YouTube",
-};
-
-/** The address a text link opens: an `https` URL, or `undefined` when the value is anything else. */
-export function httpsHref(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  try {
-    const url = new URL(value.trim());
-    return url.protocol === "https:" ? url.href : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 /** The poster image: an `https` address or a root-relative path, or `undefined` for anything else. */
 export function posterSrc(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
@@ -83,21 +62,12 @@ export function youtubePoster(src: string | undefined): string | undefined {
   }
 }
 
-/** The provider's name for the text link: "YouTube", "Vimeo", or the hostname. */
-export function providerOf(value: string): string {
-  try {
-    const host = new URL(value).hostname;
-    return PROVIDERS[host] ?? host.replace(/^www\./, "");
-  } catch {
-    return "the provider";
-  }
-}
-
 /**
  * `::video{src=… title=… poster=…}` shows a 16:9 poster, a play button, and a link to the provider.
  * The player loads only when the reader clicks the button (`client.ts`), so nothing is requested from the
- * provider before then; without JavaScript the link still opens the video in a new tab. Without a title
- * the component renders a message instead, because the player would have no accessible name. An empty or
+ * provider before then; without JavaScript the link still opens the video in a new tab. The link sits
+ * under the box, so it stays after the player loads and when a player is blocked. Without a title the
+ * component renders a message instead, because the player would have no accessible name. An empty or
  * unsafe `src` renders nothing.
  */
 export default function video({ props, page }: ComponentProps<VideoProps>) {
@@ -124,32 +94,36 @@ export default function video({ props, page }: ComponentProps<VideoProps>) {
     },
     h(
       "div",
-      { class: POSTER_CLASS, "data-video-poster": true },
-      poster === undefined
-        ? null
-        : h("img", {
-            class: IMAGE_CLASS,
-            src: poster,
-            alt: "",
-            loading: "lazy",
-            decoding: "async",
-          }),
+      { class: BOX_CLASS, "data-video-box": true },
       h(
-        "button",
-        {
-          type: "button",
-          class: PLAY_CLASS,
-          hidden: true,
-          "data-video-play": true,
-          "aria-label": `${t(lang, "video_play")}: ${title}`,
-        },
-        t(lang, "video_play"),
+        "div",
+        { class: POSTER_CLASS, "data-video-poster": true },
+        poster === undefined
+          ? null
+          : h("img", {
+              class: IMAGE_CLASS,
+              src: poster,
+              alt: "",
+              loading: "lazy",
+              decoding: "async",
+            }),
+        h(
+          "button",
+          {
+            type: "button",
+            class: PLAY_CLASS,
+            hidden: true,
+            "data-video-play": true,
+            "aria-label": `${t(lang, "video_play")}: ${title}`,
+          },
+          t(lang, "video_play"),
+        ),
       ),
-      h(
-        "a",
-        { class: LINK_CLASS, href, target: "_blank", rel: "noopener noreferrer" },
-        t(lang, "video_watch", { provider }),
-      ),
+    ),
+    h(
+      "a",
+      { class: LINK_CLASS, href, target: "_blank", rel: "noopener noreferrer" },
+      t(lang, "video_watch", { provider }),
     ),
   );
 }

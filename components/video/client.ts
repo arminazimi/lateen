@@ -6,6 +6,9 @@ export const VIDEO_SELECTOR = "[data-video]";
 /** Selector for the play button the poster renders (`data-video-play` in `index.ts`). */
 export const PLAY_SELECTOR = "[data-video-play]";
 
+/** Selector for the 16:9 box the player fills (`data-video-box` in `index.ts`). */
+export const BOX_SELECTOR = "[data-video-box]";
+
 /** Selector for the poster the island hides once the player loads (`data-video-poster` in `index.ts`). */
 export const POSTER_SELECTOR = "[data-video-poster]";
 
@@ -45,15 +48,16 @@ export interface VideoDocument {
 }
 
 /**
- * Replaces the poster with the provider's player: inserts an iframe that fills the frame and hides the
- * poster. Only `https` addresses are loaded, and a second call does nothing, so a double click cannot load
- * the player twice.
+ * Replaces the poster with the provider's player: inserts an iframe that fills the 16:9 box and hides
+ * the poster. Only `https` addresses are loaded, and a second call does nothing, so a double click cannot
+ * load the player twice. The provider link under the box stays visible as the fallback.
  */
 export function play(root: VideoElement, env: VideoEnv): void {
   if (root.dataset.loaded === "true") return;
   const embed = root.dataset.embed?.trim() ?? "";
   if (!embed.startsWith("https://")) return;
 
+  const box = root.querySelector(BOX_SELECTOR) ?? root;
   const frame = env.createFrame();
   frame.className = FRAME_CLASS;
   frame.src = embed;
@@ -62,11 +66,11 @@ export function play(root: VideoElement, env: VideoEnv): void {
   frame.referrerPolicy = "strict-origin-when-cross-origin";
   frame.allow = "encrypted-media; picture-in-picture; fullscreen";
   frame.allowFullscreen = true;
-  root.appendChild(frame);
+  box.appendChild(frame);
   frame.focus?.();
   root.dataset.loaded = "true";
 
-  const poster = root.querySelector(POSTER_SELECTOR);
+  const poster = box.querySelector(POSTER_SELECTOR) ?? root.querySelector(POSTER_SELECTOR);
   if (poster !== null) poster.hidden = true;
 }
 
