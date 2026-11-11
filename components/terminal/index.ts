@@ -136,22 +136,24 @@ export function parseLines(text: string): TerminalLine[] {
     lines.push({ kind: "command", text: input, command: own, continuation: false });
     index += 1;
 
-    // Input past the prompt: heredoc bodies in order, then backslash continuations.
+    // Read every backslash continuation first, so a heredoc opened on a later line joins the queue
+    // before any body is consumed.
     const pending = heredocsOf(input);
-    while (index < raw.length) {
+    while (index < raw.length && continues(lines[lines.length - 1]!.text)) {
       const next = raw[index]!;
-      if (pending.length > 0) {
-        const heredoc = pending[0]!;
-        const terminates = (heredoc.stripTabs ? next.replace(/^\t+/, "") : next) === heredoc.delimiter;
-        lines.push({ kind: "command", text: next, command: own, continuation: true });
-        index += 1;
-        if (terminates) pending.shift();
-        continue;
-      }
-      if (!continues(lines[lines.length - 1]!.text)) break;
       lines.push({ kind: "command", text: next, command: own, continuation: true });
       index += 1;
       pending.push(...heredocsOf(next));
+    }
+
+    // Then consume the heredoc bodies in the order their openers appeared.
+    while (index < raw.length && pending.length > 0) {
+      const heredoc = pending[0]!;
+      const next = raw[index]!;
+      const terminates = (heredoc.stripTabs ? next.replace(/^\t+/, "") : next) === heredoc.delimiter;
+      lines.push({ kind: "command", text: next, command: own, continuation: true });
+      index += 1;
+      if (terminates) pending.shift();
     }
   }
 

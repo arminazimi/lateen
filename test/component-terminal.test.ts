@@ -129,6 +129,19 @@ test("heredoc delimiters may be quoted, tab-stripped, and several in one command
   ]);
 });
 
+test("a heredoc opened on a continuation line is queued before any body is read", () => {
+  const lines = parseLines("$ cat <<A \\\n  && cat <<B\na\nA\nb\nB\nafter");
+  const input = "cat <<A \\\n  && cat <<B\na\nA\nb\nB";
+
+  assert.equal(commandsOf(lines), input);
+  assert.deepEqual(commandRecords(lines), [{ prompt: "$", input, output: ["after"] }]);
+  assert.deepEqual(
+    lines.filter((line) => line.kind === "output"),
+    [{ kind: "output", text: "after", command: 0, continuation: false }],
+    "only the line after both heredocs is output",
+  );
+});
+
 test("a heredoc that never closes stays command input to the end of the session", () => {
   const lines = parseLines("$ cat <<EOF\none\n$ two\nthree");
 
