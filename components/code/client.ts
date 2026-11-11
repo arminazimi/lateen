@@ -25,8 +25,11 @@ const COPY_PATH =
 const CHECK_PATH =
   "M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z";
 
-/** Languages whose lines may start with a shell prompt (`$ ` or `% `). */
-const SHELL = new Set(["bash", "console", "shell", "shellsession", "sh", "terminal", "zsh"]);
+/** Languages for a recorded console session: only prompted lines are command input; the rest is output. */
+const SESSION = new Set(["console", "shellsession", "terminal"]);
+
+/** Languages for a shell source file: a prompt is taken off, but every line stays code. */
+const SHELL = new Set(["bash", "shell", "sh", "zsh"]);
 
 /** Languages whose lines may start with a Python prompt (`>>> ` or `... `). */
 const PYTHON = new Set(["py", "pycon", "python", "python3"]);
@@ -76,16 +79,54 @@ export interface CopyUi {
 /**
  * The text a copy takes from a block: its code with the markers and prompts of its language removed.
  * In a `diff` block, removed lines (`-`) and file and hunk headers are dropped, and the `+` or space marker
- * is taken off the rest. In a shell block the `$ ` and `% ` prompts are taken off; in a Python block the
- * `>>> ` and `... ` prompts. Every other language is copied as written.
+ * is taken off the rest. In a recorded session (`console`, `shellsession`, `terminal`) only the prompted
+ * command lines are kept, with their prompts and any `>` continuation prompts taken off; output, blank
+ * lines, and diff metadata are dropped, so the clipboard can be run. In a shell block the `$ ` and `% `
+ * prompts are taken off and every line stays; in a Python block the `>>> ` and `... ` prompts. Every other
+ * language is copied as written.
  */
 export function copyText(text: string, lang: string | undefined): string {
   const kind = (lang ?? "").trim().toLowerCase();
   const lines = text.split("\n");
   if (kind === "diff" || kind === "patch") return fromDiff(lines).join("\n");
+  if (SESSION.has(kind)) return fromSession(lines).join("\n");
   if (SHELL.has(kind)) return lines.map((line) => line.replace(/^(\s*)[$%] /, "$1")).join("\n");
   if (PYTHON.has(kind)) return lines.map((line) => line.replace(/^(\s*)(>>>|\.\.\.) /, "$1")).join("\n");
   return text;
+}
+
+/**
+ * The command input of a recorded session, one line per command, and nothing else. A `$` or `%` line is a
+ * command and an empty one adds no line. A line that continues the command is kept: the lines after a
+ * trailing `\`, and the body and delimiter of a heredoc. A `>` before a continuation line is its prompt and
+ * is taken off; any other line is output or diff metadata and is dropped.
+ */
+function fromSession(lines: readonly string[]): string[] {
+  const out: string[] = [];
+  let open = false;
+  let heredoc: string | undefined;
+  for (const line of lines) {
+    if (heredoc !== undefined) {
+      const text = line.replace(/^\s*> /, "");
+      out.push(text);
+      if (text.trim() === heredoc) heredoc = undefined;
+      continue;
+    }
+    if (open) {
+      const text = line.replace(/^\s*> /, "");
+      out.push(text);
+      open = text.trimEnd().endsWith("\\");
+      continue;
+    }
+    const command = /^\s*[$%](?:[ \t](.*))?$/.exec(line);
+    if (command === null) continue;
+    const text = command[1] ?? "";
+    if (text.trim() === "") continue;
+    out.push(text);
+    open = text.trimEnd().endsWith("\\");
+    heredoc = /<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1/.exec(text)?.[2];
+  }
+  return out;
 }
 
 /** The lines of a diff that are still code: no headers, no removed lines, no `+` or space markers. */
