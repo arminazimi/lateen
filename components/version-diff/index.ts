@@ -10,6 +10,11 @@ export const KINDS = ["added", "removed", "changed", "moved"] as const;
 
 export type ChangeKind = (typeof KINDS)[number];
 
+/** The states an explicit comparison can be in; absent input renders nothing instead. */
+export const STATES = ["changes", "unchanged", "unavailable"] as const;
+
+export type DiffState = (typeof STATES)[number];
+
 /** The id prefix used when the directive gives none. */
 export const DEFAULT_ID = "version-diff";
 
@@ -51,12 +56,14 @@ export interface VersionChange {
   readonly after?: string;
 }
 
-/** One page's diff between two versions. */
+/** One page's diff between two versions, and whether the evidence could be read. */
 export interface VersionDiff {
-  /** The older version folder, such as `v1`. */
-  readonly from: string;
-  /** The newer version folder, such as `v2`. */
-  readonly to: string;
+  /** `changes` when a comparison found changes, `unchanged` for a verified empty one. */
+  readonly state: DiffState;
+  /** The older version folder, such as `v1`, when the data named a usable one. */
+  readonly from?: string;
+  /** The newer version folder, such as `v2`, when the data named a usable one. */
+  readonly to?: string;
   /** The section differences, in the order the data lists them. */
   readonly changes: readonly VersionChange[];
 }
@@ -140,65 +147,116 @@ export function changesOf(value: unknown): readonly VersionChange[] {
   return value.map(changeOf).filter((change): change is VersionChange => change !== undefined);
 }
 
+/** The usable changes in a record, whether it carried change evidence at all, and how much was unusable. */
+interface Evidence {
+  readonly changes: readonly VersionChange[];
+  /** True when the record names any change list, even an empty one. */
+  readonly present: boolean;
+  /** Entries written in a change list that were dropped as unusable. */
+  readonly dropped: number;
+}
+
 /**
- * The changes in the engine's `diff/<version>/<page>.json` shape, where the four kinds are four
- * lists: added and removed sections carry `text`, changed and moved ones `oldText` and `newText`.
- * The lists are read in {@link KINDS} order, which is the only order that shape keeps.
+ * The changes in a record, from either the listed `changes` shape or the engine's grouped
+ * `diff/<version>/<page>.json` shape, where added and removed sections carry `text` and changed and
+ * moved ones `oldText` and `newText`. The grouped lists are read in {@link KINDS} order, which is the
+ * only order that shape keeps. A listed change wins over grouped lists, as before.
  */
-function groupedChanges(value: Readonly<Record<string, unknown>>): readonly VersionChange[] {
+function evidenceOf(value: Readonly<Record<string, unknown>>): Evidence {
   const changes: VersionChange[] = [];
-  for (const kind of KINDS) {
-    const list = value[kind];
-    if (!Array.isArray(list)) continue;
-    for (const raw of list) {
-      if (!isRecord(raw)) continue;
-      const change = changeOf({
-        ...raw,
-        kind,
-        before: raw.before ?? raw.oldText ?? (kind === "removed" ? raw.text : undefined),
-        after: raw.after ?? raw.newText ?? (kind === "added" ? raw.text : undefined),
-      });
-      if (change !== undefined) changes.push(change);
+  let present = false;
+  let dropped = 0;
+
+  if (value.changes !== undefined) {
+    present = true;
+    if (Array.isArray(value.changes)) {
+      const usable = changesOf(value.changes);
+      changes.push(...usable);
+      dropped += value.changes.length - usable.length;
+    } else {
+      dropped += 1;
     }
   }
-  return changes;
+
+  // The grouped shape is read only when the listed one yields nothing, so the listed form wins.
+  if (changes.length === 0) {
+    for (const kind of KINDS) {
+      if (!Object.hasOwn(value, kind)) continue;
+      present = true;
+      const list = value[kind];
+      if (!Array.isArray(list)) {
+        dropped += 1;
+        continue;
+      }
+      for (const raw of list) {
+        if (!isRecord(raw)) {
+          dropped += 1;
+          continue;
+        }
+        const change = changeOf({
+          ...raw,
+          kind,
+          before: raw.before ?? raw.oldText ?? (kind === "removed" ? raw.text : undefined),
+          after: raw.after ?? raw.newText ?? (kind === "added" ? raw.text : undefined),
+        });
+        if (change === undefined) dropped += 1;
+        else changes.push(change);
+      }
+    }
+  }
+
+  return { changes, present, dropped };
 }
 
 /**
  * A diff from a record: `{ from, to, changes }`, or the engine's grouped `{ from, to, added, removed,
- * changed, moved }`. A missing version, two equal versions, or no usable change gives undefined, so
- * the viewer renders nothing.
+ * changed, moved }`. Two usable versions with an explicit empty change list are `unchanged`; missing
+ * or equal versions, absent change evidence, or change lists with no usable entry are `unavailable`.
  */
-export function diffOf(value: unknown): VersionDiff | undefined {
-  if (!isRecord(value)) return undefined;
+export function diffOf(value: unknown): VersionDiff {
+  if (!isRecord(value)) return { state: "unavailable", changes: [] };
+
   const from = textOf(value.from);
   const to = textOf(value.to);
-  if (from === undefined || to === undefined || from === to) return undefined;
+  if (from === undefined || to === undefined || from === to) {
+    return {
+      state: "unavailable",
+      ...(from === undefined ? {} : { from }),
+      ...(to === undefined ? {} : { to }),
+      changes: [],
+    };
+  }
 
-  const listed = changesOf(value.changes);
-  const changes = listed.length > 0 ? listed : groupedChanges(value);
-  return changes.length === 0 ? undefined : { from, to, changes };
+  const evidence = evidenceOf(value);
+  const state: DiffState =
+    evidence.changes.length > 0
+      ? "changes"
+      : evidence.present && evidence.dropped === 0
+        ? "unchanged"
+        : "unavailable";
+  return { state, from, to, changes: evidence.changes };
 }
 
 /**
  * The diff to show: the `data` attribute first, then `from`/`to` with the `changes` attribute, then
- * the page's `versionDiff` front matter. The first one that names two different versions and carries
- * a change wins.
+ * the page's `versionDiff` front matter. Any of those that was written is an explicit comparison, so
+ * malformed data renders `unavailable` rather than falling through. With none of them written the
+ * viewer renders nothing.
  */
 export function versionDiffFor(
   props: VersionDiffProps,
   frontMatter: Readonly<Record<string, unknown>>,
 ): VersionDiff | undefined {
-  const data = parseJson(props.data);
-  if (isRecord(data)) return diffOf(data);
+  if (textOf(props.data) !== undefined) return diffOf(parseJson(props.data));
 
   const from = textOf(props.from);
   const to = textOf(props.to);
-  const changes = parseJson(props.changes);
-  if (from !== undefined && to !== undefined && changes !== undefined) {
-    return diffOf({ from, to, changes });
+  const changes = textOf(props.changes);
+  if (from !== undefined || to !== undefined || changes !== undefined) {
+    return diffOf({ from, to, changes: parseJson(changes) });
   }
 
+  if (frontMatter.versionDiff === undefined) return undefined;
   return diffOf(frontMatter.versionDiff);
 }
 
@@ -313,9 +371,13 @@ function changeItem(change: VersionChange, index: number, base: string, lang: st
  * keeps the added and removed markers. The diff is an ordered list with a heading, so without
  * JavaScript it reads top to bottom as written.
  *
- * `client.ts` is the island: it reveals Previous and Next buttons and a change count, and the arrow
- * keys, Home, and End move between changes with one change in the tab order at a time. The wording
- * comes from `i18n/*.json` in the page's language, and the stylesheet uses logical properties only.
+ * An explicit empty comparison still renders its heading and both versions, with a zero-change
+ * message and `data-diff-state="unchanged"`. Malformed evidence renders as `unavailable` instead of
+ * disappearing, so it cannot be read as a verified empty diff; only input that was never written
+ * renders nothing. `client.ts` is the island: it reveals Previous and Next buttons and a change
+ * count, and the arrow keys, Home, and End move between changes with one change in the tab order at
+ * a time. The wording comes from `i18n/*.json` in the page's language, and the stylesheet uses
+ * logical properties only.
  */
 const versionDiff: Component<VersionDiffProps> = ({ props, page }) => {
   const diff = versionDiffFor(props, page.frontMatter);
@@ -325,14 +387,16 @@ const versionDiff: Component<VersionDiffProps> = ({ props, page }) => {
   const titleId = `${base}-title`;
   const listId = `${base}-list`;
   const total = diff.changes.length;
+  const { from, to } = diff;
 
   return h(
     "section",
     {
       class: "version-diff",
       "data-version-diff": base,
-      "data-version-from": diff.from,
-      "data-version-to": diff.to,
+      "data-diff-state": diff.state,
+      ...(from === undefined ? {} : { "data-version-from": from }),
+      ...(to === undefined ? {} : { "data-version-to": to }),
       "aria-labelledby": titleId,
     },
     h(
@@ -344,64 +408,78 @@ const versionDiff: Component<VersionDiffProps> = ({ props, page }) => {
         h(
           "h2",
           { class: "version-diff-title", id: titleId },
-          t(page.lang, "version_diff_title", { from: diff.from, to: diff.to }),
+          from !== undefined && to !== undefined
+            ? t(page.lang, "version_diff_title", { from, to })
+            : t(page.lang, "diff"),
         ),
-        h(
-          "p",
-          { class: "version-diff-versions" },
-          versionLabel("base", t(page.lang, "version_diff_base"), diff.from),
-          " ",
-          versionLabel("target", t(page.lang, "version_diff_target"), diff.to),
-        ),
+        from === undefined && to === undefined
+          ? null
+          : h(
+              "p",
+              { class: "version-diff-versions" },
+              from === undefined ? null : versionLabel("base", t(page.lang, "version_diff_base"), from),
+              from !== undefined && to !== undefined ? " " : null,
+              to === undefined ? null : versionLabel("target", t(page.lang, "version_diff_target"), to),
+            ),
       ),
-      h(
-        "div",
-        {
-          class: "version-diff-controls",
-          role: "group",
-          "aria-label": t(page.lang, "version_diff_group"),
-          "data-version-diff-controls": "",
-          hidden: true,
-        },
-        h(
-          "button",
-          {
-            type: "button",
-            class: "version-diff-previous",
-            "data-version-diff-previous": "",
-            "aria-controls": listId,
-          },
-          t(page.lang, "version_diff_previous"),
-        ),
-        h(
+      diff.state !== "changes"
+        ? null
+        : h(
+            "div",
+            {
+              class: "version-diff-controls",
+              role: "group",
+              "aria-label": t(page.lang, "version_diff_group"),
+              "data-version-diff-controls": "",
+              hidden: true,
+            },
+            h(
+              "button",
+              {
+                type: "button",
+                class: "version-diff-previous",
+                "data-version-diff-previous": "",
+                "aria-controls": listId,
+              },
+              t(page.lang, "version_diff_previous"),
+            ),
+            h(
+              "p",
+              {
+                class: "version-diff-count",
+                "data-version-diff-count": "",
+                "data-template": patternOf(page.lang, "version_diff_count"),
+                "data-total": String(total),
+                "aria-live": "polite",
+                "aria-atomic": "true",
+              },
+              t(page.lang, "version_diff_count", { current: 1, total }),
+            ),
+            h(
+              "button",
+              {
+                type: "button",
+                class: "version-diff-next",
+                "data-version-diff-next": "",
+                "aria-controls": listId,
+              },
+              t(page.lang, "version_diff_next"),
+            ),
+          ),
+    ),
+    diff.state === "changes"
+      ? h(
+          "ol",
+          { class: "version-diff-list", id: listId, "data-version-diff-list": "" },
+          diff.changes.map((change, index) => changeItem(change, index, base, page.lang)),
+        )
+      : h(
           "p",
-          {
-            class: "version-diff-count",
-            "data-version-diff-count": "",
-            "data-template": patternOf(page.lang, "version_diff_count"),
-            "data-total": String(total),
-            "aria-live": "polite",
-            "aria-atomic": "true",
-          },
-          t(page.lang, "version_diff_count", { current: 1, total }),
+          { class: `version-diff-state version-diff-${diff.state}` },
+          diff.state === "unchanged"
+            ? t(page.lang, "version_diff_count", { current: 0, total: 0 })
+            : t(page.lang, "drift_state_unavailable"),
         ),
-        h(
-          "button",
-          {
-            type: "button",
-            class: "version-diff-next",
-            "data-version-diff-next": "",
-            "aria-controls": listId,
-          },
-          t(page.lang, "version_diff_next"),
-        ),
-      ),
-    ),
-    h(
-      "ol",
-      { class: "version-diff-list", id: listId, "data-version-diff-list": "" },
-      diff.changes.map((change, index) => changeItem(change, index, base, page.lang)),
-    ),
   );
 };
 

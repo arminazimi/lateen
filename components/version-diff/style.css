@@ -115,6 +115,26 @@
   list-style: none;
 }
 
+/* A verified empty comparison, or evidence that could not be read, keeps the header and shows one
+   state line instead of a list. */
+.version-diff-state {
+  margin: 0;
+  padding-block: var(--space-4);
+  padding-inline: var(--space-4);
+  color: var(--color-muted);
+}
+
+.version-diff-unchanged {
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.version-diff-unavailable {
+  border-inline-start: 3px dashed var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-canvas);
+}
+
 .version-diff-item {
   padding-block: var(--space-3);
   padding-inline: var(--space-4);
