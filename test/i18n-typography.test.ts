@@ -208,7 +208,7 @@ test("sample output and variables keep the monospace face on a right-to-left pag
   for (const element of ["samp", "var"]) {
     assert.ok(technical.selector.includes(element), `rtl.css does not name ${element}`);
   }
-  assert.match(technical.body, /unicode-bidi:\s*isolate/);
+  assert.doesNotMatch(technical.selector, /:not\(\[dir\]\)/, "an authored dir keeps the mono face");
 });
 
 test("Persian and Arabic prose may break a long token but never inside a joined word", () => {
