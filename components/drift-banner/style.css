@@ -73,6 +73,72 @@
   font-weight: var(--type-weight-medium);
 }
 
+/* The finding list spans the banner, so the summary line stays legible and every finding has room. */
+.drift-banner-findings {
+  display: flex;
+  flex: 1 0 100%;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.drift-banner-finding {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  align-items: baseline;
+  padding-block-start: var(--space-1);
+  border-block-start: 1px solid var(--color-border);
+}
+
+.drift-banner-finding-severity {
+  color: var(--color-muted);
+  font-family: var(--type-font-mono);
+  font-size: var(--type-size-xs);
+  text-transform: uppercase;
+  unicode-bidi: isolate;
+}
+
+.drift-banner-finding[data-drift-severity="error"] .drift-banner-finding-severity {
+  color: var(--color-danger);
+}
+
+.drift-banner-finding[data-drift-severity="warning"] .drift-banner-finding-severity {
+  color: var(--color-warning);
+}
+
+.drift-banner-finding[data-drift-severity="info"] .drift-banner-finding-severity {
+  color: var(--color-info);
+}
+
+/* Paths, check ids, and severities are machine values: they stay left to right and may wrap anywhere. */
+.drift-banner-finding-kind,
+.drift-banner-finding-reference {
+  color: var(--color-heading);
+  font-family: var(--type-font-mono);
+  font-size: var(--type-size-xs);
+  overflow-wrap: anywhere;
+  unicode-bidi: isolate;
+}
+
+.drift-banner-finding-message {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+.drift-banner-finding-note {
+  color: var(--color-muted);
+  font-style: italic;
+}
+
+.drift-banner-finding a:focus-visible {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: 2px;
+}
+
 .drift-banner-details {
   color: var(--color-link);
   font-weight: var(--type-weight-medium);

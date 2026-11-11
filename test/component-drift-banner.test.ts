@@ -7,16 +7,28 @@ import { stringsOf } from "../i18n/index.ts";
 import driftBanner, {
   CLASS,
   DETAILS_CLASS,
+  FINDING_CLASS,
+  FINDING_KIND_CLASS,
+  FINDING_LINK_CLASS,
+  FINDING_MESSAGE_CLASS,
+  FINDING_REFERENCE_CLASS,
+  FINDING_SEVERITY_CLASS,
+  FINDING_UNAVAILABLE_CLASS,
+  FINDINGS_CLASS,
   ICONS,
   SEVERITIES,
   STATES,
   STATE_KEYS,
   WHAT_KEYS,
   detailsHrefOf,
+  evidenceHrefOf,
   evidenceOf,
+  findingDetailsOf,
   findingsOf,
   messageOf,
   pagesOf,
+  referenceOf,
+  spanOf,
   whatOf,
 } from "../components/drift-banner/index.ts";
 
@@ -235,6 +247,173 @@ test("the state label, count, and next step follow the page language", () => {
       `${lang} localises the details link`,
     );
   }
+});
+
+test("each finding has a stable anchor, kind, severity, message, and exact span", () => {
+  const findings = [
+    { kind: "drift.missing-symbol", reference: "src/app.ts:12", severity: "error", message: "buildDocs is gone." },
+    { kind: "drift.moved-symbol", reference: "src/util.ts:4-9:3", severity: "info" },
+  ];
+  const data = { drift: { "/guide/": findings } };
+  const out = render(data);
+  assert.ok(out);
+  assert.match(out, new RegExp(`<ul class="${FINDINGS_CLASS}">`));
+  assert.equal((out.match(/<li /g) ?? []).length, 2, "one row per finding");
+  assert.match(
+    out,
+    new RegExp(
+      `<li id="drift-banner-finding-1" class="${FINDING_CLASS}" data-drift-severity="error" ` +
+        `data-drift-finding-available="true" data-drift-path="src/app.ts" data-drift-line="12">`,
+    ),
+  );
+  assert.match(out, new RegExp(`<span class="${FINDING_SEVERITY_CLASS}" dir="ltr">error</span>`));
+  assert.match(out, new RegExp(`<code class="${FINDING_KIND_CLASS}" dir="ltr">drift.missing-symbol</code>`));
+  assert.match(out, new RegExp(`<code class="${FINDING_REFERENCE_CLASS}" dir="ltr">src/app.ts:12</code>`));
+  assert.match(out, new RegExp(`<span class="${FINDING_MESSAGE_CLASS}">buildDocs is gone.</span>`));
+  assert.match(
+    out,
+    new RegExp(
+      `<li id="drift-banner-finding-2"[^>]*data-drift-path="src/util.ts" data-drift-line="4" ` +
+        `data-drift-end-line="9" data-drift-column="3">`,
+    ),
+  );
+
+  const details = findingDetailsOf(findings, siteOf(data).config);
+  assert.deepEqual(
+    details.map((detail) => detail.id),
+    ["drift-banner-finding-1", "drift-banner-finding-2"],
+  );
+  assert.equal(details[1]!.reference, "src/util.ts:4-9:3");
+  assert.deepEqual(details[1]!.span, { path: "src/util.ts", line: 4, endLine: 9, column: 3 });
+  assert.equal(new Set(details.map((detail) => detail.id)).size, findings.length, "ids are unique");
+  assert.equal(render(data), out, "the same data gets the same anchors");
+});
+
+test("spans parse the documented references and explicit fields, and drop bad parts", () => {
+  assert.deepEqual(spanOf({ reference: "src/app.ts" }), { path: "src/app.ts" });
+  assert.deepEqual(spanOf({ reference: "src/app.ts:7" }), { path: "src/app.ts", line: 7 });
+  assert.deepEqual(spanOf({ reference: "src/app.ts:7-9" }), { path: "src/app.ts", line: 7, endLine: 9 });
+  assert.deepEqual(spanOf({ reference: "src/app.ts:7:3" }), { path: "src/app.ts", line: 7, column: 3 });
+  assert.deepEqual(spanOf({ path: "src/app.ts", line: "7", endLine: "9", column: "3" }), {
+    path: "src/app.ts",
+    line: 7,
+    endLine: 9,
+    column: 3,
+  });
+  assert.deepEqual(spanOf({ file: "src/app.ts", line: 7 }), { path: "src/app.ts", line: 7 });
+  assert.deepEqual(spanOf({ path: "src/app.ts", line: 9, endLine: 3 }), { path: "src/app.ts", line: 9 });
+  assert.deepEqual(spanOf({ path: "src/app.ts", column: 3 }), { path: "src/app.ts" });
+  assert.equal(spanOf({ message: "The option was renamed.", line: 42 }), undefined, "a page line is not a source span");
+  assert.equal(referenceOf({ path: "src/app.ts", line: 7, endLine: 9, column: 3 }), "src/app.ts:7-9:3");
+  assert.equal(referenceOf({ path: "src/app.ts" }), "src/app.ts");
+});
+
+test("malformed references and unsafe paths never become source claims", () => {
+  for (const reference of [
+    "javascript:alert(1)",
+    "https://evil.example/app.ts:1",
+    "//evil.example/app.ts:1",
+    "/etc/passwd:1",
+    "src/../secret.ts:1",
+    "src\\app.ts:1",
+    "src/app.ts:0",
+    "src/app.ts:1:0",
+    "src/app.ts:12-3",
+    "src/app.ts:1:",
+    "src/app.ts:not-a-line",
+  ]) {
+    assert.equal(spanOf({ reference }), undefined, `${reference} is not a span`);
+  }
+  const out = render({ drift: { "/guide/": [{ kind: "drift.missing-file", reference: "src/app.ts:0" }] } });
+  assert.ok(out);
+  assert.doesNotMatch(out, /data-drift-path|data-drift-line|app\.ts:0/);
+  assert.equal((out.match(/<li /g) ?? []).length, 1, "the finding still gets an unavailable row");
+});
+
+test("a safe evidence link wraps the reference, takes the base, and keeps its scheme", () => {
+  const linked = (url: string, base = "") =>
+    render({ drift: { "/guide/": [{ kind: "drift.missing-file", reference: "src/app.ts:12", url }] } }, { base })!;
+
+  assert.match(
+    linked("/evidence/12", "/evergreen"),
+    new RegExp(
+      `<a class="${FINDING_REFERENCE_CLASS} ${FINDING_LINK_CLASS}" href="/evergreen/evidence/12" dir="ltr">src/app.ts:12</a>`,
+    ),
+  );
+  assert.match(linked("https://ci.example/build/12"), /href="https:\/\/ci\.example\/build\/12"/);
+  assert.match(
+    render({ drift: { "/guide/": [{ kind: "drift.missing-file", url: "https://ci.example/build/12" }] } })!,
+    new RegExp(`<a class="${FINDING_KIND_CLASS} ${FINDING_LINK_CLASS}" href="https://ci.example/build/12" dir="ltr">drift.missing-file</a>`),
+  );
+  assert.match(
+    render({ drift: { "/guide/": [{ url: "https://ci.example/build/12" }] } })!,
+    new RegExp(`<a class="${FINDING_LINK_CLASS}" href="https://ci.example/build/12">View drift details</a>`),
+  );
+});
+
+test("unsafe evidence links are dropped instead of rendered", () => {
+  for (const url of ["javascript:alert(1)", "//evil.example/path", "relative/path", " http://example.com/ "]) {
+    const out = render({ drift: { "/guide/": [{ kind: "drift.missing-file", reference: "src/app.ts:12", url }] } });
+    assert.ok(out);
+    assert.doesNotMatch(out, new RegExp(FINDING_LINK_CLASS), `${url} is not a link`);
+    assert.match(out, new RegExp(`<code class="${FINDING_REFERENCE_CLASS}" dir="ltr">src/app.ts:12</code>`));
+  }
+  assert.equal(evidenceHrefOf(siteOf({}).config, "javascript:alert(1)"), undefined);
+  assert.equal(evidenceHrefOf(siteOf({}, {}, "/evergreen").config, "/evidence/"), "/evergreen/evidence/");
+  assert.equal(evidenceHrefOf(siteOf({}, {}, "/").config, "/evidence/"), undefined, "a bare base cannot make //host");
+});
+
+test("the evidence link is escaped, never parsed as markup", () => {
+  const out = render({
+    drift: { "/guide/": [{ kind: "drift.missing-file", reference: "src/app.ts:12", url: "/drift?a=1&b=2" }] },
+  });
+  assert.ok(out);
+  assert.match(out, /href="\/drift\?a=1&amp;b=2"/);
+  assert.doesNotMatch(out, /<script>/);
+});
+
+test("mixed valid and invalid findings keep the count, severity, and list in agreement", () => {
+  const findings = [
+    { kind: "drift.missing-file", reference: "src/app.ts:12", severity: "info" },
+    "not a finding",
+    { kind: "drift.missing-symbol", reference: "src/app.ts:0", severity: "error", url: "javascript:alert(1)" },
+    null,
+  ];
+  const out = render({ drift: { "/guide/": findings } });
+  assert.ok(out);
+  assert.match(out, /<span class="drift-banner-message">4 drift findings<\/span>/);
+  assert.match(out, /data-drift-severity="error"/, "the worst finding still sets the banner severity");
+
+  const rows = [...out.matchAll(/<li id="[^"]+" class="[^"]*" data-drift-severity="([^"]+)"/g)].map((match) => match[1]);
+  assert.deepEqual(rows, ["info", "warning", "error", "warning"], "every finding has its own severity");
+
+  const unavailable = [...out.matchAll(/data-drift-finding-available="false"/g)];
+  assert.equal(unavailable.length, 2, "the string and null findings are plainly unavailable");
+  assert.doesNotMatch(out, /drift-banner-finding-link/, "an unsafe link is not rendered");
+  assert.doesNotMatch(out, /app\.ts:0/, "a malformed span is not shown");
+  assert.match(out, new RegExp(`<span class="${FINDING_CLASS}-note">Not recorded</span>`));
+});
+
+test("machine values stay left to right on an RTL page while the labels translate", () => {
+  for (const lang of ["fa", "ar"] as const) {
+    const strings = stringsOf(lang);
+    const out = render(
+      { drift: { "/guide/": [{ kind: "drift.missing-file", reference: "src/app.ts:12", url: "/evidence/" }] } },
+      { lang },
+    );
+    assert.ok(out, `${lang} renders`);
+    assert.ok(out.includes(strings.drift_state_drifting!), `${lang} localises the state label`);
+    assert.ok(out.includes(strings.drift_what_source!), `${lang} localises the next step`);
+    assert.equal((out.match(/dir="ltr"/g) ?? []).length, 3, `${lang} keeps severity, kind, and path left to right`);
+    assert.doesNotMatch(out, /dir="rtl"/, "the page direction is not overridden on machine values");
+  }
+});
+
+test("an unavailable page shows no finding list", () => {
+  const out = render({ drift: { "/guide/": null } });
+  assert.ok(out);
+  assert.doesNotMatch(out, new RegExp(FINDINGS_CLASS));
+  assert.doesNotMatch(out, new RegExp(FINDING_CLASS));
 });
 
 test("style.css colours each severity from a token, and keeps unavailable apart with a dashed edge", () => {
