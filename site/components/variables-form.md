@@ -8,7 +8,7 @@ tags:
   - code
 ---
 
-A variables form turns the `{{name}}` placeholders in a page's code examples into labelled inputs. Each input starts with the variable's declared default, and the code examples update as the reader types. Values stay in the browser: the component sets no cookie, writes no storage, and makes no request. Without JavaScript the form still shows every default, so the page reads correctly and a reader can copy the values by hand.
+A variables form turns the `\{{name}}` placeholders in a page's code examples into labelled inputs. Each input starts with the variable's declared default, and the code examples update as the reader types. Values stay in the browser: the component sets no cookie, writes no storage, and makes no request. Without JavaScript the form still shows every default, so the page reads correctly and a reader can copy the values by hand.
 
 ## Syntax
 

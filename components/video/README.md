@@ -16,8 +16,7 @@ YouTube video uses its provider thumbnail, and any other provider gets a plain s
 when the player replaces the poster. It uses tokens only and logical properties, so it reads the same
 in right-to-left pages.
 
-Known gap: the build renders the play button and collects the island, but no output writes the island
-scripts yet (the `html` output emits the `<script type="module">` tags and the files are missing). Until
-that is wired, a built page keeps the button hidden and the visible link is the way to the video. The
-island itself is exercised by `test/component-video.test.ts` with fakes and is ready when the output
-lands.
+The `html` output ships `client.ts` as an island: it writes the module and loads it with a
+`<script type="module">` on every page that uses the component. The island reveals the play button, and
+a click swaps the poster for the player. Without JavaScript the button stays hidden and the visible
+link opens the video in a new tab. `test/component-video.test.ts` exercises the island with fakes.

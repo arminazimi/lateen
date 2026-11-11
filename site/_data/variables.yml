@@ -1,0 +1,7 @@
+# The site's variables, as the `variables` output and the placeholder check read them.
+- name: api_key
+  default: YOUR_KEY
+  type: string
+- name: host
+  default: https://api.example.com
+  type: url
