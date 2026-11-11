@@ -8,6 +8,7 @@ import versionBadge, {
   DEFAULT_VARIANT,
   ICONS,
   LABEL_KEYS,
+  UNKNOWN_VARIANT,
   VARIANTS,
   blockOf,
   classNameOf,
@@ -15,6 +16,7 @@ import versionBadge, {
   variantOf,
   versionOf,
   type VersionBadgeProps,
+  type VersionBadgeState,
 } from "../components/version-badge/index.ts";
 
 /** Render the badge the way the render host calls it: directive props and the page's language. */
@@ -39,6 +41,7 @@ test("default export is the component and the directive is version-badge", () =>
   assert.equal(directive, "version-badge");
   assert.deepEqual([...VARIANTS], ["added", "changed", "removed"]);
   assert.equal(DEFAULT_VARIANT, "added");
+  assert.equal(UNKNOWN_VARIANT, "unknown");
 });
 
 test("renders v<version> and each variant's icon and class", () => {
@@ -105,12 +108,67 @@ test("a missing, blank, or non-string version renders nothing", () => {
   assert.equal(versionOf("<b>"), "<b>");
 });
 
-test("a missing or unknown variant is added", () => {
+test("an omitted or blank variant keeps the documented added default", () => {
   assert.equal(variantOf(undefined), "added");
-  assert.equal(variantOf("purple"), "added");
-  assert.equal(variantOf("removed"), "removed");
+  assert.equal(variantOf(null), "added");
+  assert.equal(variantOf(false), "added");
+  assert.equal(variantOf(""), "added");
+  assert.equal(variantOf("   "), "added");
   assert.match(render({ version: "0.3" })!, /version-badge-added/);
+  assert.match(render({ version: "0.3", variant: "" })!, /version-badge-added/);
   assert.equal(classNameOf("changed"), "version-badge version-badge-changed");
+});
+
+test("an explicit invalid variant is unknown, never added", () => {
+  for (const value of ["purple", "add", "0", "true", 42, {}]) {
+    assert.equal(variantOf(value), "unknown", `variantOf(${String(value)})`);
+  }
+  const out = render({ version: "0.3", variant: "purple" });
+  assert.ok(out);
+  assert.match(out, /class="version-badge version-badge-unknown"/);
+  assert.match(out, /data-variant="unknown"/);
+  assert.doesNotMatch(out, /version-badge-added|data-variant="added"/);
+  assert.match(out, /class="version-badge-icon" aria-hidden="true">\?</);
+  assert.equal(classNameOf("unknown"), "version-badge version-badge-unknown");
+});
+
+test("known variants are trimmed and matched without case", () => {
+  for (const value of ["changed", " Changed ", "CHANGED", "\tremoved\n", "ADDED"]) {
+    const expected = value.trim().toLowerCase();
+    assert.equal(variantOf(value), expected, JSON.stringify(value));
+    assert.match(render({ version: "0.3", variant: value })!, new RegExp(`version-badge-${expected}`));
+  }
+});
+
+test("an unknown variant announces the version without inventing a change", () => {
+  const out = render({ version: "0.3", variant: "purple" }, "fa");
+  assert.ok(out);
+  assert.doesNotMatch(out, /version-badge-sr/);
+  assert.doesNotMatch(out, /Added in version|version_added/);
+  assert.match(out, /class="version-badge-value" dir="ltr">v0\.3</);
+  assert.doesNotMatch(out, /class="version-badge-value" aria-hidden/);
+  assert.match(out, /data-version="0\.3"/);
+  assert.match(out, /data-variant="unknown"/);
+});
+
+test("Unicode versions keep their exact text in the value and the attribute", () => {
+  const version = "۱.۰-β";
+  const out = render({ version, variant: "changed" }, "fa");
+  assert.ok(out);
+  assert.ok(out.includes(`>v${version}<`));
+  assert.ok(out.includes(`data-version="${version}"`));
+  assert.match(out, /class="version-badge-value"[^>]*dir="ltr"/);
+});
+
+test("an unknown variant keeps the version escaped, in RTL and LTR pages alike", () => {
+  for (const lang of ["en", "fa", "ar"]) {
+    const out = render({ version: '<b>"x"</b>', variant: "bogus" }, lang);
+    assert.ok(out);
+    assert.doesNotMatch(out, /<b>/);
+    assert.match(out, /data-version="&lt;b>&quot;x&quot;&lt;\/b>"/);
+    assert.match(out, /v&lt;b>&quot;x&quot;&lt;\/b>/);
+    assert.doesNotMatch(out, /Added in version/);
+  }
 });
 
 test("version text and its attribute are escaped, never parsed as markup", () => {
@@ -123,9 +181,10 @@ test("version text and its attribute are escaped, never parsed as markup", () =>
   assert.doesNotMatch(out, /dangerouslySetInnerHTML/);
 });
 
-test("each variant has a different icon, so color is never the only signal", () => {
-  const icons = VARIANTS.map((variant) => ICONS[variant]);
-  assert.equal(new Set(icons).size, VARIANTS.length);
+test("each state has a different icon, so color is never the only signal", () => {
+  const states: readonly VersionBadgeState[] = [...VARIANTS, UNKNOWN_VARIANT];
+  const icons = states.map((state) => ICONS[state]);
+  assert.equal(new Set(icons).size, states.length);
   for (const icon of icons) assert.notEqual(icon.trim(), "");
 });
 
@@ -158,6 +217,14 @@ test("style.css keeps the version value left to right and uses logical spacing",
 });
 
 test("style.css prints the full sentence in place of the compact icon and value", () => {
-  assert.match(css, /@media print\s*\{[^}]*\.version-badge-icon,[^}]*\.version-badge-value\s*\{[^}]*display:\s*none/s);
+  assert.match(
+    css,
+    /@media print\s*\{[^}]*\.version-badge:not\(\.version-badge-unknown\) \.version-badge-icon,[^}]*\.version-badge:not\(\.version-badge-unknown\) \.version-badge-value\s*\{[^}]*display:\s*none/s,
+  );
   assert.match(css, /@media print[\s\S]*\.version-badge-sr\s*\{[^}]*clip-path:\s*none/s);
+});
+
+test("style.css presents an unknown badge neutrally, without a success color", () => {
+  assert.match(css, /\.version-badge-unknown\s*\{[^}]*color:\s*var\(--color-muted\)/s);
+  assert.match(css, /\.version-badge-unknown\s*\{[^}]*border-color:\s*var\(--color-border-strong\)/s);
 });
