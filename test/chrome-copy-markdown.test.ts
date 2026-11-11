@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { test } from "node:test";
+import { beforeEach, test } from "node:test";
 import type { ChromeProps, Page, Pager, Site, SiteConfig, SourcePos, Trail } from "@velella/mizzen/contracts";
 import copyMarkdown, { twinUrl } from "../chrome/copy-markdown/index.ts";
 import {
@@ -15,7 +15,14 @@ import {
   type ShortcutEvent,
   type ShortcutHost,
 } from "../chrome/copy-markdown/client.ts";
-import { OFF, type ShortcutStorage } from "../chrome/shortcuts/preference.ts";
+import {
+  OFF,
+  rememberShortcuts,
+  resetShortcutsPreference,
+  type ShortcutStorage,
+} from "../chrome/shortcuts/preference.ts";
+
+beforeEach(() => resetShortcutsPreference());
 
 const pos: SourcePos = { file: "docs/guide/install.md", line: 3, column: 1, endLine: 9, endColumn: 1 };
 
@@ -394,6 +401,46 @@ test("the preference is read on every press, so turning it back on restores the 
   assert.equal(world.keys.press().prevented, true);
   await settle();
   assert.deepEqual(world.fetched, ["/example/guide/install/index.md"]);
+});
+
+test("an explicit choice applies to m even when storage is blocked or read-only", async () => {
+  const blocked: ShortcutStorage = {
+    getItem(): string | null {
+      throw new Error("storage is blocked");
+    },
+    setItem(): void {
+      throw new Error("storage is blocked");
+    },
+  };
+  const readOnly: ShortcutStorage = {
+    getItem: () => null,
+    setItem(): void {
+      throw new Error("storage is read-only");
+    },
+  };
+
+  for (const storage of [blocked, readOnly]) {
+    resetShortcutsPreference();
+    const button = fakeButton();
+    const world = env({ storage });
+    activate(button, world);
+
+    rememberShortcuts(storage, false);
+    let result = world.keys.press();
+    await settle();
+    assert.equal(result.prevented, false);
+    assert.deepEqual(world.fetched, []);
+
+    button.clicks[0]!();
+    await settle();
+    assert.deepEqual(world.fetched, ["/example/guide/install/index.md"], "the pointer action still copies");
+
+    rememberShortcuts(storage, true);
+    result = world.keys.press();
+    await settle();
+    assert.equal(result.prevented, true);
+    assert.deepEqual(world.fetched, ["/example/guide/install/index.md", "/example/guide/install/index.md"]);
+  }
 });
 
 test("the shortcut leaves /, ?, and Ctrl/Cmd+K to search and ignores modifiers and repeats", () => {

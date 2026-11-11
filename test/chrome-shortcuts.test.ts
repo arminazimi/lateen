@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { test } from "node:test";
+import { beforeEach, test } from "node:test";
 import { Fragment, h } from "preact";
 import type { ChromeProps, Page, Site, SiteConfig, SourcePos } from "@velella/mizzen/contracts";
 import shortcuts, { SHORTCUTS, SHORTCUTS_TITLE_ID, SHORTCUTS_TOGGLE_ID } from "../chrome/shortcuts/index.ts";
@@ -17,10 +17,17 @@ import {
   type ShortcutsParts,
   type ShortcutsToggle,
 } from "../chrome/shortcuts/client.ts";
-import { OFF, STORAGE_KEY, type ShortcutStorage } from "../chrome/shortcuts/preference.ts";
+import {
+  OFF,
+  resetShortcutsPreference,
+  STORAGE_KEY,
+  type ShortcutStorage,
+} from "../chrome/shortcuts/preference.ts";
 import { isSearchShortcut } from "../chrome/search/shortcut.ts";
 import { stringsOf } from "../i18n/index.ts";
 import base from "../layouts/base.ts";
+
+beforeEach(() => resetShortcutsPreference());
 
 const pos: SourcePos = { file: "guide/install.md", line: 1, column: 1, endLine: 1, endColumn: 1 };
 
@@ -529,6 +536,44 @@ test("blocked or corrupt storage reads as on and never stops the dialog or the l
     document.fire(key("?", { tagName: "BODY" }));
     assert.equal(dialog.shows, 1);
     assert.equal(open.hidden, false);
+  }
+});
+
+test("an explicit choice applies at once even when storage is blocked or read-only", () => {
+  const blocked: ShortcutStorage = {
+    getItem(): string | null {
+      throw new Error("storage is blocked");
+    },
+    setItem(): void {
+      throw new Error("storage is blocked");
+    },
+  };
+  const readOnly: ShortcutStorage = {
+    getItem: () => null,
+    setItem(): void {
+      throw new Error("storage is read-only");
+    },
+  };
+
+  for (const storage of [blocked, readOnly]) {
+    resetShortcutsPreference();
+    const { dialog, toggle, parts } = partsOf();
+    const document = fakeDocument();
+    activate(parts, { document, storage });
+
+    toggle.checked = false;
+    toggle.fire();
+    let event = key("?", { tagName: "BODY" });
+    document.fire(event);
+    assert.equal(event.prevented, false, "`?` should type normally after the explicit choice");
+    assert.equal(dialog.shows, 0);
+
+    toggle.checked = true;
+    toggle.fire();
+    event = key("?", { tagName: "BODY" });
+    document.fire(event);
+    assert.equal(event.prevented, true, "the choice can be turned back on without storage");
+    assert.equal(dialog.shows, 1);
   }
 });
 
