@@ -46,6 +46,11 @@ function dataOf(list: readonly VersionChange[] = changes, from = "v1", to = "v2"
   return JSON.stringify({ from, to, changes: list });
 }
 
+/** The text with Unicode bidi isolates removed; they order mixed-direction text but add no characters a reader sees. */
+function visible(text: string): string {
+  return text.replace(/[\u2068\u2069]/g, "");
+}
+
 /** Render the viewer the way the render host calls it: directive props, language, and front matter. */
 function render(
   props: VersionDiffProps,
@@ -155,7 +160,7 @@ test("the labels, buttons, count, and title follow the page language", () => {
       `${lang} count`,
     );
     assert.ok(
-      out.includes(strings.version_diff_title!.replace("{from}", "v1").replace("{to}", "v2")),
+      visible(out).includes(strings.version_diff_title!.replace("{from}", "v1").replace("{to}", "v2")),
       `${lang} title`,
     );
     assert.ok(out.includes(strings.version_diff_before!), `${lang} before`);

@@ -1,6 +1,6 @@
 import { h } from "preact";
 import type { Chrome } from "@velella/mizzen/contracts";
-import { t } from "../../i18n/index.ts";
+import { patternOf, t } from "../../i18n/index.ts";
 
 /**
  * Block actions: one "Edit with your agent" control for every block on the page, each copying a
@@ -17,7 +17,7 @@ const blockActions: Chrome = ({ page }) => {
     "template",
     {
       "data-block-actions": true,
-      "data-prompt": t(lang, "edit_prompt"),
+      "data-prompt": patternOf(lang, "edit_prompt"),
       "data-copied": t(lang, "copied"),
       "data-copy-failed": t(lang, "copy_failed"),
     },
