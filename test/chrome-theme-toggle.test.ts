@@ -14,7 +14,10 @@ import {
   save,
   sync,
   type ThemeEnv,
+  type ThemeEvents,
+  type ThemeMedia,
   type ThemeStorage,
+  type ThemeStorageEvent,
   type ThemeToggleRoot,
 } from "../chrome/theme-toggle/client.ts";
 import { THEME_KEY } from "../layouts/base.ts";
@@ -121,11 +124,13 @@ function fakeToggle(): ThemeToggleRoot & {
 function env<S extends ThemeStorage>(
   storage: S,
   prefersLight = false,
+  extra: Pick<ThemeEnv, "media" | "events"> = {},
 ): ThemeEnv & { attrs: Record<string, string>; storage: S } {
   const fake = {
     attrs: {} as Record<string, string>,
     storage,
     prefersLight,
+    ...extra,
     root: {
       setAttribute(name: string, value: string) {
         fake.attrs[name] = value;
@@ -133,6 +138,51 @@ function env<S extends ThemeStorage>(
     },
   };
   return fake;
+}
+
+/** A color-scheme query whose OS change a test can fire. */
+function media(prefersLight = false): ThemeMedia & {
+  listeners: Set<(event: { matches: boolean }) => void>;
+  fire(matches: boolean): void;
+} {
+  const listeners = new Set<(event: { matches: boolean }) => void>();
+  let matches = prefersLight;
+  return {
+    listeners,
+    get matches() {
+      return matches;
+    },
+    addEventListener(_type, listener) {
+      listeners.add(listener);
+    },
+    removeEventListener(_type, listener) {
+      listeners.delete(listener);
+    },
+    fire(next: boolean) {
+      matches = next;
+      for (const listener of listeners) listener({ matches });
+    },
+  };
+}
+
+/** A window whose cross-tab storage event a test can fire. */
+function events(): ThemeEvents & {
+  listeners: Set<(event: ThemeStorageEvent) => void>;
+  fire(event: ThemeStorageEvent): void;
+} {
+  const listeners = new Set<(event: ThemeStorageEvent) => void>();
+  return {
+    listeners,
+    addEventListener(_type, listener) {
+      listeners.add(listener);
+    },
+    removeEventListener(_type, listener) {
+      listeners.delete(listener);
+    },
+    fire(event: ThemeStorageEvent) {
+      for (const listener of listeners) listener(event);
+    },
+  };
 }
 
 test("renders a hidden switch with data-theme-toggle, one named button, and a status region", () => {
@@ -260,6 +310,136 @@ test("choose: the whole change works without an event, in order", () => {
   assert.equal(page.attrs["data-theme"], "light");
   assert.equal(toggle.hidden, false);
   assert.equal(toggle.status.textContent, "Light theme.");
+});
+
+test("activate: system follows live OS changes", () => {
+  const query = media(true);
+  const page = env(store("system"), true, { media: query });
+  activate(fakeToggle(), page);
+
+  query.fire(false);
+  assert.equal(page.attrs["data-theme"], "dark");
+
+  query.fire(true);
+  assert.equal(page.attrs["data-theme"], "light");
+});
+
+test("activate: an explicit choice stays put when the OS changes", () => {
+  const query = media(false);
+  const page = env(store("dark"), false, { media: query });
+  const toggle = fakeToggle();
+  activate(toggle, page);
+
+  query.fire(true);
+  assert.equal(page.attrs["data-theme"], "dark");
+  assert.equal(toggle.attrs["data-choice"], "dark");
+  assert.equal(page.prefersLight, true);
+});
+
+test("activate: the toggle adopts a valid choice made in another tab", () => {
+  const other = events();
+  const page = env(store("light"), false, { events: other });
+  const toggle = fakeToggle();
+  activate(toggle, page);
+
+  other.fire({ key: THEME_KEY, newValue: "dark" });
+  assert.equal(page.attrs["data-theme"], "dark");
+  assert.equal(toggle.attrs["data-choice"], "dark");
+  assert.equal(toggle.button.attrs["aria-label"], "Color theme: Dark. Switch to light.");
+  assert.equal(toggle.status.textContent, "Dark theme.");
+
+  other.fire({ key: THEME_KEY, newValue: "system" });
+  assert.equal(page.attrs["data-theme"], "dark");
+  assert.equal(toggle.attrs["data-choice"], "system");
+});
+
+test("activate: removing the stored key in another tab falls back to system", () => {
+  const other = events();
+  const page = env(store("light"), true, { events: other });
+  const toggle = fakeToggle();
+  activate(toggle, page);
+
+  other.fire({ key: THEME_KEY, newValue: null });
+  assert.equal(toggle.attrs["data-choice"], "system");
+  assert.equal(page.attrs["data-theme"], "light");
+});
+
+test("activate: invalid values and other keys in storage events change nothing", () => {
+  const other = events();
+  const page = env(store("light"), false, { events: other });
+  const toggle = fakeToggle();
+  activate(toggle, page);
+
+  other.fire({ key: THEME_KEY, newValue: "banana" });
+  other.fire({ key: "another-key", newValue: "dark" });
+  assert.equal(page.attrs["data-theme"], "light");
+  assert.equal(toggle.attrs["data-choice"], "light");
+});
+
+test("activate: cleanup stops following the OS and other tabs", () => {
+  const query = media(false);
+  const other = events();
+  const page = env(store("system"), false, { media: query, events: other });
+  const toggle = fakeToggle();
+  const stop = activate(toggle, page);
+
+  assert.equal(query.listeners.size, 1);
+  assert.equal(other.listeners.size, 1);
+  stop();
+
+  assert.equal(query.listeners.size, 0);
+  assert.equal(other.listeners.size, 0);
+  query.fire(true);
+  other.fire({ key: THEME_KEY, newValue: "light" });
+  assert.equal(page.attrs["data-theme"], "dark");
+  assert.equal(toggle.attrs["data-choice"], "system");
+});
+
+test("activate: an OS change and a cross-tab choice settle in the order they arrive", () => {
+  const query = media(true);
+  const other = events();
+  const page = env(store("system"), true, { media: query, events: other });
+  const toggle = fakeToggle();
+  activate(toggle, page);
+
+  // An explicit choice from another tab wins over a later OS change.
+  other.fire({ key: THEME_KEY, newValue: "dark" });
+  query.fire(true);
+  assert.equal(page.attrs["data-theme"], "dark");
+  assert.equal(toggle.attrs["data-choice"], "dark");
+
+  // Back to system, a later OS change applies using the latest preference.
+  other.fire({ key: THEME_KEY, newValue: "system" });
+  assert.equal(page.attrs["data-theme"], "light");
+  query.fire(false);
+  assert.equal(page.attrs["data-theme"], "dark");
+
+  // A later cross-tab choice wins over the OS again.
+  other.fire({ key: THEME_KEY, newValue: "light" });
+  assert.equal(page.attrs["data-theme"], "light");
+});
+
+test("activate: a blocked store still follows the OS and other tabs", () => {
+  const query = media(true);
+  const other = events();
+  const page = env(brokenStore(), true, { media: query, events: other });
+  const toggle = fakeToggle();
+  assert.doesNotThrow(() => activate(toggle, page));
+
+  query.fire(false);
+  assert.equal(page.attrs["data-theme"], "dark");
+
+  other.fire({ key: THEME_KEY, newValue: "light" });
+  assert.equal(page.attrs["data-theme"], "light");
+  assert.equal(toggle.attrs["data-choice"], "light");
+});
+
+test("activate: a host without media or storage-event APIs stays usable", () => {
+  const toggle = fakeToggle();
+  const page = env(store("light"), true);
+  assert.doesNotThrow(() => activate(toggle, page));
+  assert.equal(page.attrs["data-theme"], "light");
+  assert.equal(toggle.attrs["data-choice"], "light");
 });
 
 test("style.css uses only token names from tokens/names.json for var(--*) references", () => {
