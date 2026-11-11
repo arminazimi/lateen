@@ -24,14 +24,16 @@ banner.
 | `lastPassed` | ISO date | none | When the examples last passed, as a `title` tooltip and a visually hidden sentence. |
 
 A count is a non-negative integer. A missing, blank, negative, fractional, or non-numeric value is `0`.
-When `passed` and `failed` are absent, the chip reads the page's entry in `site.data.examples` instead.
-Props win when either count is given.
+When no count is given, the chip reads the page's entry in `site.data.examples` instead.
+Props win when any count is given.
 
-The chip renders nothing when there is no data or when `passed + failed` is `0`, which is the untested
-case. It reports `failed` when anything failed, `partial` when the entry's `total` counts more examples
-than the results cover, and `passed` otherwise. A partial chip says how many examples did not run, so a
-partly run page never reads as a full pass. The icon shape, the visible text, and the counts all carry
-the result, so colour is never the only signal.
+The chip renders nothing when there is no report or the record's `total` is `0`, which is the
+no-evidence case. A positive `total` with nothing passed or failed is a recorded but unrun suite: it
+reports `unrun`, says every counted example did not run, and never reads as passed or partial. It
+reports `failed` when anything failed, `partial` when the entry's `total` counts more examples than the
+results cover, and `passed` otherwise. A partial chip says how many examples did not run, so a partly
+run page never reads as a full pass. The icon shape, the visible text, and the counts all carry the
+result, so colour is never the only signal.
 
 `lastPassed` is formatted in the page's calendar: Gregorian for English, Jalali for Persian, and Hijri
 for Arabic, using the same helper as the "last updated" line.
@@ -65,6 +67,6 @@ from `site.data.examples`. This unit does not edit the code component, the layou
 
 ## Tests
 
-`test/component-tested-chip.test.ts` covers the passed, partial, failed, and mixed states, the
-untested cases, the data fallback, the date tooltip in every language, escaping, and the stylesheet's
-tokens and logical properties.
+`test/component-tested-chip.test.ts` covers the passed, partial, unrun, failed, and mixed states, the
+no-evidence cases, the data fallback, the date tooltip in every language, escaping, and the
+stylesheet's tokens and logical properties.

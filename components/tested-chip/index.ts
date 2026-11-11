@@ -18,8 +18,8 @@ export const COUNT_CLASS = "tested-chip-count";
 /** Class on the visually hidden sentence that carries the last-passed date to assistive tech. */
 export const SR_CLASS = "tested-chip-sr";
 
-/** The three states a chip reports. A partly run set is `partial`, never rounded up to `passed`. */
-export const STATES = ["passed", "partial", "failed"] as const;
+/** The states a chip reports. A set with no completed examples is `unrun`; a partly run one is `partial`, never rounded up to `passed`. */
+export const STATES = ["passed", "partial", "unrun", "failed"] as const;
 
 export type TestedChipState = (typeof STATES)[number];
 
@@ -30,6 +30,7 @@ export type TestedChipState = (typeof STATES)[number];
 export const ICONS: Readonly<Record<TestedChipState, readonly string[]>> = {
   passed: ["m3.5 8.25 3 3 6-6"],
   partial: ["M8 2.25a5.75 5.75 0 0 1 0 11.5", "M8 2.25v11.5"],
+  unrun: ["M3.5 8h9"],
   failed: ["m4.5 4.5 7 7", "m11.5 4.5-7 7"],
 };
 
@@ -67,19 +68,21 @@ export function countOf(value: unknown): number {
 }
 
 /**
- * Counts from an examples entry or from a chip's props. Returns `undefined` when there is no data or
- * when no example ran, which is what hides the chip. A recorded `total` larger than `passed + failed`
- * is kept, so the chip can say how many examples did not run instead of implying full coverage. A
- * `total` smaller than the counts, or a missing one, is ignored.
+ * Counts from an examples entry or from a chip's props. Returns `undefined` when there is no data and
+ * no report, which is what hides the chip. A positive `total` with no passed or failed examples is a
+ * known unrun suite, not missing evidence, so it is kept. A recorded `total` larger than
+ * `passed + failed` is kept too, so the chip can say how many examples did not run instead of
+ * implying full coverage. A `total` of zero, a `total` smaller than the counts, or a missing one is
+ * ignored.
  */
 export function countsOf(value: unknown): TestedCounts | undefined {
   if (typeof value !== "object" || value === null) return undefined;
   const record = value as Record<string, unknown>;
   const passed = countOf(record.passed);
   const failed = countOf(record.failed);
-  if (passed + failed === 0) return undefined;
   const reported = countOf(record.total);
   const total = reported > passed + failed ? reported : undefined;
+  if (passed + failed === 0 && total === undefined) return undefined;
   const raw = typeof record.lastPassed === "string" ? record.lastPassed.trim() : "";
   return {
     passed,
@@ -99,9 +102,10 @@ export function countsFor(site: Site | undefined, page: Page | undefined): Teste
   return countsOf((examples as Record<string, unknown>)[page.url]);
 }
 
-/** The state of a chip: `failed` when anything failed, `partial` when some examples did not run, otherwise `passed`. */
+/** The state of a chip: `failed` when anything failed, `unrun` when nothing completed, `partial` when some examples did not run, otherwise `passed`. */
 export function stateOf(counts: TestedCounts): TestedChipState {
   if (counts.failed > 0) return "failed";
+  if (counts.passed + counts.failed === 0) return "unrun";
   return counts.total !== undefined && counts.total > counts.passed + counts.failed ? "partial" : "passed";
 }
 
@@ -147,14 +151,18 @@ function icon(state: TestedChipState) {
 /**
  * An inline chip for the result of a page's examples: an icon, the word "Tested", and the passed and
  * failed counts. Props give the numbers directly; when they are absent, the chip reads the page's
- * entry in `site.data.examples`. It renders nothing when there is no data or when no example ran.
- * When the report's `total` is larger than the results, it says how many examples did not run and
- * reads as `partial`, so missing evidence never passes as a full result. A `lastPassed` date becomes
+ * entry in `site.data.examples`. It renders nothing when there is no data and no report. When the
+ * report's `total` is larger than the results, it says how many examples did not run and reads as
+ * `partial`, so missing evidence never passes as a full result; when nothing completed at all it
+ * reads as `unrun`, so a recorded but unexecuted suite is not hidden. A `lastPassed` date becomes
  * a `title` tooltip and a visually hidden sentence, in the page's calendar, so the chip never depends
  * on colour and the date is available to a screen reader too.
  */
 const testedChip: Component<TestedChipProps> = ({ props, page, site }) => {
-  const counts = props.passed !== undefined || props.failed !== undefined ? countsOf(props) : countsFor(site, page);
+  const counts =
+    props.passed !== undefined || props.failed !== undefined || props.total !== undefined
+      ? countsOf(props)
+      : countsFor(site, page);
   if (counts === undefined) return null;
 
   const lang = page?.lang ?? "en";
@@ -176,9 +184,9 @@ const testedChip: Component<TestedChipProps> = ({ props, page, site }) => {
     h("span", { class: LABEL_CLASS }, t(lang, state === "partial" ? "tested_partial" : "tested")),
     counts.passed === 0 ? null : count(counts, "passed", lang),
     counts.failed === 0 ? null : count(counts, "failed", lang),
-    state === "partial"
-      ? h("span", { class: `${COUNT_CLASS} ${COUNT_CLASS}-not-run` }, t(lang, "tested_not_run", { n: notRunOf(counts) }))
-      : null,
+    notRunOf(counts) === 0
+      ? null
+      : h("span", { class: `${COUNT_CLASS} ${COUNT_CLASS}-not-run` }, t(lang, "tested_not_run", { n: notRunOf(counts) })),
     tooltip === undefined ? null : h("span", { class: SR_CLASS }, tooltip),
   );
 };

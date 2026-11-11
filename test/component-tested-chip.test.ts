@@ -104,10 +104,62 @@ test("a total that does not exceed the results is ignored", () => {
   assert.doesNotMatch(out, /not run/);
 });
 
+test("a positive total with nothing run says all examples did not run and never reads as passed or partial", () => {
+  const out = render({ passed: 0, failed: 0, total: 5 });
+  assert.ok(out);
+  assert.match(out, /^<span class="tested-chip tested-chip-unrun" role="note"/);
+  assert.match(out, /role="note" data-passed="0" data-failed="0" data-total="5"/);
+  assert.ok(out.includes(`<path d="${ICONS.unrun[0]}"></path>`));
+  assert.ok(out.includes(`<span class="${LABEL_CLASS}">${stringsOf("en").tested}</span>`));
+  assert.ok(out.includes(`<span class="${COUNT_CLASS} ${COUNT_CLASS}-not-run">5 not run</span>`));
+  assert.doesNotMatch(out, new RegExp(`${COUNT_CLASS}-passed`));
+  assert.doesNotMatch(out, new RegExp(`${COUNT_CLASS}-failed`));
+  assert.doesNotMatch(out, /tested-chip-partial/);
+});
+
+test("a positive total alone is a recorded unrun suite, not missing evidence", () => {
+  const out = render({ total: 3 });
+  assert.ok(out);
+  assert.match(out, /class="tested-chip tested-chip-unrun"/);
+  assert.match(out, /data-total="3"/);
+  assert.ok(out.includes(`>3 not run</span>`));
+});
+
+test("an unrun suite from site data says every example did not run", () => {
+  const site = examples({ "/guide/": { total: 4, passed: 0, failed: 0 } });
+  const out = render({}, { site, url: "/guide/" });
+  assert.ok(out);
+  assert.match(out, /class="tested-chip tested-chip-unrun"/);
+  assert.match(out, /data-total="4"/);
+  assert.ok(out.includes(`>4 not run</span>`));
+  assert.doesNotMatch(out, new RegExp(`${COUNT_CLASS}-passed`));
+  assert.doesNotMatch(out, /tested-chip-partial/);
+});
+
+test("an unrun suite keeps its last-passed date without inferring a pass", () => {
+  const props = render({ passed: 0, failed: 0, total: 2, lastPassed: "2026-11-09" });
+  assert.ok(props);
+  assert.match(props, /class="tested-chip tested-chip-unrun"/);
+  assert.ok(props.includes(`>2 not run</span>`));
+  assert.match(props, /title="Last passed November 9, 2026"/);
+  assert.doesNotMatch(props, new RegExp(`${COUNT_CLASS}-passed`));
+
+  const site = examples({ "/guide/": { passed: 0, failed: 0, total: 2, lastPassed: "2026-11-09" } });
+  const out = render({}, { site, url: "/guide/" });
+  assert.ok(out);
+  assert.match(out, /class="tested-chip tested-chip-unrun"/);
+  assert.match(out, /title="Last passed November 9, 2026"/);
+  assert.doesNotMatch(out, new RegExp(`${COUNT_CLASS}-passed`));
+});
+
 test("an untested page or block renders nothing", () => {
   assert.equal(render({}), null);
   assert.equal(render({ passed: 0, failed: 0 }), null);
-  assert.equal(render({ passed: 0, failed: 0, total: 5 }), null);
+  assert.equal(render({ passed: 0, failed: 0, total: 0 }), null);
+  assert.equal(render({ total: 0 }), null);
+  assert.equal(render({ total: "0" }), null);
+  assert.equal(render({ total: "-5" }), null);
+  assert.equal(render({ total: "five" }), null);
   assert.equal(render({ passed: "0", failed: "0" }), null);
   assert.equal(render({ passed: "-1" }), null);
   assert.equal(render({ passed: "two", failed: "three" }), null);
@@ -201,6 +253,22 @@ test("the partial label and the not-run count follow the page language", () => {
   }
 });
 
+test("the unrun label and count follow every supported page language", () => {
+  const cases = [
+    { lang: "en", label: "Tested", count: "4 not run" },
+    { lang: "fa", label: "آزموده", count: "4 اجرانشده" },
+    { lang: "ar", label: "مُختبَر", count: "4 لم تُشغَّل" },
+  ] as const;
+  for (const { lang, label, count } of cases) {
+    const out = render({ total: 4 }, { lang });
+    assert.ok(out, lang);
+    assert.match(out, /class="tested-chip tested-chip-unrun"/, `${lang} state`);
+    assert.ok(out.includes(`<span class="${LABEL_CLASS}">${label}</span>`), `${lang} label`);
+    assert.ok(out.includes(count), `${lang} not-run count`);
+    assert.doesNotMatch(out, new RegExp(`${COUNT_CLASS}-passed`), `${lang} passed count`);
+  }
+});
+
 test("the i18n keys exist in every language and keep their placeholders", () => {
   for (const lang of ["en", "fa", "ar"] as const) {
     const table = stringsOf(lang);
@@ -225,7 +293,7 @@ test("values are escaped or rejected, never parsed as markup", () => {
 });
 
 test("each state has a different icon, so the result never depends on colour alone", () => {
-  assert.deepEqual([...STATES], ["passed", "partial", "failed"]);
+  assert.deepEqual([...STATES], ["passed", "partial", "unrun", "failed"]);
   assert.equal(new Set(STATES.map((state) => ICONS[state].join("|"))).size, STATES.length);
   for (const state of STATES) assert.ok(ICONS[state].length > 0);
 });
@@ -244,7 +312,13 @@ test("counts and state helpers treat malformed values as untested", () => {
   assert.deepEqual(countsOf({ passed: 2, failed: 1 }), { passed: 2, failed: 1 });
   assert.deepEqual(countsOf({ passed: 2, failed: 0, total: 5 }), { passed: 2, failed: 0, total: 5 });
   assert.deepEqual(countsOf({ passed: 2, failed: 0, total: 1 }), { passed: 2, failed: 0 });
-  assert.deepEqual(countsOf({ total: 5 }), undefined);
+  assert.deepEqual(countsOf({ total: 5 }), { passed: 0, failed: 0, total: 5 });
+  assert.deepEqual(countsOf({ passed: 0, failed: 0, total: "5" }), { passed: 0, failed: 0, total: 5 });
+  assert.deepEqual(countsOf({ passed: "two", failed: "three", total: 5 }), { passed: 0, failed: 0, total: 5 });
+  assert.equal(countsOf({ total: 0 }), undefined);
+  assert.equal(countsOf({ total: "-5" }), undefined);
+  assert.equal(countsOf({ total: "five" }), undefined);
+  assert.deepEqual(countsOf({ passed: 2, failed: 0, total: 0 }), { passed: 2, failed: 0 });
   assert.deepEqual(countsOf({ passed: 2, failed: 0, lastPassed: "2026-11-09" }), {
     passed: 2,
     failed: 0,
@@ -256,11 +330,14 @@ test("counts and state helpers treat malformed values as untested", () => {
   assert.equal(countsFor(undefined, undefined), undefined);
   assert.equal(stateOf({ passed: 2, failed: 0 }), "passed");
   assert.equal(stateOf({ passed: 2, failed: 0, total: 5 }), "partial");
+  assert.equal(stateOf({ passed: 0, failed: 0, total: 5 }), "unrun");
   assert.equal(stateOf({ passed: 2, failed: 1, total: 5 }), "failed");
   assert.equal(stateOf({ passed: 0, failed: 1 }), "failed");
   assert.equal(notRunOf({ passed: 2, failed: 0, total: 5 }), 3);
+  assert.equal(notRunOf({ passed: 0, failed: 0, total: 5 }), 5);
   assert.equal(notRunOf({ passed: 2, failed: 1 }), 0);
   assert.equal(classNameOf("passed"), `${CHIP_CLASS} ${CHIP_CLASS}-passed`);
+  assert.equal(classNameOf("unrun"), `${CHIP_CLASS} ${CHIP_CLASS}-unrun`);
 });
 
 test("style.css uses only token names from tokens/names.json", () => {

@@ -35,6 +35,14 @@
   color: var(--color-warning);
 }
 
+.tested-chip-unrun {
+  border-color: var(--color-muted);
+}
+
+.tested-chip-unrun .tested-chip-icon {
+  color: var(--color-muted);
+}
+
 .tested-chip-failed {
   border-color: var(--color-danger);
 }
