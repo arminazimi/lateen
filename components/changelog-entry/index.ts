@@ -121,8 +121,9 @@ const pageIds = new WeakMap<Page, { html: string; used: Set<string> }>();
 
 /**
  * An id unique on its page: the base for the first entry to claim it, then `<base>-2`, `<base>-3` in page
- * order. Keyed by the Page and reset when its HTML changes, so one page's ids cannot leak into another page
- * or build, and a unique ordinary version keeps the id it published.
+ * order. Both the section id and {@link versionTextId} are reserved, so one entry's text id can never become
+ * another entry's section id. Keyed by the Page and reset when its HTML changes, so one page's ids cannot
+ * leak into another page or build, and a unique ordinary version keeps the id it published.
  */
 export function uniqueIdOf(page: Page, base: string): string {
   let state = pageIds.get(page);
@@ -131,8 +132,9 @@ export function uniqueIdOf(page: Page, base: string): string {
     pageIds.set(page, state);
   }
   let id = base;
-  for (let n = 2; state.used.has(id); n += 1) id = `${base}-${n}`;
+  for (let n = 2; state.used.has(id) || state.used.has(versionTextId(id)); n += 1) id = `${base}-${n}`;
   state.used.add(id);
+  state.used.add(versionTextId(id));
   return id;
 }
 

@@ -293,6 +293,26 @@ test("an explicit id is escaped, and repeated explicit ids are disambiguated", (
   assert.equal(sectionId(render({ version: "1.2.0", id: "???" })), "v1-2-0");
 });
 
+test("a section id never collides with another entry's version text id", () => {
+  const page = pageFor();
+  const first = renderOn(page, { version: "2.0.0", id: "release" });
+  const second = renderOn(page, { version: "3.0.0", id: "changelog-version-release" });
+
+  assert.equal(sectionId(first), "release");
+  assert.equal(sectionId(second), "changelog-version-release-2");
+
+  for (const out of [first, second]) {
+    const id = sectionId(out);
+    const textId = `changelog-version-${id}`;
+    assert.ok(out.includes(`href="#${id}"`), `self-link of ${id}`);
+    assert.ok(out.includes(`<span id="${textId}"`), `version text id of ${id}`);
+    assert.ok(out.includes(`aria-labelledby="${textId}"`), `labels of ${id}`);
+  }
+
+  const ids = [...`${first}${second}`.matchAll(/\bid="([^"]+)"/g)].map((match) => match[1]!);
+  assert.equal(new Set(ids).size, ids.length, "all ids on the page are unique");
+});
+
 test("Unicode and prerelease versions keep their authored text and still get unique ids", () => {
   const page = pageFor();
   const first = renderOn(page, { version: "نسخه ۲.۰.۰" });
