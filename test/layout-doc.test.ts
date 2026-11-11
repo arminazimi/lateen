@@ -124,7 +124,7 @@ test("the body, page footer, and pager follow the title inside the article", () 
   assert.ok(article, "article present");
   assert.match(
     article[1] ?? "",
-    /<div class="doc-body"><p>Run the build.<\/p><\/div><div class="doc-actions"><div class="page-footer">[\s\S]*<nav class="pager" aria-label="Previous and next pages"><a class="pager-link pager-prev" href="\/guide\/" rel="prev">/,
+    /<div class="doc-body"><p>Run the build.<\/p><\/div><div class="doc-actions"><div class="page-footer">[\s\S]*<nav class="pager" aria-label="Previous and next"><a class="pager-link pager-prev" href="\/guide\/" rel="prev">/,
   );
 });
 

@@ -160,14 +160,14 @@ test("a page with no steps renders its body whole and no progress list", () => {
   assert.doesNotMatch(page, /class="tutorial-progress"/);
   assert.doesNotMatch(page, /tutorial-step/);
   assert.match(page, /<div class="doc-body"><p>Run the build.<\/p><\/div>/);
-  assert.match(page, /<nav class="pager" aria-label="Previous and next pages">/);
+  assert.match(page, /<nav class="pager" aria-label="Previous and next">/);
 });
 
 test("the page pager still follows the last step", () => {
   const page = out(threeSteps());
 
   assert.match(page, /data-step="3"[\s\S]*<\/section><\/div><div class="doc-actions"><div class="page-footer">/);
-  assert.match(page, /<nav class="pager" aria-label="Previous and next pages"><a class="pager-link pager-prev" href="\/guide\/" rel="prev">/);
+  assert.match(page, /<nav class="pager" aria-label="Previous and next"><a class="pager-link pager-prev" href="\/guide\/" rel="prev">/);
 });
 
 test("the progress text is localised and the page keeps its direction", () => {
