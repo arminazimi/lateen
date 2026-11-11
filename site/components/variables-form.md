@@ -41,6 +41,8 @@ curl -H "Authorization: Bearer {{api_key}}" {{host}}/v1/status
 
 Type in the form and the command follows. The literal placeholders show what the page looked like before a value was known; the form's islands fill them with the defaults when JavaScript runs.
 
+Each example keeps the text the page author wrote, and every change is rendered from it: a placeholder split across highlighting spans still changes as a whole, and unrelated text that happens to equal a default or the value typed before it is never rewritten.
+
 ## Notes
 
 - The form is a `<fieldset>` with a legend, one visible label per variable, and a hint that values stay in the browser.
