@@ -15,6 +15,20 @@ export const CONTRIBUTORS_CLASS = "last-updated-contributors";
 /** How many contributor names the line shows. */
 export const MAX_CONTRIBUTORS = 3;
 
+/** What a page's date means: the source's last change, or a review recorded in the site's data. */
+export type DateSource = "source" | "review";
+
+/** One date the line shows, with the kind of evidence it records. */
+export interface PageDate {
+  /** The ISO calendar date. */
+  readonly date: string;
+  /** Whether the date records a source change or a review. */
+  readonly source: DateSource;
+}
+
+/** The string-table key for each kind of date. */
+const LABELS: Readonly<Record<DateSource, string>> = { source: "updated", review: "reviewed" };
+
 const DAY_MS = 86_400_000;
 
 /** The locale `Intl.RelativeTimeFormat` uses for a language; anything but the theme's languages reads as English. */
@@ -99,15 +113,23 @@ export function asOfOf(site: Site): string | undefined {
 }
 
 /**
- * The page's last change: `last_modified_at` from front matter, else `updated`, else the date of its entry
- * in `site.data.reviewers`. Anything unreadable reads as no date.
+ * The dates the line shows, each with what it records: the source's last change (`last_modified_at`, else
+ * `updated` in front matter) and the page's review date in `site.data.reviewers`. An unreadable date is
+ * absent, and a review on the same day as the source change is left out as a duplicate. The source date
+ * comes first, so {@link dateOf} and a one-date line keep reading the same way.
  */
+export function datesOf(page: Page, site: Site): readonly PageDate[] {
+  const source = isoDate(page.frontMatter.last_modified_at) ?? isoDate(page.frontMatter.updated);
+  const review = isoDate(reviewOf(site, page.url)?.date);
+  const dates: PageDate[] = [];
+  if (source !== undefined) dates.push({ date: source, source: "source" });
+  if (review !== undefined && review !== source) dates.push({ date: review, source: "review" });
+  return dates;
+}
+
+/** The page's first recorded date: its source date, else its review date. */
 export function dateOf(page: Page, site: Site): string | undefined {
-  return (
-    isoDate(page.frontMatter.last_modified_at) ??
-    isoDate(page.frontMatter.updated) ??
-    isoDate(reviewOf(site, page.url)?.date)
-  );
+  return datesOf(page, site)[0]?.date;
 }
 
 /**
@@ -133,16 +155,21 @@ export function contributorsOf(site: Site, url: string): string[] {
   return [...seen].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)).slice(0, MAX_CONTRIBUTORS);
 }
 
-/** The date part: "Updated 2 days ago" when the build has an as-of date, else the absolute date. */
-function datePart(iso: string, asOf: string | undefined, lang: string) {
-  const absolute = calendarDate(iso, lang);
+/**
+ * One date part: its label, then "2 days ago" when the build has an as-of date, else the absolute date.
+ * A date after the as-of date is bad data, so it stays absolute rather than reading as impending. The
+ * absolute date always fills the `<time>` element's `title` and `aria-label`.
+ */
+function datePart(entry: PageDate, asOf: string | undefined, lang: string) {
+  const absolute = calendarDate(entry.date, lang);
   if (absolute === undefined) return null;
 
-  const text = asOf === undefined ? undefined : relativeDate(iso, asOf, lang);
+  // ISO calendar dates compare correctly as strings, so a later day sorts after the build's as-of day.
+  const text = asOf === undefined || entry.date > asOf ? undefined : relativeDate(entry.date, asOf, lang);
   return h(
     "span",
-    { class: DATE_CLASS },
-    t(lang, "updated"),
+    { class: DATE_CLASS, "data-date-source": entry.source },
+    t(lang, LABELS[entry.source]),
     " ",
     h(
       "time",
@@ -153,25 +180,27 @@ function datePart(iso: string, asOf: string | undefined, lang: string) {
 }
 
 /**
- * The line under a page title: when the page last changed and who last contributed to it. The date comes
- * from front matter or the page's entry in `site.data.reviewers`; the names come from the same entry. A
- * relative date is used only when the site's data supplies an as-of date, so the build never reads the
- * clock; otherwise the absolute date is shown. The absolute date always fills the `title` and
- * `aria-label`, and the line renders nothing when both the date and the contributors are missing.
+ * The line under a page title: when the page last changed and who last contributed to it. A source
+ * date and a review date are labelled separately, so "Updated" always means the source changed and
+ * "Reviewed" always means someone reviewed it. The date comes from front matter or the page's entry in
+ * `site.data.reviewers`; the names come from the same entry. A relative date is used only when the
+ * site's data supplies an as-of date, so the build never reads the clock; otherwise the absolute date
+ * is shown. The absolute date always fills the `title` and `aria-label`, and the line renders nothing
+ * when both the dates and the contributors are missing.
  */
 const lastUpdated: Chrome = ({ site, page }) => {
-  const date = dateOf(page, site);
+  const dates = datesOf(page, site);
   const names = contributorsOf(site, page.url);
 
-  if (date === undefined && names.length === 0) return null;
+  if (dates.length === 0 && names.length === 0) return null;
 
-  const dateNode = date === undefined ? null : datePart(date, asOfOf(site), page.lang);
-  if (dateNode === null && names.length === 0) return null;
+  const dateNodes = dates.map((entry) => datePart(entry, asOfOf(site), page.lang)).filter((node) => node !== null);
+  if (dateNodes.length === 0 && names.length === 0) return null;
 
   return h(
     "p",
     { class: CLASS },
-    dateNode,
+    ...dateNodes,
     names.length === 0
       ? null
       : h(

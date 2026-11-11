@@ -23,7 +23,9 @@ The link is hidden entirely when the site has no address for the page (AC1, AC3)
 
 1. `site.data["edit-links"]` (or `site.data.editLinks`), when a build writes it, keyed by page URL. It accepts
    the engine's array of `{ url, source, editUrl }` and a record of page URL to either the URL or an object with
-   `editUrl` (`edit_url` also reads). Only `http` and `https` addresses are linked.
+   `editUrl` (`edit_url` also reads). An array entry whose `source` names a different file than the page's
+   canonical source is skipped, so a stale entry cannot send an editor to the wrong file; without a matching
+   entry the repository rules below apply. Only `http` and `https` addresses are linked.
 2. Otherwise the URL comes from `repository`, by the same rules as the engine's `outputs/edit-links.ts`
    (N35): `main` when no branch is set, `${root}/edit/${branch}/${path}` on GitHub and
    `${root}/-/edit/${branch}/${path}` on GitLab, one encoded branch segment, and each source path segment encoded
