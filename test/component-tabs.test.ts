@@ -19,8 +19,13 @@ import {
   TAB_PARAM,
   TABLIST_SELECTOR,
   activate,
+  applyHash,
+  hashId,
   langSearch,
+  showAt,
   syncTabs,
+  targetOf,
+  withTab,
   type TabsElement,
   type TabsEnv,
   type TabsGroup,
@@ -176,6 +181,19 @@ function fakeGroup(labels: string[], { panels = labels.length, enhanced = true }
 }
 
 type Group = ReturnType<typeof fakeGroup>;
+
+/** Finds the fake panel that owns a fragment id: a panel's own id, or a heading mapped into one. */
+function fakePanelOf(groups: Group[], inside: Record<string, FakeEl> = {}) {
+  return (id: string): FakeEl | undefined => {
+    const mapped = inside[id];
+    if (mapped) return mapped;
+    for (const { panels } of groups) {
+      const panel = panels.find((candidate) => candidate.id === id);
+      if (panel) return panel;
+    }
+    return undefined;
+  };
+}
 
 /** An environment over `groups`, with a query, storage, and a scroll position the tests can move. */
 function fakeEnv(groups: Group[], { search = "", stored = {} as Record<string, string>, scrollY = 200 } = {}) {
@@ -417,6 +435,133 @@ test("syncTabs() touches only groups the island enhanced", () => {
 test("syncTabs() wires nothing for a page with no group", () => {
   const { env } = fakeEnv([]);
   assert.doesNotThrow(() => syncTabs(env));
+});
+
+test("hashId() strips the # and decodes, rejecting empty or malformed fragments", () => {
+  assert.equal(hashId("#install-panel-2"), "install-panel-2");
+  assert.equal(hashId("#%D9%86%D8%B5%D8%A8"), "نصب");
+  assert.equal(hashId("#"), undefined);
+  assert.equal(hashId(""), undefined);
+  assert.equal(hashId("#   "), undefined);
+  assert.equal(hashId("#%E0%A4%A"), undefined, "a broken escape fails soft");
+});
+
+test("withTab() sets the tab and keeps every other parameter", () => {
+  assert.equal(withTab("?q=beacon&page=2", "Linux"), "?q=beacon&page=2&tab=Linux");
+  assert.equal(withTab("?tab=macOS&q=beacon", "Linux"), "?tab=Linux&q=beacon");
+  assert.equal(withTab("", "mac OS"), "?tab=mac+OS");
+});
+
+test("targetOf() resolves a panel id and a heading inside a panel to its group", () => {
+  const a = fakeGroup(["macOS", "Windows", "Linux"]);
+  const b = fakeGroup(["npm", "pnpm"]);
+  const panelOf = fakePanelOf([a, b], { "install-heading": a.panels[2]! });
+
+  assert.deepEqual(targetOf([a.group, b.group], panelOf, "#p3"), { group: a.group, index: 2 });
+  assert.equal(targetOf([a.group, b.group], panelOf, "#install-heading")?.group, a.group);
+  assert.equal(targetOf([a.group, b.group], panelOf, "#nope"), undefined);
+  assert.equal(targetOf([a.group, b.group], panelOf, "#"), undefined);
+});
+
+test("targetOf() ignores a group whose tabs and panels do not pair up", () => {
+  const broken = fakeGroup(["macOS", "Windows"], { panels: 1 });
+  assert.equal(targetOf([broken.group], fakePanelOf([broken]), "#p1"), undefined);
+});
+
+test("a fragment inside a closed panel opens its group and beats ?tab= for that group", () => {
+  const a = fakeGroup(["macOS", "Windows", "Linux"]);
+  const b = fakeGroup(["Windows", "macOS"]);
+  const panelOf = fakePanelOf([a, b], { "linux-heading": a.panels[2]! });
+
+  // Resolution happens before any group hides a panel; the shared label sync runs first, then the target.
+  const target = targetOf([a.group, b.group], panelOf, "#linux-heading");
+  activate(a.group, false);
+  activate(b.group, false);
+  const { env } = fakeEnv([a, b], { search: `?${TAB_PARAM}=macOS` });
+  syncTabs(env);
+  assert.deepEqual(shown(b.panels), [false, true], "the shared label still applies to the other group");
+  assert.ok(target);
+  assert.equal(showAt(target.group, target.index), true);
+  assert.deepEqual(shown(a.panels), [false, false, true], "the fragment picks the panel in its own group");
+  assert.deepEqual(shown(b.panels), [false, true], "and leaves the other group alone");
+});
+
+test("a hash change opens the panel that owns the new fragment, and an unknown one changes nothing", () => {
+  const a = fakeGroup(["macOS", "Windows", "Linux"]);
+  activate(a.group, false);
+  const panelOf = fakePanelOf([a], { "windows-heading": a.panels[1]! });
+
+  assert.equal(applyHash([a.group], panelOf, "#windows-heading"), true);
+  assert.deepEqual(selected(a.tabs), ["false", "true", "false"]);
+  assert.deepEqual(shown(a.panels), [false, true, false]);
+
+  assert.equal(applyHash([a.group], panelOf, "#gone"), false);
+  assert.deepEqual(shown(a.panels), [false, true, false], "a stale fragment leaves the current panel up");
+});
+
+test("choosing a tab shares the label without losing other parameters", () => {
+  const a = fakeGroup(["macOS", "Windows", "Linux"]);
+  const shared: string[] = [];
+  activate(a.group, false, (label) => shared.push(withTab("?q=beacon&tab=macOS", label)));
+  a.tabs[1]!.click();
+  assert.deepEqual(shared, ["?q=beacon&tab=Windows"], "an explicit choice replaces the stale tab and keeps q");
+});
+
+test("keyboard selection in a right-to-left group shares the chosen label", () => {
+  const a = fakeGroup(["macOS", "Windows", "Linux"]);
+  const shared: string[] = [];
+  activate(a.group, true, (label) => shared.push(label));
+  a.list.fire("keydown", { key: "ArrowRight", target: a.tabs[0] });
+  assert.deepEqual(selected(a.tabs), ["false", "false", "true"], "ArrowRight moves back in RTL");
+  assert.deepEqual(shared, ["Linux"]);
+});
+
+test("URL synchronization leaves the scroll position alone", () => {
+  const a = fakeGroup(["macOS", "Windows"]);
+  const b = fakeGroup(["macOS", "Windows"]);
+  const shared: string[] = [];
+  const onSelect = (label: string): void => {
+    shared.push(label);
+  };
+  activate(a.group, false, onSelect);
+  activate(b.group, false, onSelect);
+  const { env, scrolls, at } = fakeEnv([a, b], { scrollY: 120 });
+  syncTabs(env);
+
+  a.tabs[1]!.click();
+  assert.deepEqual(shared, ["Windows"]);
+  assert.deepEqual(selected(b.tabs), ["false", "true"], "the other group follows the label");
+  assert.deepEqual(scrolls, [120], "sharing adds no scroll of its own; only the existing sync restores the offset");
+  assert.equal(at(), 120);
+});
+
+test("a shared fragment does not overwrite what the visitor remembered", () => {
+  const a = fakeGroup(["macOS", "Windows", "Linux"]);
+  activate(a.group, false);
+  const { env, written } = fakeEnv([a], { stored: { [STORAGE_KEY]: "Windows" } });
+  syncTabs(env);
+
+  const target = targetOf([a.group], fakePanelOf([a]), "#p3");
+  assert.ok(target);
+  showAt(target.group, target.index);
+  assert.deepEqual([...written], [], "opening a shared link is not a choice to remember");
+  assert.deepEqual(shown(a.panels), [false, false, true]);
+});
+
+test("stale fragments fail soft and keep a stacked group fully readable", () => {
+  const stacked = fakeGroup(["macOS", "Windows"], { enhanced: false });
+  const panelOf = fakePanelOf([stacked]);
+
+  assert.equal(applyHash([stacked.group], panelOf, "#p2"), false);
+  assert.equal(showAt(stacked.group, 1), false);
+  assert.deepEqual(shown(stacked.panels), [true, true], "no panel is hidden when the island did not run");
+});
+
+test("an unknown ?tab= leaves every group on its first tab", () => {
+  const a = fakeGroup(["macOS", "Windows"]);
+  const { env } = fakeEnv([a], { search: `?${TAB_PARAM}=Ghost&keep=1` });
+  syncTabs(env);
+  assert.deepEqual(selected(a.tabs), ["true", "false"]);
 });
 
 const styleCss = readFileSync(new URL("../components/tabs/style.css", import.meta.url), "utf8");

@@ -11,7 +11,7 @@ import {
   type TabsElement as IslandElement,
   type TabsEvent,
 } from "../code-tabs/client.ts";
-import { LANG_PARAM, sync, type SyncEnv, type SyncGroup } from "../code-tabs/sync.ts";
+import { ENHANCED_ATTR, LANG_PARAM, sync, type SyncEnv, type SyncGroup } from "../code-tabs/sync.ts";
 
 /** Attribute on each group root (`data-tabs-group`); the island finds groups by it. */
 export const GROUP_SELECTOR = "[data-tabs-group]";
@@ -70,6 +70,56 @@ export function langSearch(search: string): string {
   return `?${new URLSearchParams({ [LANG_PARAM]: tab }).toString()}`;
 }
 
+/** The id a fragment names, without its `#` and percent-decoded. An empty or malformed fragment has none. */
+export function hashId(hash: string): string | undefined {
+  const raw = hash.startsWith("#") ? hash.slice(1) : hash;
+  if (raw === "") return undefined;
+  try {
+    const id = decodeURIComponent(raw).trim();
+    return id === "" ? undefined : id;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The page query with `?tab=` set to `label`, keeping every other parameter where it was. */
+export function withTab(search: string, label: string): string {
+  const params = new URLSearchParams(search);
+  params.set(TAB_PARAM, label);
+  return `?${params.toString()}`;
+}
+
+/** The group and panel index a fragment belongs to. */
+export interface TabTarget {
+  group: TabsGroup;
+  index: number;
+}
+
+/**
+ * Resolves a fragment to the panel that owns its element. `panelOf` finds the panel the target id sits
+ * in, so a heading inside a section resolves as well as the panel itself. An unknown id, or a group
+ * whose tabs and panels do not pair up, resolves to nothing.
+ */
+export function targetOf(
+  groups: Iterable<TabsGroup>,
+  panelOf: (id: string) => TabsElement | null | undefined,
+  hash: string,
+): TabTarget | undefined {
+  const id = hashId(hash);
+  if (id === undefined) return undefined;
+  const panel = panelOf(id);
+  if (!panel) return undefined;
+
+  for (const group of groups) {
+    const tabs = [...group.querySelectorAll(TAB_SELECTOR)];
+    const panels = [...group.querySelectorAll(PANEL_SELECTOR)];
+    if (tabs.length === 0 || tabs.length !== panels.length) continue;
+    const index = panels.indexOf(panel);
+    if (index >= 0) return { group, index };
+  }
+  return undefined;
+}
+
 /** One group as the shared sync module sees it: its panels are `[role=tabpanel]`, not the code tabs class. */
 function synced(group: TabsGroup): SyncGroup {
   return {
@@ -80,16 +130,23 @@ function synced(group: TabsGroup): SyncGroup {
 }
 
 /**
- * Wires one group: reveals the tab list, pairs each panel with its tab, and selects the first tab. A group
- * whose tabs and panels do not pair up stays stacked: the island changes nothing. `rtl` is the group's
- * direction, which decides which arrow key moves forward. The group is enhanced only after every part is
- * wired; a failure halfway through leaves its sections stacked and readable.
+ * Wires one group: reveals the tab list, pairs each panel with its tab, and selects the first tab. A
+ * group whose tabs and panels do not pair up stays stacked: the island changes nothing. `rtl` is the
+ * group's direction, which decides which arrow key moves forward. `onSelect` hears every explicit
+ * choice — a click or a key — so the page can make it shareable. The group is enhanced only after
+ * every part is wired; a failure halfway through leaves its sections stacked and readable.
  */
-export function activate(group: TabsGroup, rtl: boolean): void {
+export function activate(group: TabsGroup, rtl: boolean, onSelect?: (label: string) => void): void {
   const list = group.querySelector(TABLIST_SELECTOR);
   const tabs = [...group.querySelectorAll(TAB_SELECTOR)];
   const panels = [...group.querySelectorAll(PANEL_SELECTOR)];
   if (!list || tabs.length === 0 || tabs.length !== panels.length) return;
+
+  const choose = (index: number): void => {
+    select(tabs, panels, index);
+    const label = tabs[index]?.textContent?.trim();
+    if (label) onSelect?.(label);
+  };
 
   try {
     tabs.forEach((tab, i) => {
@@ -98,7 +155,7 @@ export function activate(group: TabsGroup, rtl: boolean): void {
         panel.setAttribute("role", "tabpanel");
         panel.setAttribute("aria-labelledby", tab.id);
       }
-      tab.addEventListener("click", () => select(tabs, panels, i));
+      tab.addEventListener("click", () => choose(i));
     });
 
     list.addEventListener("keydown", (event) => {
@@ -107,7 +164,7 @@ export function activate(group: TabsGroup, rtl: boolean): void {
       const to = step(event.key ?? "", from, tabs.length, rtl);
       if (to === undefined) return;
       event.preventDefault();
-      select(tabs, panels, to);
+      choose(to);
       tabs[to]?.focus();
     });
 
@@ -119,7 +176,30 @@ export function activate(group: TabsGroup, rtl: boolean): void {
     return;
   }
 
-  group.setAttribute("data-enhanced", "");
+  group.setAttribute(ENHANCED_ATTR, "");
+}
+
+/**
+ * Shows panel `index` in a group the island enhanced. A group that stayed stacked, or an index with no
+ * paired panel, is left alone so the stacked fallback keeps every section readable.
+ */
+export function showAt(group: TabsGroup, index: number): boolean {
+  if (group.getAttribute(ENHANCED_ATTR) === null) return false;
+  const tabs = [...group.querySelectorAll(TAB_SELECTOR)];
+  const panels = [...group.querySelectorAll(PANEL_SELECTOR)];
+  if (tabs.length === 0 || tabs.length !== panels.length || index < 0 || index >= tabs.length) return false;
+  select(tabs, panels, index);
+  return true;
+}
+
+/** Shows the panel a fragment names, reporting whether it found one to show. */
+export function applyHash(
+  groups: Iterable<TabsGroup>,
+  panelOf: (id: string) => TabsElement | null | undefined,
+  hash: string,
+): boolean {
+  const target = targetOf(groups, panelOf, hash);
+  return target !== undefined && showAt(target.group, target.index);
 }
 
 /**
@@ -141,8 +221,17 @@ export function syncTabs(env: TabsEnv): void {
 }
 
 // The theme's tsconfig has no DOM lib; these are the browser globals the island needs, no more.
-declare const document: { querySelectorAll(selector: string): Iterable<unknown> };
-declare const window: { location: { search: string }; scrollY: number; scrollTo(x: number, y: number): void };
+declare const document: {
+  querySelectorAll(selector: string): Iterable<unknown>;
+  getElementById(id: string): { closest(selector: string): unknown; scrollIntoView?(): void } | null;
+};
+declare const window: {
+  location: { search: string; hash: string };
+  scrollY: number;
+  scrollTo(x: number, y: number): void;
+  addEventListener(type: string, listener: () => void): void;
+};
+declare const history: { replaceState(data: unknown, unused: string, url: string): void };
 declare function getComputedStyle(element: unknown): { direction: string };
 
 /** Reads one key from localStorage. Access itself can throw, so the whole touch is guarded. */
@@ -166,9 +255,27 @@ function storageWrite(key: string, value: string): void {
 // The island runs when the browser loads it; nothing happens in a runtime without a document.
 if (typeof document !== "undefined") {
   const groups = [...document.querySelectorAll(GROUP_SELECTOR)] as TabsGroup[];
+  const panelOf = (id: string): TabsElement | undefined =>
+    (document.getElementById(id)?.closest(PANEL_SELECTOR) as TabsElement | null) ?? undefined;
+
+  // Resolved before any group hides a panel, then applied after the shared label so a fragment can
+  // point into the panel a shared `?tab=` would otherwise leave closed.
+  const target = targetOf(groups, panelOf, window.location.hash);
+
+  /** Writes the chosen label to the query, dropping a fragment that pointed into the same group. */
+  const share = (group: TabsGroup, label: string): void => {
+    const inside = targetOf([group], panelOf, window.location.hash) !== undefined;
+    const hash = inside ? "" : window.location.hash;
+    try {
+      history.replaceState(null, "", `${withTab(window.location.search, label)}${hash}`);
+    } catch {
+      // A URL the browser refuses costs sharing only; the tabs still work.
+    }
+  };
+
   for (const group of groups) {
     try {
-      activate(group, getComputedStyle(group).direction === "rtl");
+      activate(group, getComputedStyle(group).direction === "rtl", (label) => share(group, label));
     } catch {
       // One group that cannot be read must not keep the rest of the page from enhancing.
     }
@@ -180,5 +287,13 @@ if (typeof document !== "undefined") {
     scrollTo: (top) => window.scrollTo(0, top),
     read: storageRead,
     write: storageWrite,
+  });
+  if (target) showAt(target.group, target.index);
+
+  window.addEventListener("hashchange", () => {
+    const id = hashId(window.location.hash);
+    if (id !== undefined && applyHash(groups, panelOf, window.location.hash)) {
+      document.getElementById(id)?.scrollIntoView?.();
+    }
   });
 }
