@@ -1,0 +1,16 @@
+# A tiny site whose pages exercise every Lateen layout and both text directions.
+# The accessibility gate builds it with the theme's own layouts, chrome, and components.
+title: Lateen accessibility fixture
+description: Representative pages for the accessibility gate.
+lang: en
+url: https://example.com
+base: ""
+languages:
+  - code: fa
+    name: فارسی
+    prefix: /fa
+  - code: ar
+    name: العربية
+    prefix: /ar
+navigation: _data/navigation.yml
+search: false
