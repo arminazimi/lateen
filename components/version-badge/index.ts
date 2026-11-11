@@ -84,7 +84,7 @@ const versionBadge: Component<VersionBadgeProps> = ({ props, page }) => {
 
   return h(
     "span",
-    { class: classNameOf(variant, block), "data-version": version },
+    { class: classNameOf(variant, block), "data-version": version, "data-variant": variant },
     h("span", { class: "version-badge-icon", "aria-hidden": "true" }, ICONS[variant]),
     h("span", { class: "version-badge-value", "aria-hidden": "true", dir: "ltr" }, `v${version}`),
     h("span", { class: "version-badge-sr" }, t(page.lang, LABEL_KEYS[variant], { version })),
