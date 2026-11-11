@@ -1,0 +1,9 @@
+main:
+  - title: Fixture
+    children:
+      - title: Overview
+        url: /
+      - title: Guide
+        url: /guide/
+      - title: Reference
+        url: /reference/
