@@ -24,7 +24,7 @@ A file tree turns a nested list into a folder structure with icons, indentation,
 | Name | Type | Default | What it does |
 | --- | --- | --- | --- |
 | `label` | string | `File tree` | The tree's accessible name. |
-| `id` | string | `file-tree` | Prefix for the tree's element ids. Give every tree on a page its own id. |
+| `id` | string | `file-tree` | Prefix for the tree's element ids. Without one, each tree on the page gets `file-tree`, then `file-tree-2`, and so on. |
 
 ## Keyboard
 
@@ -62,5 +62,5 @@ Arrow keys do not wrap: at the first or last row the focus stays put. On a right
 - A name in bold, `**name**`, is highlighted as the file the page is about.
 - Screen readers hear each row's level, its position among its siblings, the name, and the note. A folder with nested rows also reports whether it is open; a folder with no rows cannot open.
 - Without JavaScript the complete tree stays visible and every row stays in the tab order. Folders start open: closing one is an enhancement, and the markup the server writes never hides a row.
-- Two trees on one page need different `id` values so their element ids stay unique. The ids only label rows; the paths in `data-copy-value` never change.
+- Trees without an `id` get page-scoped ids in document order, so two trees on one page never collide. Give an `id` when links or tests should keep the same prefix across edits. The ids only label rows; the paths in `data-copy-value` never change.
 - Keep the tree to the files a reader needs. A whole repository dump hides the three lines that matter.

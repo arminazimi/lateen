@@ -76,9 +76,13 @@ function html(node: unknown): string {
   return `<${tag}${attrs}>${inner}</${tag}>`;
 }
 
-function render(body: string, props: Record<string, string> = {}): string {
-  const componentProps: ComponentProps<Record<string, string>> = { props, page, site, html: body };
+function render(body: string, props: Record<string, string> = {}, on: Page = { ...page }): string {
+  const componentProps: ComponentProps<Record<string, string>> = { props, page: on, site, html: body };
   return html(fileTree(componentProps as ComponentProps<{ label?: string }>));
+}
+
+function idsOf(out: string): string[] {
+  return [...out.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]!);
 }
 
 const names = JSON.parse(readFileSync(new URL("../tokens/names.json", import.meta.url), "utf8")) as Record<
@@ -301,6 +305,47 @@ test("a path that appears twice in one tree still gets unique ids, and its copy 
   assert.match(out, /id="file-tree-a-x-md-2"/);
   assert.match(out, /id="file-tree-a-x-md-2" role="treeitem"[^>]*aria-labelledby="file-tree-a-x-md-2-name"/);
   assert.equal(out.match(/data-copy-value="a\/x\.md"/g)?.length, 2, "source paths are unchanged");
+});
+
+test("two default trees with identical content on one page get unique ids", () => {
+  const body = "<ul><li>src/<ul><li>index.ts</li></ul></li><li>src/<ul><li>index.ts</li></ul></li></ul>";
+  const shared: Page = { ...page };
+  const one = render(body, {}, shared);
+  const two = render(body, {}, shared);
+
+  const all = [...idsOf(one), ...idsOf(two)];
+  assert.equal(new Set(all).size, all.length);
+  assert.match(one, /<ul class="file-tree" role="tree" id="file-tree"/);
+  assert.match(two, /<ul class="file-tree" role="tree" id="file-tree-2"/);
+  assert.match(one, /id="file-tree-src-index-ts"/);
+  assert.match(one, /id="file-tree-src-index-ts-2"/);
+  assert.match(two, /id="file-tree-2-src-index-ts"/);
+  assert.match(two, /id="file-tree-2-src-index-ts-2"/);
+  assert.equal(one.match(/data-copy-value="src\/index\.ts"/g)?.length, 2);
+  assert.equal(two.match(/data-copy-value="src\/index\.ts"/g)?.length, 2);
+});
+
+test("a default tree beside a tree with an explicit id keeps every id unique", () => {
+  const body = "<ul><li>src/<ul><li>index.ts</li></ul></li></ul>";
+  const shared: Page = { ...page };
+  const manual = render(body, { id: "layout" }, shared);
+  const automatic = render(body, {}, shared);
+
+  const all = [...idsOf(manual), ...idsOf(automatic)];
+  assert.equal(new Set(all).size, all.length);
+  assert.match(manual, /<ul class="file-tree" role="tree" id="layout"/);
+  assert.match(manual, /id="layout-src-index-ts" role="treeitem"/);
+  assert.match(automatic, /<ul class="file-tree" role="tree" id="file-tree"/);
+  assert.match(automatic, /id="file-tree-src-index-ts" role="treeitem"/);
+});
+
+test("default-tree ids are deterministic on a fresh page", () => {
+  const body = "<ul><li>src/<ul><li>index.ts</li></ul></li></ul>";
+  const pair = (): string[] => {
+    const fresh: Page = { ...page };
+    return [render(body, {}, fresh), render(body, {}, fresh)];
+  };
+  assert.deepEqual(pair(), pair());
 });
 
 /* The island, with fakes standing in for the browser's elements. */

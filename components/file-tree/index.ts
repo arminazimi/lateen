@@ -1,6 +1,6 @@
 import { h } from "preact";
 import type { ComponentChildren, VNode } from "preact";
-import type { Component } from "@velella/mizzen/contracts";
+import type { Component, Page } from "@velella/mizzen/contracts";
 
 /** Markdown directive that turns the nested list in its body into a file tree. */
 export const directive = "file-tree";
@@ -140,10 +140,33 @@ function slugOf(value: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
+/** The id an author gave, or `undefined` when the prop is missing or sanitizes to nothing. */
+function givenId(raw: unknown): string | undefined {
+  const given = slugOf(typeof raw === "string" ? raw : "");
+  return given === "" ? undefined : given;
+}
+
 /** The tree's id: the `id` prop when given, otherwise `file-tree`. */
 export function idBase(raw: unknown): string {
-  const given = slugOf(typeof raw === "string" ? raw : "");
-  return given === "" ? "file-tree" : given;
+  return givenId(raw) ?? "file-tree";
+}
+
+/**
+ * Per-page state for trees that give no `id`: the next default instance number, and the page HTML it
+ * was counted against. Keyed by the Page, so one page's ids cannot leak into another page or build.
+ */
+const pageIds = new WeakMap<Page, { html: string; next: number }>();
+
+/** The base of a tree without an `id`: `file-tree`, then `file-tree-2`, in page order. */
+function defaultBase(page: Page): string {
+  let state = pageIds.get(page);
+  if (state === undefined || state.html !== page.html) {
+    state = { html: page.html, next: 0 };
+    pageIds.set(page, state);
+  }
+  const base = state.next === 0 ? idBase(undefined) : `${idBase(undefined)}-${state.next + 1}`;
+  state.next += 1;
+  return base;
 }
 
 /** The id of one tree node, from the full path of the entry. */
@@ -250,13 +273,13 @@ function group(
  * `data-copy-value` path with no markup in it. Without a list the body is passed through so the
  * page still reads.
  */
-const fileTree: Component<FileTreeProps> = ({ props, html }) => {
+const fileTree: Component<FileTreeProps> = ({ props, html, page }) => {
   const entries = parseEntries(html);
   if (entries.length === 0) {
     return h("div", { class: "file-tree", dangerouslySetInnerHTML: { __html: html } });
   }
   const label = typeof props.label === "string" && props.label !== "" ? props.label : DEFAULT_LABEL;
-  const base = idBase(props.id);
+  const base = givenId(props.id) ?? defaultBase(page);
   return group(entries, 1, base, "", label, new Set<string>());
 };
 
