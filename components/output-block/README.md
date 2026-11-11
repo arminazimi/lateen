@@ -14,10 +14,15 @@ body is read as plain text, so it keeps its line breaks and HTML in it stays tex
 ## Variables
 
 A body that names a variable (`{{project}}`) records the names in `data-output-deps`, the same shape a
-code block records in `data-placeholders`. When the reader changes one of those values in the page's
-variables form, the block is marked `data-output-stale` and its note (localized as `output_stale`) is
-filled in: the recorded text is never rewritten, because only running the command again can change what
-it printed. The note is an empty `role="status"` span otherwise, so nothing is announced on load.
+code block records in `data-placeholders`. An output that never repeats its inputs, such as an exit status
+or a timing result, declares them in the `deps` prop: a JSON array of variable names such as
+`'["project"]'`. The declared names are merged with the inferred ones, in order and once each.
 
-Only a body that mentions the variable is known to depend on it; an output that never repeats the value
-is not marked stale.
+When the reader changes one of those values in the page's variables form, the block is marked
+`data-output-stale` and its note (localized as `output_stale`) is filled in: the recorded text is never
+rewritten, because only running the command again can change what it printed. The note is an empty
+`role="status"` span otherwise, so nothing is announced on load.
+
+A malformed `deps` value gives no declared names, and an item that is not a variable name is dropped, so
+the valid names beside it still count. An escaped placeholder in the body (`\{{name}}`) stays literal and
+is not a dependency.
