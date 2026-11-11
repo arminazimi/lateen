@@ -5,7 +5,7 @@ layout: doc
 permalink: /components/changelog-entry/
 ---
 
-A changelog entry is one release: a version heading that links to itself, the release date, the categories the release touches, and the entry text. The heading and section id come from the version, so a link to `#v1-2-0` points at that release.
+A changelog entry is one release: a version heading that links to itself, the release date, the categories the release touches, and the entry text. The heading and section id come from the version, or from an explicit `id`, so a link to `#v1-2-0` points at that release.
 
 ## Syntax
 
@@ -21,6 +21,7 @@ A changelog entry is one release: a version heading that links to itself, the re
 | Name | Type | Default | What it does |
 | --- | --- | --- | --- |
 | `version` | string | `Unreleased` | The release version, such as `1.2.0` or `v1.2.0`. It becomes the id `v1-2-0` and the link target. |
+| `id` | string | the version slug | A stable id for the section and its self-link, when the generated one is not what you want. It is escaped, and repeats on one page get a numeric suffix. |
 | `date` | string | `Date unknown` | An ISO date, `YYYY-MM-DD`; a date-time keeps its date part. A real date renders a `<time datetime>`. |
 | `categories` | string | none | Comma-separated names, or a JSON array: `added`, `changed`, `fixed`, `removed`, `security`. Unknown names are dropped and repeats are removed. |
 
@@ -42,8 +43,9 @@ The old theme's `blocks` folder is gone. Every block has a component page under 
 
 ## Notes
 
-- The section id is `v` plus a slug of the version: lower case, dots to dashes, other runs of characters to one dash. A leading `v` is not doubled. Two entries on one page need different versions, or they share an id.
-- A missing or blank version shows "Unreleased" and the id `vunversioned`; it never shows a bare `v`. A missing or invalid date shows "Date unknown" and no `<time>` element.
+- The section id is `v` plus a slug of the version: lower case, dots to dashes, other runs of characters to one dash. A leading `v` is not doubled. Every entry on a page gets its own id: the first to claim one keeps it and the next get `-2`, `-3`, so repeated or slug-equivalent versions never share a fragment. The visible version and `data-version` stay exactly as authored.
+- A missing or blank version shows "Unreleased" and the id `vunversioned`; a later one gets `vunversioned-2`. It never shows a bare `v`. A missing or invalid date shows "Date unknown" and no `<time>` element.
+- A version with no Latin characters falls back to `vunversioned`; give it an `id` when you want a readable, stable link target.
 - An empty body keeps the heading, date, and categories, and adds a short "No details for this release" paragraph, so a stub is visibly a stub.
 - Each category is an icon and a text label. The icon and label carry the meaning, so the difference between categories does not depend on color.
 - Dates use the page's calendar: English shows Gregorian, Persian Jalali, and Arabic Hijri.
