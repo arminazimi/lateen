@@ -48,6 +48,7 @@ import {
   type VariableForm,
   type VariableInput,
 } from "../components/variables-form/client.ts";
+import { commandsOf } from "../components/terminal/client.ts";
 
 type RenderOptions = {
   readonly lang?: string;
@@ -576,6 +577,150 @@ test("a highlighted token split across spans still changes as a whole", () => {
   const root = new FakeRoot([], [code]);
   applyValue(root, "api_key", "SECRET");
   assert.equal(code.textContent, "SECRET");
+});
+
+test("text identical to a value the block showed before is never rewritten", () => {
+  const code = new FakeElement({ "data-placeholders": '[{"name":"api_key"}]' }, [
+    new FakeText("KEY={{api_key}}; YOUR_KEY above is only an example"),
+  ]);
+  const root = new FakeRoot([], [code]);
+
+  applyValue(root, "api_key", "YOUR_KEY");
+  assert.equal(code.textContent, "KEY=YOUR_KEY; YOUR_KEY above is only an example");
+  applyValue(root, "api_key", "LIVE_KEY");
+  assert.equal(code.textContent, "KEY=LIVE_KEY; YOUR_KEY above is only an example");
+});
+
+test("repeated, adjacent, and split-span placeholders all follow the same variable", () => {
+  const code = new FakeElement({ "data-placeholders": '[{"name":"host"}]' }, [
+    new FakeText("{{host}}"),
+    new FakeText("{{ho"),
+    new FakeText("st}}/{{host}}"),
+  ]);
+  const root = new FakeRoot([], [code]);
+
+  applyValue(root, "host", "https://one.example.com");
+  assert.equal(code.textContent, "https://one.example.comhttps://one.example.com/https://one.example.com");
+  applyValue(root, "host", "https://two.example.com");
+  assert.equal(code.textContent, "https://two.example.comhttps://two.example.com/https://two.example.com");
+});
+
+test("a highlighted token round-trips without flattening the spans around it", () => {
+  const token = new FakeElement({ class: "token" }, [new FakeText("{{api"), new FakeText("_key}}")]);
+  const code = new FakeElement({ "data-placeholders": '[{"name":"api_key"}]' }, [
+    new FakeElement({ class: "line" }, [new FakeText("curl -H "), token, new FakeText(" /v1")]),
+  ]);
+  const root = new FakeRoot([], [code]);
+
+  applyValue(root, "api_key", "SECRET");
+  assert.equal(code.textContent, "curl -H SECRET /v1");
+  assert.equal(code.childNodes.length, 1);
+  assert.equal(token.childNodes.length, 2, "the highlighted token keeps both of its spans");
+
+  applyValue(root, "api_key", "OTHER");
+  assert.equal(code.textContent, "curl -H OTHER /v1");
+  assert.equal(token.childNodes.length, 2);
+});
+
+test("an escaped placeholder stays literal while the real one follows the value", () => {
+  const code = new FakeElement({ "data-placeholders": '[{"name":"api_key"}]' }, [
+    new FakeText("echo \\{{api_key}} {{api_key}}"),
+  ]);
+  const root = new FakeRoot([], [code]);
+
+  applyValue(root, "api_key", "SECRET");
+  assert.equal(code.textContent, "echo \\{{api_key}} SECRET");
+  applyValue(root, "api_key", "OTHER");
+  assert.equal(code.textContent, "echo \\{{api_key}} OTHER");
+});
+
+test("an even run of backslashes leaves a variable the island follows", () => {
+  const code = new FakeElement({ "data-placeholders": '[{"name":"api_key"}]' }, [
+    new FakeText("echo \\\\{{api_key}}"),
+  ]);
+  const root = new FakeRoot([], [code]);
+  applyValue(root, "api_key", "SECRET");
+  assert.equal(code.textContent, "echo \\\\SECRET");
+});
+
+test("swapped values never cascade into each other", () => {
+  const code = new FakeElement({ "data-placeholders": '[{"name":"a"},{"name":"b"}]' }, [
+    new FakeText("a={{a}} b={{b}}"),
+  ]);
+  const root = new FakeRoot([], [code]);
+
+  applyValue(root, "a", "two");
+  applyValue(root, "b", "one");
+  assert.equal(code.textContent, "a=two b=one");
+  applyValue(root, "a", "one");
+  applyValue(root, "b", "two");
+  assert.equal(code.textContent, "a=one b=two");
+});
+
+test("a value that looks like another placeholder is inserted once, not expanded", () => {
+  const code = new FakeElement({ "data-placeholders": '[{"name":"a"},{"name":"b"}]' }, [
+    new FakeText("a={{a}} b={{b}}"),
+  ]);
+  const root = new FakeRoot([], [code]);
+
+  applyValue(root, "a", "{{b}}");
+  applyValue(root, "b", "N");
+  assert.equal(code.textContent, "a={{b}} b=N");
+});
+
+test("a token the author spaced inside the braces still matches its variable", () => {
+  const code = new FakeElement({ "data-placeholders": '[{"name":"api_key"},{"name":"host"}]' }, [
+    new FakeText("curl -H 'Bearer {{ api_key }}' {{host}}/v1"),
+  ]);
+  const root = new FakeRoot([], [code]);
+
+  applyValue(root, "api_key", "SECRET");
+  assert.equal(code.textContent, "curl -H 'Bearer SECRET' {{host}}/v1");
+  applyValue(root, "host", "https://api.example.com");
+  assert.equal(code.textContent, "curl -H 'Bearer SECRET' https://api.example.com/v1");
+});
+
+test("two forms on one page follow their own variables without touching the other", () => {
+  const code = new FakeElement({ "data-placeholders": '[{"name":"a"},{"name":"b"}]' }, [
+    new FakeText("{{a}}/{{b}}"),
+  ]);
+  const root = new FakeRoot([], [code]);
+
+  activate(root, new FakeForm([new FakeInput("a", "one")]));
+  activate(root, new FakeForm([new FakeInput("b", "two")]));
+  assert.equal(code.textContent, "one/two");
+
+  const b = new FakeInput("b", "three");
+  activate(root, new FakeForm([b]));
+  assert.equal(code.textContent, "one/three");
+  b.type("four");
+  assert.equal(code.textContent, "one/four");
+});
+
+test("the copied commands are the command text the block now shows", () => {
+  const text = new FakeElement({ class: "terminal-text" }, [new FakeText("curl {{host}}/v1")]);
+  const line = new FakeElement({ class: "terminal-command" }, [text]);
+  const code = new FakeElement({ "data-placeholders": '[{"name":"host"}]' }, [line]);
+  const root = new FakeRoot([], [code]);
+
+  applyValue(root, "host", "https://sandbox.example.com");
+  assert.equal(text.textContent, "curl https://sandbox.example.com/v1");
+  assert.equal(commandsOf({ querySelectorAll: () => [text] }), text.textContent);
+});
+
+test("reset puts the authored defaults back into a highlighted example", () => {
+  const code = new FakeElement({ "data-placeholders": '[{"name":"api_key"}]' }, [
+    new FakeElement({ class: "line" }, [new FakeText("Bearer "), new FakeText("{{api_key}}")]),
+  ]);
+  const root = new FakeRoot([], [code]);
+  const api = new FakeInput("api_key", "YOUR_KEY");
+  const reset = new FakeReset();
+
+  activate(root, new FakeForm([api], reset));
+  api.type("LIVE_KEY");
+  assert.equal(code.textContent, "Bearer LIVE_KEY");
+  reset.click();
+  assert.equal(code.textContent, "Bearer YOUR_KEY");
 });
 
 test("activate wires each input and starts from the form's defaults", () => {

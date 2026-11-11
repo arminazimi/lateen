@@ -108,31 +108,120 @@ export function replaceIn(node: PlaceholderNode, from: string, to: string): bool
   return changed;
 }
 
-/** A code block whose token straddles highlighted spans still changes as a whole. */
-function replacePlaceholder(element: PlaceholderNode, name: string, value: string, previous?: string): void {
-  const from = tokenOf(name);
-  if (replaceIn(element, from, value)) return;
-  // After the first edit the token is gone; the block shows the value it was given, so replace that.
-  // shortcut: a block that shows the same text for a reason of its own follows this variable too; give
-  // the variables distinct values, or upgrade this when a block can hold its template.
-  if (previous !== undefined && previous !== "" && replaceIn(element, previous, value)) return;
-  const text = element.textContent ?? "";
-  if (text.includes(from)) element.textContent = text.split(from).join(value);
+/** A placeholder the engine recorded: `{{name}}`, with optional spaces the author may have written. */
+const PLACEHOLDER = /\{\{[ \t]*([A-Za-z0-9_.-]+)[ \t]*\}\}/g;
+
+/** A code block as the author wrote it: its text nodes and the joined text they hold. */
+interface BlockTemplate {
+  readonly nodes: PlaceholderNode[];
+  /** Where each text node ends in the joined text, so an edit can be written back span by span. */
+  readonly ends: number[];
+  readonly text: string;
 }
 
-/** What each root last put into a block per variable, so a second edit replaces the value on screen. */
+/**
+ * The authored text of each block, kept on the first edit. Every later edit starts from this template, so a
+ * value that equals another variable's token, or the text the block showed a moment ago, is never replaced.
+ */
+const templates = new WeakMap<PlaceholderNode, BlockTemplate>();
+
+/** The text nodes inside a block, in document order. */
+function textNodesOf(node: PlaceholderNode, found: PlaceholderNode[] = []): PlaceholderNode[] {
+  if (node.nodeType === 3) {
+    found.push(node);
+    return found;
+  }
+  const children = node.childNodes;
+  if (children !== undefined) for (const child of children) textNodesOf(child, found);
+  return found;
+}
+
+/** The block's authored text, captured before the first edit and reused after it. */
+function templateOf(block: PlaceholderNode): BlockTemplate {
+  const cached = templates.get(block);
+  if (cached !== undefined) return cached;
+  const nodes = textNodesOf(block);
+  const ends: number[] = [];
+  let at = 0;
+  for (const node of nodes) {
+    at += (node.textContent ?? "").length;
+    ends.push(at);
+  }
+  const template = { nodes, ends, text: nodes.map((node) => node.textContent ?? "").join("") };
+  templates.set(block, template);
+  return template;
+}
+
+/** One token to replace in the template and the text that takes its place. */
+interface Edit {
+  readonly start: number;
+  readonly end: number;
+  readonly text: string;
+}
+
+/** The edits for the values this block knows, skipping an escaped `\{{name}}` the author meant literally. */
+function editsIn(template: string, values: ReadonlyMap<string, string>): Edit[] {
+  const edits: Edit[] = [];
+  for (const match of template.matchAll(PLACEHOLDER)) {
+    const start = match.index ?? 0;
+    let backslashes = 0;
+    for (let i = start - 1; i >= 0 && template.charAt(i) === "\\"; i -= 1) backslashes += 1;
+    if (backslashes % 2 === 1) continue;
+    const value = values.get(match[1] ?? "");
+    if (value === undefined) continue;
+    edits.push({ start, end: start + match[0].length, text: value });
+  }
+  return edits;
+}
+
+/** Where template offset `at` lands once the edits are applied, so each text node keeps its own slice. */
+function offsetAfter(at: number, edits: readonly Edit[]): number {
+  let out = at;
+  for (const edit of edits) {
+    if (edit.start >= at) break;
+    const before = Math.min(at, edit.end) - edit.start;
+    out += Math.min(before, edit.text.length) - before;
+  }
+  return out;
+}
+
+/**
+ * Writes every known variable's value into the block it was authored with. A token split across highlighted
+ * spans is found in the joined text and its replacement is spread back over the same nodes, so the rest of the
+ * markup keeps its shape. Tokens are matched once against the template, so a value never cascades into another.
+ */
+function fillTemplate(block: PlaceholderNode, values: ReadonlyMap<string, string>): void {
+  const template = templateOf(block);
+  const edits = editsIn(template.text, values);
+  if (edits.length === 0) return;
+  let out = "";
+  let cursor = 0;
+  for (const edit of edits) {
+    out += template.text.slice(cursor, edit.start) + edit.text;
+    cursor = edit.end;
+  }
+  out += template.text.slice(cursor);
+  for (const [index, node] of template.nodes.entries()) {
+    const from = index === 0 ? 0 : offsetAfter(template.ends[index - 1] ?? 0, edits);
+    const to = index === template.nodes.length - 1 ? out.length : offsetAfter(template.ends[index] ?? 0, edits);
+    node.textContent = out.slice(from, to);
+  }
+}
+
+/** What each root last put into its blocks per variable, so a later edit can be rendered from the template. */
 const appliedValues = new WeakMap<PlaceholderRoot, Map<string, string>>();
 
 /**
  * Writes `value` into every placeholder for `name` under `root`: inline code spans, and code blocks and
  * terminal sessions that recorded the name in `data-placeholders`. Other variables and escaped placeholders
- * are left alone, and a repeat edit replaces the value the block already shows. A terminal's copy button
- * reads its command text from the page when it is clicked, so the copied commands follow this change too.
+ * are left alone, and each block is rendered from the text the author wrote, so a second edit replaces only
+ * the tokens and never a value it showed before. A terminal's copy button reads its command text from the
+ * page when it is clicked, so the copied commands follow this change too.
  */
 export function applyValue(root: PlaceholderRoot, name: string, value: string): void {
   if (name === "") return;
   const applied = appliedValues.get(root) ?? new Map<string, string>();
-  const previous = applied.get(name);
+  applied.set(name, value);
   appliedValues.set(root, applied);
 
   for (const span of root.querySelectorAll(INLINE_SELECTOR)) {
@@ -140,9 +229,8 @@ export function applyValue(root: PlaceholderRoot, name: string, value: string): 
   }
   for (const block of root.querySelectorAll(BLOCK_SELECTOR)) {
     if (!namesOf(block.getAttribute("data-placeholders")).includes(name)) continue;
-    replacePlaceholder(block, name, value, previous);
+    fillTemplate(block, applied);
   }
-  applied.set(name, value);
 }
 
 /**

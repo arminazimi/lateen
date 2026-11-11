@@ -15,8 +15,10 @@ form and the page are readable before any script runs.
 - `style.css`: tokens only and logical properties only, so dark mode and right-to-left pages follow.
 - `client.ts`: the island. Typing in an input copies its value into that variable's placeholders on the
   page; each default is applied once on load; a change marks the recorded output that depends on it
-  stale; and the reset button puts every declared default back. Values stay in the browser: no cookie,
-  no storage, no request, and no command runs.
+  stale; and the reset button puts every declared default back. Code blocks and terminals are rendered
+  from the text the author wrote, so an unrelated literal that happens to equal a value is never
+  rewritten, a token split across highlighted spans still changes as a whole, and escaped placeholders
+  stay literal. Values stay in the browser: no cookie, no storage, no request, and no command runs.
 - `test/component-variables-form.test.ts`: labels, defaults, the empty case, the data fallback, every
   language, escaping, input types, the reset button, validation, stale output, the island's placeholder
   updates, and the stylesheet rules.
@@ -65,6 +67,10 @@ site data are used. An empty list renders nothing, as does a page with no declar
 - The inline placeholders the engine writes (`<span class="placeholder" data-var="name">`), code blocks
   that carry `data-placeholders`, and a terminal's session all follow the input. A terminal's copy button
   reads the command text from the page when it is clicked, so it copies the values on screen.
+- Each block and session keeps the text the author wrote, and every edit is rendered from that text. A
+  token split across highlighted spans is replaced as a whole, repeated tokens all follow the value, and
+  unrelated text that happens to equal a default or an earlier value is never rewritten. An escaped
+  `\{{name}}` stays literal, and swapping two values cannot cascade into the other variable.
 - A recorded output block that names the variable in `data-output-deps` is marked stale instead of being
   rewritten: the text is what a command printed once, and only running the command again can change it.
   Its note says so and its edge turns to the warning color.
