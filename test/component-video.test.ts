@@ -7,17 +7,20 @@ import { renderToString } from "preact-render-to-string";
 import type { ComponentProps } from "@velella/mizzen/contracts";
 import video, {
   BOX_CLASS,
+  CAPTIONS_CLASS,
   DIAGNOSTIC_CLASS,
   FRAME_CLASS,
   IMAGE_CLASS,
   LINK_CLASS,
   PLAY_CLASS,
   POSTER_CLASS,
+  TRANSCRIPT_BODY_CLASS,
+  TRANSCRIPT_CLASS,
   directive,
+  mediaHref,
   posterSrc,
   VIDEO_CLASS,
   type VideoProps,
-  youtubePoster,
 } from "../components/video/index.ts";
 import { httpsHref, providerOf } from "../components/embed/index.ts";
 import {
@@ -42,10 +45,10 @@ const TITLE = "Big Buck Bunny";
 const WATCH = "https://www.youtube.com/watch?v=aqz-KE-bpKQ";
 const EMBED = "https://www.youtube-nocookie.com/embed/aqz-KE-bpKQ";
 
-function render(props: VideoProps, lang = "en"): string {
+function render(props: VideoProps, lang = "en", html = ""): string {
   const input = {
     props,
-    html: "",
+    html,
     page: { lang },
     site: {},
   } as unknown as ComponentProps<VideoProps>;
@@ -99,10 +102,11 @@ function fakeFrame(): VideoFrame {
   };
 }
 
-function fakeEnv(created: VideoFrame[]): VideoEnv {
+function fakeEnv(created: VideoFrame[], onFocus?: () => void): VideoEnv {
   return {
     createFrame() {
       const frame = fakeFrame();
+      if (onFocus !== undefined) frame.focus = onFocus;
       created.push(frame);
       return frame;
     },
@@ -114,7 +118,7 @@ test("the directive is video and the default export is a component", () => {
   assert.equal(typeof video, "function");
 });
 
-test("renders a box with a poster, a hidden play button, and a text link to the provider", () => {
+test("a default YouTube video requests nothing remote: no thumbnail, image, track, or frame", () => {
   const html = render({ src: WATCH, title: TITLE });
 
   assert.match(html, new RegExp(`^<div class="${VIDEO_CLASS}"`));
@@ -122,7 +126,6 @@ test("renders a box with a poster, a hidden play button, and a text link to the 
   assert.match(html, /data-title="Big Buck Bunny"/);
   assert.match(html, new RegExp(`<div class="${BOX_CLASS}"`));
   assert.match(html, new RegExp(`<div class="${POSTER_CLASS}"`));
-  assert.match(html, new RegExp(`<img class="${IMAGE_CLASS}" src="https://i.ytimg.com/vi/aqz-KE-bpKQ/hqdefault.jpg" alt[ >]`));
   assert.match(html, new RegExp(`<button type="button" class="${PLAY_CLASS}" hidden`));
   assert.match(html, /data-video-play="true"/);
   assert.match(html, /aria-label="Play video: Big Buck Bunny"/);
@@ -130,7 +133,11 @@ test("renders a box with a poster, a hidden play button, and a text link to the 
     html.includes(`<a class="${LINK_CLASS}" href="${WATCH}" target="_blank" rel="noopener noreferrer">Watch on YouTube</a>`),
     html,
   );
-  assert.doesNotMatch(html, /<iframe/);
+
+  // The embed address lives only in a data attribute; no element loads it before consent.
+  assert.doesNotMatch(html, /i\.ytimg\.com|ytimg/);
+  assert.doesNotMatch(html, /<(?:img|iframe|track|source|video|link|script)\b/);
+  assert.doesNotMatch(html, /\ssrc=/);
 });
 
 test("the provider link sits under the box, so it stays when the player loads or fails", () => {
@@ -173,16 +180,31 @@ test("the title is trimmed before it names the player and the button", () => {
   assert.match(html, /aria-label="Play video: Demo"/);
 });
 
-test("a poster is an https address or a root-relative path; an explicit poster wins", () => {
-  assert.equal(posterSrc("https://cdn.example/poster.jpg"), "https://cdn.example/poster.jpg");
+test("a poster must be a local root-relative path; an explicit local poster renders", () => {
   assert.equal(posterSrc("/images/poster.jpg"), "/images/poster.jpg");
+  assert.equal(posterSrc("  /images/poster.jpg  "), "/images/poster.jpg");
+  assert.equal(posterSrc("https://cdn.example/poster.jpg"), undefined);
   assert.equal(posterSrc("http://cdn.example/poster.jpg"), undefined);
   assert.equal(posterSrc("javascript:alert(1)"), undefined);
   assert.equal(posterSrc("//cdn.example/poster.jpg"), undefined);
+  assert.equal(posterSrc("/\\cdn.example/poster.jpg"), undefined);
+  assert.equal(posterSrc("\\\\cdn.example/poster.jpg"), undefined);
+  assert.equal(posterSrc("/a\\b.jpg"), undefined);
+  assert.equal(posterSrc("/a b.jpg"), undefined);
+  assert.equal(posterSrc(""), undefined);
+  assert.equal(posterSrc(undefined), undefined);
 
-  const html = render({ src: WATCH, title: TITLE, poster: "https://cdn.example/poster.jpg" });
-  assert.match(html, /src="https:\/\/cdn.example\/poster.jpg"/);
+  const html = render({ src: WATCH, title: TITLE, poster: "/images/poster.jpg" });
+  assert.match(html, new RegExp(`<img class="${IMAGE_CLASS}" src="/images/poster.jpg" alt[ >]`));
   assert.doesNotMatch(html, /i.ytimg.com/);
+});
+
+test("a remote poster is rejected, so no third party is asked before consent", () => {
+  for (const poster of ["https://cdn.example/poster.jpg", "http://cdn.example/poster.jpg", "//cdn.example/p.jpg"]) {
+    const html = render({ src: WATCH, title: TITLE, poster });
+    assert.doesNotMatch(html, /<img/);
+    assert.doesNotMatch(html, /cdn\.example/);
+  }
 });
 
 test("a non-youtube source without a poster has no image, only the surface", () => {
@@ -196,7 +218,7 @@ test("youtube links normalise to the privacy host and keep the watch address for
     const html = render({ src, title: TITLE });
     assert.match(html, new RegExp(`data-embed="${EMBED}"`));
     assert.ok(httpsHref(src) === src, src);
-    assert.equal(youtubePoster(EMBED), "https://i.ytimg.com/vi/aqz-KE-bpKQ/hqdefault.jpg");
+    assert.doesNotMatch(html, /<img/);
   }
   assert.equal(render({ src: "https://www.youtube.com/@channel", title: TITLE }), "");
 });
@@ -208,15 +230,129 @@ test("providerOf names the known providers and falls back to the hostname", () =
   assert.equal(providerOf("https://www.example.com/v/1"), "example.com");
 });
 
-test("the play button is revealed when the island runs", () => {
-  const videoRoot = new FakeElement({ embed: EMBED, title: TITLE });
-  const button = new FakeElement({}, true);
-  activate(videoRoot, button, fakeEnv([]));
-  assert.equal(button.hidden, false);
+test("captions are a static labelled link to a safe https or local file", () => {
+  assert.equal(mediaHref("/media/captions.vtt"), "/media/captions.vtt");
+  assert.equal(mediaHref("https://cdn.example/captions.vtt"), "https://cdn.example/captions.vtt");
+
+  const local = render({
+    src: WATCH,
+    title: TITLE,
+    captions: "/media/captions.vtt",
+    captions_label: "English captions",
+  });
+  assert.match(
+    local,
+    new RegExp(
+      `<p class="${CAPTIONS_CLASS}" data-video-captions="true"><a href="/media/captions.vtt" rel="noopener">English captions</a></p>`,
+    ),
+  );
+  assert.doesNotMatch(local, /<iframe/);
+
+  const remote = render({
+    src: WATCH,
+    title: TITLE,
+    captions: "https://cdn.example/captions.vtt",
+    captions_label: "English captions",
+  });
+  assert.match(remote, /href="https:\/\/cdn\.example\/captions\.vtt"/);
 });
 
-test("a click inserts the privacy iframe into the box, fills it, and hides the poster", () => {
+test("unsafe captions URLs and a caption without an authored label are rejected", () => {
+  for (const captions of [
+    "http://cdn.example/captions.vtt",
+    "javascript:alert(1)",
+    "data:text/vtt,WEBVTT",
+    "//cdn.example/captions.vtt",
+    "/\\cdn.example/captions.vtt",
+  ]) {
+    const html = render({ src: WATCH, title: TITLE, captions, captions_label: "Captions" });
+    assert.doesNotMatch(html, /data-video-captions/);
+    assert.doesNotMatch(html, /href="(?:javascript|data|http:)/);
+  }
+  assert.doesNotMatch(render({ src: WATCH, title: TITLE, captions: "/c.vtt" }), /data-video-captions/);
+  assert.doesNotMatch(render({ src: WATCH, title: TITLE, captions: "/c.vtt", captions_label: "  " }), /data-video-captions/);
+});
+
+test("the directive body is a static transcript disclosure labelled by the author", () => {
+  const html = render(
+    { src: WATCH, title: TITLE, transcript_label: "Transcript" },
+    "en",
+    "<p>The bunny wakes up.</p><p>Then he leaves.</p>",
+  );
+
+  assert.match(
+    html,
+    new RegExp(
+      `<details class="${TRANSCRIPT_CLASS}" data-video-transcript="true"><summary>Transcript</summary><div class="${TRANSCRIPT_BODY_CLASS}"><p>The bunny wakes up.</p><p>Then he leaves.</p></div></details>`,
+    ),
+  );
+  assert.match(html, /Watch on YouTube/);
+  assert.doesNotMatch(html, /<iframe|<script/);
+});
+
+test("a transcript without an authored label is shown plainly, with no invented text", () => {
+  const html = render({ src: WATCH, title: TITLE }, "en", "<p>Inline transcript.</p>");
+  assert.match(
+    html,
+    new RegExp(`<div class="${TRANSCRIPT_CLASS}" data-video-transcript="true"><div class="${TRANSCRIPT_BODY_CLASS}"><p>Inline transcript.</p></div></div>`),
+  );
+  assert.doesNotMatch(html, /<details|<summary/);
+});
+
+test("an external transcript is a static labelled link; the inline body wins when both exist", () => {
+  const linked = render({
+    src: WATCH,
+    title: TITLE,
+    transcript: "https://example.com/transcript.html",
+    transcript_label: "Read the transcript",
+  });
+  assert.match(
+    linked,
+    new RegExp(
+      `<p class="${TRANSCRIPT_CLASS}" data-video-transcript="true"><a href="https://example.com/transcript.html" rel="noopener">Read the transcript</a></p>`,
+    ),
+  );
+
+  const inline = render(
+    { src: WATCH, title: TITLE, transcript: "https://example.com/transcript.html", transcript_label: "Transcript" },
+    "en",
+    "<p>Inline wins.</p>",
+  );
+  assert.match(inline, /<summary>Transcript<\/summary>/);
+  assert.match(inline, /Inline wins/);
+  assert.doesNotMatch(inline, /example\.com\/transcript/);
+});
+
+test("unsafe transcript URLs are rejected", () => {
+  for (const transcript of [
+    "http://example.com/t.html",
+    "javascript:alert(1)",
+    "data:text/html,hi",
+    "//example.com/t.html",
+    "/\\example.com/t.html",
+  ]) {
+    const html = render({ src: WATCH, title: TITLE, transcript, transcript_label: "Transcript" });
+    assert.doesNotMatch(html, /data-video-transcript/);
+    assert.doesNotMatch(html, /href="(?:javascript|data|http:)/);
+  }
+  assert.doesNotMatch(
+    render({ src: WATCH, title: TITLE, transcript: "https://example.com/t.html" }),
+    /data-video-transcript/,
+  );
+});
+
+test("the play button is revealed when the island runs, without a request", () => {
   const created: VideoFrame[] = [];
+  const videoRoot = new FakeElement({ embed: EMBED, title: TITLE });
+  const button = new FakeElement({}, true);
+  activate(videoRoot, button, fakeEnv(created));
+  assert.equal(button.hidden, false);
+  assert.deepEqual(created, []);
+});
+
+test("a click inserts the privacy iframe into the box, fills it, focuses it, and hides the poster", () => {
+  const created: VideoFrame[] = [];
+  let focused = 0;
   const videoRoot = new FakeElement({ embed: EMBED, title: TITLE });
   const box = new FakeElement();
   const button = new FakeElement({}, true);
@@ -225,7 +361,7 @@ test("a click inserts the privacy iframe into the box, fills it, and hides the p
   box.set(PLAY_SELECTOR, button);
   box.set(POSTER_SELECTOR, poster);
 
-  activate(videoRoot, button, fakeEnv(created));
+  activate(videoRoot, button, fakeEnv(created, () => focused++));
   button.click();
 
   assert.equal(created.length, 1);
@@ -241,20 +377,55 @@ test("a click inserts the privacy iframe into the box, fills it, and hides the p
   assert.deepEqual(videoRoot.children, []);
   assert.equal(poster.hidden, true);
   assert.equal(videoRoot.dataset.loaded, "true");
+  assert.equal(focused, 1);
 });
 
-test("a second click does not load the player twice", () => {
+test("keyboard activation is the button's click, so it loads once and moves focus to the player", () => {
+  const created: VideoFrame[] = [];
+  let focused = 0;
+  const videoRoot = new FakeElement({ embed: EMBED, title: TITLE });
+  const button = new FakeElement({}, true);
+  videoRoot.set(PLAY_SELECTOR, button);
+
+  activate(videoRoot, button, fakeEnv(created, () => focused++));
+  // A native button turns Enter and Space into a click; the island adds no key handler of its own.
+  button.click();
+
+  assert.equal(created.length, 1);
+  assert.equal(focused, 1);
+});
+
+test("a second click, or a second activation, does not load the player twice", () => {
   const created: VideoFrame[] = [];
   const videoRoot = new FakeElement({ embed: EMBED, title: TITLE });
   const button = new FakeElement({}, true);
   videoRoot.set(PLAY_SELECTOR, button);
-  activate(videoRoot, button, fakeEnv(created));
 
+  activate(videoRoot, button, fakeEnv(created));
+  activate(videoRoot, button, fakeEnv(created));
   button.click();
   button.click();
 
   assert.equal(created.length, 1);
   assert.equal(videoRoot.children.length, 1);
+});
+
+test("a failed or blocked player leaves the static provider link untouched", () => {
+  const created: VideoFrame[] = [];
+  const videoRoot = new FakeElement({ embed: EMBED, title: TITLE });
+  const box = new FakeElement();
+  const button = new FakeElement({}, true);
+  videoRoot.set(BOX_SELECTOR, box);
+  box.set(PLAY_SELECTOR, button);
+
+  activate(videoRoot, button, fakeEnv(created));
+  button.click();
+
+  // The island writes only inside the box and the poster; the link is a sibling in static markup.
+  assert.deepEqual(videoRoot.children, []);
+  assert.deepEqual(box.children.length, 1);
+  const html = render({ src: WATCH, title: TITLE });
+  assert.ok(html.includes(`class="${LINK_CLASS}"`));
 });
 
 test("the island refuses a non-https address, so a bad attribute loads nothing", () => {
@@ -289,11 +460,24 @@ test("activateAll reveals the button in every video on the page", () => {
   assert.equal(secondButton.hidden, false);
 });
 
-test("the title and the link text are escaped", () => {
-  const html = render({ src: WATCH, title: '"><script>alert(1)</script>' });
+test("the title, the labels, and the link text are escaped", () => {
+  const html = render(
+    {
+      src: WATCH,
+      title: '"><script>alert(1)</script>',
+      captions: "/c.vtt",
+      captions_label: "<b>Captions</b>",
+      transcript_label: "<i>Transcript</i>",
+    },
+    "en",
+    "<p>Authored body</p>",
+  );
   assert.doesNotMatch(html, /<script>/);
+  assert.doesNotMatch(html, /<b>|<i>/);
   assert.match(html, /&lt;script>alert\(1\)&lt;\/script>/);
   assert.match(html, /data-title="&quot;>&lt;script>alert\(1\)&lt;\/script>"/);
+  assert.match(html, /&lt;b>Captions&lt;\/b>/);
+  assert.match(html, /&lt;i>Transcript&lt;\/i>/);
 });
 
 test("the Persian and Arabic diagnostic is translated", () => {
@@ -318,10 +502,12 @@ test("style.css uses logical properties only", () => {
   assert.doesNotMatch(css, /(?<![\w-])(min-|max-)?(width|height)\s*:/);
 });
 
-test("style.css keeps the box at 16:9, fills it with the player, and keeps the link under it", () => {
+test("style.css keeps the box at 16:9, fills it with the player, and keeps the alternatives under it", () => {
   assert.match(css, /\.video\s*\{[^}]*max-inline-size:\s*100%/);
   assert.match(css, /\.video-box\s*\{[^}]*aspect-ratio:\s*16\s*\/\s*9/);
   assert.match(css, /\.video-frame\s*\{[^}]*position:\s*absolute/);
   assert.match(css, /\.video-play\[hidden\][^{]*\{[^}]*display:\s*none/);
   assert.doesNotMatch(css, /\.video-link\s*\{[^}]*position:\s*absolute/);
+  assert.doesNotMatch(css, /\.video-(?:captions|transcript)\s*\{[^}]*position:\s*absolute/);
+  assert.match(css, /\.video-transcript > summary\s*\{[^}]*cursor:\s*pointer/);
 });
