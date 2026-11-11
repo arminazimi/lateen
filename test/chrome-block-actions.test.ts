@@ -8,13 +8,14 @@ import blockActions from "../chrome/block-actions/index.ts";
 import {
   activate,
   blockId,
+  cleanText,
   copy,
   isNested,
   MAX_TEXT,
   parseSpan,
   promptFor,
+  promptText,
   RESET_MS,
-  summarizeText,
   topLevel,
   type ActionButton,
   type ActionTemplate,
@@ -159,21 +160,45 @@ test("parseSpan rejects a missing part, zero, and an end before the start", () =
   assert.equal(parseSpan("docs/a.md:4:5-4:2"), undefined);
 });
 
-test("summarizeText keeps the prompt on one line and truncates a long block", () => {
-  assert.equal(summarizeText("  Run\nthe\tbuild.  "), "Run the build.");
-  assert.equal(summarizeText("short", 20), "short");
-
-  const long = "word ".repeat(100);
-  const cut = summarizeText(long, MAX_TEXT);
-  assert.ok(cut.length <= MAX_TEXT);
-  assert.ok(cut.endsWith("…"));
+test("cleanText keeps line structure and drops characters that could forge prompt fields", () => {
+  assert.equal(cleanText("  Run\r\nthe\tbuild.  "), "Run\nthe\tbuild.");
+  assert.equal(cleanText("\u001b[31mred\u202e\u0000\u000b\u009b tail"), "[31mred tail");
+  assert.equal(cleanText("one\u2028two\u2029three"), "one\ntwo\nthree");
 });
 
-test("promptFor fills the source and text once and normalizes whitespace", () => {
-  const prompt = promptFor('Edit {source}. Current text: "{text}". Change:', "a.md:1:1-1:4", "The {source} block");
+test("promptText carries a normal multiline block longer than the old limit completely", () => {
+  const multiline = `# Install\n\n${"Run the build and check the output. ".repeat(10)}\n\nDone.`;
+  assert.ok(multiline.length > 160);
+  assert.ok(multiline.length < MAX_TEXT);
 
-  assert.equal(prompt, 'Edit a.md:1:1-1:4. Current text: "The {source} block". Change:');
-  assert.doesNotMatch(prompt, /\n/);
+  const carried = promptText(multiline);
+  assert.equal(carried.text, multiline);
+  assert.equal(carried.omitted, 0);
+  assert.equal(carried.total, [...multiline].length);
+  assert.doesNotMatch(carried.text, /truncated/);
+});
+
+test("promptText bounds an exceptional block at a code-point boundary and says what it left out", () => {
+  const long = "😀".repeat(12);
+  const carried = promptText(long, 5);
+
+  assert.equal([...carried.text].slice(0, 5).join(""), "😀".repeat(5));
+  assert.equal(carried.total, 12);
+  assert.equal(carried.omitted, 7);
+  assert.match(carried.text, /\[Lateen: text truncated, 7 of 12 characters omitted\]$/);
+  assert.doesNotMatch(carried.text, /[\ud800-\udbff](?![\udc00-\udfff])/);
+});
+
+test("promptText returns short text whole and trims only the edges", () => {
+  assert.deepEqual(promptText("  short  ", 20), { text: "short", total: 5, omitted: 0 });
+  assert.deepEqual(promptText("", 20), { text: "", total: 0, omitted: 0 });
+});
+
+test("promptFor fills the source and text once, keeping lines and literal placeholders", () => {
+  const prompt = promptFor('Edit {source}. Current text: "{text}". Change:', "a.md:1:1-1:4", 'The {source} block\nwith $& {copied}');
+
+  assert.equal(prompt, 'Edit a.md:1:1-1:4. Current text: "The {source} block\nwith $& {copied}". Change:');
+  assert.match(prompt, /\n/);
 });
 
 /** A fake block with an optional parent chain, as the island's outermost check reads it. */
@@ -293,6 +318,11 @@ function env(options: { clipboard?: Clipboard; blocks?: BlockElement[]; template
   };
 }
 
+/** Lets queued microtasks and promise callbacks run. */
+function tick(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
 test("topLevel keeps only sourced blocks that are not nested in another sourced block", () => {
   const outer = block("a.md:1:1-3:4", "outer", block(null));
   const child = block("a.md:2:1-2:4", "inner", outer);
@@ -314,7 +344,7 @@ test("without a clipboard nothing is stamped and the template button stays hidde
   assert.deepEqual(first.appended, []);
 });
 
-test("activate stamps one revealed button per top-level block with its span and trimmed text", () => {
+test("activate stamps one revealed button per top-level block with its span and complete text", () => {
   const tpl = template();
   const outer = block("a.md:1:1-3:12", "  Install\n  the tool ");
   const child = block("a.md:2:1-2:4", "inside", outer);
@@ -330,10 +360,31 @@ test("activate stamps one revealed button per top-level block with its span and 
   assert.equal(stamped.hidden, false);
   assert.equal(
     stamped.dataset.prompt,
-    'Edit a.md:1:1-3:12. Current text: "Install the tool". Change:',
+    'Edit a.md:1:1-3:12. Current text: "Install\n  the tool". Change:',
   );
+  assert.equal(stamped.dataset.text, "  Install\n  the tool ");
+  assert.equal(stamped.dataset.textTotal, "18");
+  assert.equal(stamped.dataset.textOmitted, "0");
   assert.equal(stamped.dataset.copied, "Copied");
   assert.equal(stamped.dataset.copyFailed, "Press Ctrl+C");
+});
+
+test("a long multiline block reaches the prompt whole, and an exceptional one is marked incomplete", () => {
+  const body = `Intro line.\n\n${"Detail sentence. ".repeat(20)}\n\nEnd line.`;
+  const long = block("a.md:1:1-40:1", body);
+  const huge = block("b.md:1:1-2:1", `${"x".repeat(MAX_TEXT)}tail`);
+  const world = env({ blocks: [long, huge] });
+
+  activate(world);
+
+  const carried = long.appended[0]!;
+  assert.equal(carried.dataset.prompt, `Edit a.md:1:1-40:1. Current text: "${body}". Change:`);
+  assert.equal(carried.dataset.textOmitted, "0");
+
+  const bounded = huge.appended[0]!;
+  assert.match(bounded.dataset.prompt ?? "", /\[Lateen: text truncated, 4 of 8004 characters omitted\]/);
+  assert.equal(bounded.dataset.textTotal, "8004");
+  assert.equal(bounded.dataset.textOmitted, "4");
 });
 
 test("a code block gets one stable id and its action keeps file, language, source, and exact text", () => {
@@ -368,6 +419,57 @@ test("an existing block id is kept, and a non-code block gets no id of its own",
   assert.equal(prose.appended[0]!.dataset.prompt, 'Edit a.md:3:1-3:8. Current text: "Words.". Change:');
 });
 
+test("duplicate blocks each get one action, but only the first takes the shared id", () => {
+  const first = block("a.md:1:1-1:4", "x", null, "ts");
+  const second = block("a.md:1:1-1:4", "x", null, "ts");
+
+  activate(env({ blocks: [first, second] }));
+
+  assert.equal(first.appended.length, 1);
+  assert.equal(second.appended.length, 1);
+  const id = blockId("a.md:1:1-1:4");
+  assert.equal(first.getAttribute("id"), id);
+  assert.equal(second.getAttribute("id"), null);
+  assert.equal(second.appended[0]!.dataset.blockId, "a.md:1:1-1:4");
+});
+
+test("a localized template keeps its wording, full Unicode text, and literal placeholders", () => {
+  const localized: ActionTemplate = {
+    content: { firstElementChild: button("ویرایش با دستیار") },
+    dataset: {
+      prompt: "فایل {source} را ویرایش کن. متن فعلی: «{text}». تغییر:",
+      copied: "کپی شد",
+      copyFailed: "Ctrl+C را بزنید",
+    },
+  };
+  const text = "سلام {source} 😀\nخط دوم";
+  const first = block("docs/fa.md:1:1-2:4", text, null, "", "block-id");
+
+  activate(env({ template: localized, blocks: [first] }));
+
+  const stamped = first.appended[0]!;
+  assert.equal(
+    stamped.dataset.prompt,
+    "فایل docs/fa.md:1:1-2:4 را ویرایش کن. متن فعلی: «سلام {source} 😀\nخط دوم». تغییر:",
+  );
+  assert.equal(stamped.dataset.text, text);
+  assert.equal(stamped.dataset.textOmitted, "0");
+});
+
+test("control characters in block text cannot forge prompt fields", () => {
+  const text = "before\u001b[2K\r\n{source}: forged\u202e\u0000 after";
+  const first = block("a.md:1:1-2:1", text);
+
+  activate(env({ blocks: [first] }));
+
+  const stamped = first.appended[0]!;
+  assert.doesNotMatch(stamped.dataset.prompt ?? "", /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f\u202a-\u202e]/);
+  assert.equal(
+    stamped.dataset.prompt,
+    'Edit a.md:1:1-2:1. Current text: "before[2K\n{source}: forged after". Change:',
+  );
+});
+
 test("blockId is id-safe, stable, and different for different spans", () => {
   assert.equal(blockId("docs/a.md:3:1-9:12"), "code-docs-a-md-3-1-9-12");
   assert.equal(blockId("C:\\notes\\a.md:2:3"), "code-C-notes-a-md-2-3");
@@ -391,6 +493,59 @@ test("a click writes the prompt and shows the result until the timer restores th
   assert.equal(world.timers[0]!.ms, RESET_MS);
   world.timers[0]!.callback();
   assert.equal(stamped.textContent, "Edit with your agent");
+});
+
+test("rapid clicks write in click order and only the latest result is shown", async () => {
+  const first = block("a.md:1:1-1:4", "First");
+  const second = block("b.md:1:1-1:4", "Second");
+  const wrote: string[] = [];
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const clipboard: Clipboard = {
+    writeText(text: string) {
+      wrote.push(text);
+      return wrote.length === 1 ? gate : Promise.resolve();
+    },
+  };
+  const world = env({ blocks: [first, second], clipboard });
+  activate(world);
+
+  const a = first.appended[0] as ReturnType<typeof button>;
+  const b = second.appended[0] as ReturnType<typeof button>;
+  a.clicks[0]!();
+  b.clicks[0]!();
+  await tick();
+
+  assert.deepEqual(wrote, [a.dataset.prompt]);
+  release();
+  await tick();
+
+  assert.deepEqual(wrote, [a.dataset.prompt, b.dataset.prompt]);
+  assert.equal(a.textContent, "Copied");
+  assert.equal(b.textContent, "Copied");
+});
+
+test("a repeated click ignores an earlier result and shows the latest", async () => {
+  const first = block("a.md:1:1-1:4", "Install");
+  let attempts = 0;
+  const clipboard: Clipboard = {
+    writeText() {
+      attempts += 1;
+      return attempts === 1 ? Promise.reject(new Error("denied")) : Promise.resolve();
+    },
+  };
+  const world = env({ blocks: [first], clipboard });
+  activate(world);
+
+  const stamped = first.appended[0] as ReturnType<typeof button>;
+  stamped.clicks[0]!();
+  stamped.clicks[0]!();
+  await tick();
+
+  assert.equal(stamped.textContent, "Copied");
+  assert.equal(world.timers.length, 1);
 });
 
 test("a refused clipboard reports the failure instead of claiming a copy", async () => {
