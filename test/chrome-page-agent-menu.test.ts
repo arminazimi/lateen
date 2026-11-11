@@ -16,10 +16,10 @@ import {
 
 const pos: SourcePos = { file: "docs/guide/install.md", line: 3, column: 1, endLine: 9, endColumn: 1 };
 
-function siteConfig(options: Readonly<Record<string, unknown>> = {}, url?: string): SiteConfig {
+function siteConfig(options: Readonly<Record<string, unknown>> = {}, url?: string, base = "/example"): SiteConfig {
   return {
     title: "Example",
-    base: "/example",
+    base,
     lang: "en",
     dir: "ltr",
     languages: [],
@@ -58,8 +58,9 @@ function props(
   page: Page = pageWith(),
   options: Readonly<Record<string, unknown>> = {},
   url?: string,
+  base = "/example",
 ): ChromeProps {
-  const site: Site = { config: siteConfig(options, url), pages: [page], nav: {}, data: {} };
+  const site: Site = { config: siteConfig(options, url, base), pages: [page], nav: {}, data: {} };
   return { site, page, trail, pager };
 }
 
@@ -248,6 +249,179 @@ test("a provider with a fixed URL needs no site URL", () => {
   );
 
   assert.match(out, /href="https:\/\/example\.com\/support"/);
+});
+
+/** The href of the single provider the menu rendered. */
+function providerHref(out: string): string {
+  const match = /<a class="page-agent-menu-provider" href="([^"]+)"/.exec(out);
+  assert.ok(match !== null, "expected one provider link");
+  return match[1]!;
+}
+
+test("a configured URL that already carries the base path does not double it", () => {
+  const ask = { pageAgent: { providers: [{ title: "Ask", url: "https://example.com/ask?page={url}&file={markdown}" }] } };
+
+  const deployedUnderBase = html(
+    pageAgentMenu(props(pageWith("/docs/guide/install/"), ask, "https://docs.example.com/docs", "/docs")),
+  );
+  assert.equal(
+    providerHref(deployedUnderBase),
+    `https://example.com/ask?page=${encodeURIComponent("https://docs.example.com/docs/guide/install/")}` +
+      `&file=${encodeURIComponent("https://docs.example.com/docs/guide/install/index.md")}`,
+  );
+
+  const rootBaseWithUrlPath = html(
+    pageAgentMenu(props(pageWith("/guide/install/"), ask, "https://docs.example.com/docs", "")),
+  );
+  assert.equal(
+    providerHref(rootBaseWithUrlPath),
+    `https://example.com/ask?page=${encodeURIComponent("https://docs.example.com/docs/guide/install/")}` +
+      `&file=${encodeURIComponent("https://docs.example.com/docs/guide/install/index.md")}`,
+  );
+});
+
+test("every placeholder takes its page value, encoded once", () => {
+  const page = { ...pageWith(), frontMatter: { title: "Install", version: "1.2.0" } };
+  const out = html(
+    pageAgentMenu(
+      props(
+        page,
+        {
+          pageAgent: {
+            providers: [
+              {
+                title: "Ask",
+                url: "https://example.com/ask?url={url}&markdown={markdown}&title={title}&lang={lang}&source={source}&version={version}",
+              },
+            ],
+          },
+        },
+        "https://docs.example.com",
+      ),
+    ),
+  );
+
+  assert.equal(
+    providerHref(out),
+    `https://example.com/ask?url=${encodeURIComponent("https://docs.example.com/example/guide/install/")}` +
+      `&markdown=${encodeURIComponent("https://docs.example.com/example/guide/install/index.md")}` +
+      "&title=Install&lang=en&source=docs%2Fguide%2Finstall.md&version=1.2.0",
+  );
+});
+
+test("a page that declares no version omits providers that ask for one", () => {
+  const out = html(
+    pageAgentMenu(
+      props(
+        pageWith(),
+        {
+          pageAgent: {
+            providers: [
+              { title: "Versioned", url: "https://example.com/ask?version={version}" },
+              { title: "Support", url: "https://example.com/support" },
+            ],
+          },
+        },
+        "https://docs.example.com",
+      ),
+    ),
+  );
+
+  assert.doesNotMatch(out, /Versioned/);
+  assert.match(out, /href="https:\/\/example\.com\/support"/);
+});
+
+test("providers that need only page context render without a site URL; absolute ones are omitted", () => {
+  const out = html(
+    pageAgentMenu(
+      props(pageWith(), {
+        pageAgent: {
+          providers: [
+            { title: "Context", url: "https://example.com/ask?source={source}&lang={lang}" },
+            { title: "Address", url: "https://example.com/ask?page={url}" },
+          ],
+        },
+      }),
+    ),
+  );
+
+  assert.match(out, /href="https:\/\/example\.com\/ask\?source=docs%2Fguide%2Finstall\.md&lang=en"/);
+  assert.doesNotMatch(out, /Address/);
+});
+
+test("a value that contains braces is copied as text and never expanded as another placeholder", () => {
+  const page = { ...pageWith(), title: "{version}", frontMatter: { title: "{version}", version: "9.9.9" } };
+  const out = html(
+    pageAgentMenu(
+      props(
+        page,
+        { pageAgent: { providers: [{ title: "Ask", url: "https://example.com/ask?title={title}&version={version}" }] } },
+        "https://docs.example.com",
+      ),
+    ),
+  );
+
+  assert.equal(providerHref(out), "https://example.com/ask?title=%7Bversion%7D&version=9.9.9");
+});
+
+test("reserved characters and Unicode titles in addresses and values are encoded once", () => {
+  const page = { ...pageWith("/example/café/install/"), title: "نصب و راه‌اندازی", frontMatter: { title: "نصب و راه‌اندازی" } };
+  const out = html(
+    pageAgentMenu(
+      props(
+        page,
+        { pageAgent: { providers: [{ title: "Ask", url: "https://example.com/ask?page={url}&title={title}" }] } },
+        "https://docs.example.com",
+      ),
+    ),
+  );
+
+  assert.equal(
+    providerHref(out),
+    `https://example.com/ask?page=${encodeURIComponent("https://docs.example.com/example/café/install/")}` +
+      `&title=${encodeURIComponent("نصب و راه‌اندازی")}`,
+  );
+  assert.doesNotMatch(providerHref(out), /%25/);
+});
+
+test("duplicate providers are kept in order", () => {
+  const out = html(
+    pageAgentMenu(
+      props(
+        pageWith(),
+        {
+          pageAgent: {
+            providers: [
+              { title: "Ask", url: "https://example.com/ask" },
+              { title: "Ask", url: "https://example.com/ask" },
+            ],
+          },
+        },
+        "https://docs.example.com",
+      ),
+    ),
+  );
+
+  const hrefs = [...out.matchAll(/<a class="page-agent-menu-provider" href="([^"]+)"/g)].map((match) => match[1]!);
+  assert.deepEqual(hrefs, ["https://example.com/ask", "https://example.com/ask"]);
+});
+
+test("the menu stays a keyboard-operable disclosure and keeps no-JS and external-link protections", () => {
+  const out = html(
+    pageAgentMenu(
+      props(
+        pageWith(),
+        { pageAgent: { providers: [{ title: "Ask", url: "https://example.com/ask?page={url}" }] } },
+        "https://docs.example.com",
+      ),
+    ),
+  );
+
+  assert.match(out, /^<details class="page-agent-menu" data-page-agent-menu><summary class="page-agent-menu-summary">/);
+  assert.match(out, /<button type="button" class="page-agent-menu-copy" hidden data-page-agent-copy/);
+  assert.match(out, /<a class="page-agent-menu-view" href="\/example\/guide\/install\/index\.md">/);
+  assert.match(out, /<a class="page-agent-menu-provider" href="[^"]+" target="_blank" rel="noopener">Ask<\/a>/);
+  assert.doesNotMatch(out, /aria-keyshortcuts/, "the page keeps one m shortcut, owned by the copy control");
 });
 
 test("an app page, or a doc page whose URL names another file, renders nothing", () => {
