@@ -103,7 +103,7 @@ test("the examples panel lists each example under one heading, beside the articl
       },
     }),
   );
-  assert.match(page, /<aside class="api-examples" aria-labelledby="api-examples-title"><h2 class="api-examples-title" id="api-examples-title">Examples<\/h2>/);
+  assert.match(page, /<aside class="api-examples" aria-labelledby="api-examples-title" tabindex="0"><h2 class="api-examples-title" id="api-examples-title">Examples<\/h2>/);
   assert.match(page, /<li class="api-example"><h3 class="api-example-title">Create a charge<\/h3><p class="api-example-lang">bash<\/p><pre class="api-example-code"><code class="language-bash">curl -X POST \/v1\/charges<\/code><\/pre><\/li>/);
   assert.match(page, /<h3 class="api-example-title">List charges<\/h3><p class="api-example-lang">json<\/p>/);
   const article = page.indexOf('<article class="doc"');
