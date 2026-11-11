@@ -134,6 +134,11 @@ test("the in-view link is announced by aria-current, and the stylesheet keys its
   assert.match(css, /\.toc a\[aria-current="true"\] \{/);
 });
 
+test("the wide-screen TOC is its own scroll container so revealing a link never moves the page", () => {
+  const css = readFileSync(new URL("../chrome/toc/style.css", import.meta.url), "utf8");
+  assert.match(css, /\.toc \{[\s\S]*?overflow-y: auto;/);
+});
+
 test("style.css uses only token names from tokens/names.json for var(--*) references", () => {
   const css = readFileSync(new URL("../chrome/toc/style.css", import.meta.url), "utf8");
   const used = [...css.matchAll(/var\(--([a-z0-9-]+)\)/g)].map((match) => match[1]!);
