@@ -144,8 +144,8 @@ test("the breadcrumb leads the article and repeats the trail, end at the current
     { title: "Install", url: "/guide/install/" },
   ];
   const page = out(pageWith(), [], trail);
-  assert.match(page, /<article class="doc"[^>]*><nav class="breadcrumb" aria-label="Breadcrumbs"><a href="\/guide\/">Guides<\/a>/);
-  assert.match(page, /<span aria-current="page">Install<\/span><\/nav><h1>Install<\/h1>/);
+  assert.match(page, /<article class="doc"[^>]*><nav class="breadcrumb" aria-label="Breadcrumbs"><ol class="breadcrumb-list"><li class="breadcrumb-item"><a href="\/guide\/"><bdi class="breadcrumb-title">Guides<\/bdi><\/a><\/li>/);
+  assert.match(page, /<span aria-current="page"><bdi class="breadcrumb-title">Install<\/bdi><\/span><\/li><\/ol><\/nav><h1>Install<\/h1>/);
 });
 
 test("the sidebar renders in the site-navigation column and the toc in its own navigation landmark", () => {
