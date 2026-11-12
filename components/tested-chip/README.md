@@ -23,20 +23,28 @@ banner.
 | `total` | count | none | Examples the run counted. More than `passed + failed` means the rest did not run. |
 | `lastPassed` | ISO date | none | When the examples last passed, as a `title` tooltip and a visually hidden sentence. |
 
-A count is a non-negative integer. A missing, blank, negative, fractional, or non-numeric value is `0`.
+A count is a whole, non-negative, safe integer. Only an omitted field (`undefined`) is treated as
+missing. A blank, a negative, a fractional, `NaN`, `Infinity`, a value past `Number.MAX_SAFE_INTEGER`,
+a boolean, an object, and a non-numeric string are all "present but invalid" and never become `0`.
 When no count is given, the chip reads the page's entry in `site.data.examples` instead.
 Props win when any count is given.
 
-The chip renders nothing when there is no report or the record's `total` is `0`, which is the
-no-evidence case. A positive `total` with nothing passed or failed is a recorded but unrun suite: it
-reports `unrun`, says every counted example did not run, and never reads as passed or partial. It
-reports `failed` when anything failed, `partial` when the entry's `total` counts more examples than the
-results cover, and `passed` otherwise. A partial chip says how many examples did not run, so a partly
-run page never reads as a full pass. The icon shape, the visible text, and the counts all carry the
-result, so colour is never the only signal.
+The chip renders nothing when there is no count at all, or when every supplied count is a valid zero
+and no positive total is recorded, which is the no-evidence case. A positive `total` with nothing
+passed or failed is a recorded but unrun suite: it reports `unrun`, says every counted example did
+not run, and never reads as passed or partial. A present-but-invalid count, or a valid `total`
+smaller than `passed + failed`, reports the neutral `unavailable` state: the chip shows an icon and
+the theme's "Unknown" label with no visible count and no `data-passed`, `data-failed`, or
+`data-total` attribute, so a bad report never masquerades as a valid execution state. A valid report
+still reports `failed` when anything failed, `partial` when the entry's `total` counts more examples
+than the results cover, and `passed` otherwise. A partial chip says how many examples did not run, so
+a partly run page never reads as a full pass. The icon shape, the visible text, and the counts all
+carry the result, so colour is never the only signal.
 
 `lastPassed` is formatted in the page's calendar: Gregorian for English, Jalali for Persian, and Hijri
-for Arabic, using the same helper as the "last updated" line.
+for Arabic, using the same helper as the "last updated" line. On an `unavailable` chip it still
+renders, because the date is separate evidence and the chip only refuses to turn bad counts into a
+pass/fail/partial/unrun claim.
 
 ## Data
 

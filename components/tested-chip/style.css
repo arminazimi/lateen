@@ -51,6 +51,21 @@
   color: var(--color-danger);
 }
 
+/* A malformed or impossible report: neutral, dashed edge so it never reads as a passing, failing,
+   partial, or unrun result. Only the icon and the label are shown; no count is emitted. */
+.tested-chip-unavailable {
+  border-style: dashed;
+  border-color: var(--color-border-strong);
+}
+
+.tested-chip-unavailable .tested-chip-icon {
+  color: var(--color-muted);
+}
+
+.tested-chip-unavailable .tested-chip-label {
+  color: var(--color-muted);
+}
+
 .tested-chip-icon {
   flex: none;
   inline-size: var(--space-3);

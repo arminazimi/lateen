@@ -12,11 +12,11 @@ import testedChip, {
   SR_CLASS,
   STATES,
   classNameOf,
-  countOf,
   countsFor,
   countsOf,
   directive,
   notRunOf,
+  parseCount,
   stateOf,
   type TestedChipProps,
 } from "../components/tested-chip/index.ts";
@@ -158,15 +158,159 @@ test("an untested page or block renders nothing", () => {
   assert.equal(render({ passed: 0, failed: 0, total: 0 }), null);
   assert.equal(render({ total: 0 }), null);
   assert.equal(render({ total: "0" }), null);
-  assert.equal(render({ total: "-5" }), null);
-  assert.equal(render({ total: "five" }), null);
   assert.equal(render({ passed: "0", failed: "0" }), null);
-  assert.equal(render({ passed: "-1" }), null);
-  assert.equal(render({ passed: "two", failed: "three" }), null);
   assert.equal(render({ lastPassed: "2026-11-09" }), null);
   assert.equal(render({}, { site: {}, url: "/guide/" }), null);
   assert.equal(render({}, { site: { data: {} }, url: "/guide/" }), null);
   assert.equal(render({ failed: 0 }, { site: examples({ "/guide/": { passed: 3, failed: 0 } }), url: "/guide/" }), null);
+});
+
+test("a malformed supplied count renders as unavailable, never as a fabricated result", () => {
+  const cases: readonly [string, TestedChipProps][] = [
+    ["passed blank", { passed: "" }],
+    ["passed whitespace", { passed: "   " }],
+    ["passed negative", { passed: "-1" }],
+    ["passed non-numeric", { passed: "two" }],
+    ["passed markup-shaped", { passed: '1"><script>alert(1)</script>' }],
+    ["failed blank", { failed: "" }],
+    ["failed negative", { failed: -1 }],
+    ["failed fractional", { failed: "1.5" }],
+    ["total blank", { total: "" }],
+    ["total negative", { total: "-5" }],
+    ["total non-numeric", { total: "five" }],
+    ["mixed valid passed with invalid failed", { passed: 2, failed: "three" }],
+    ["all counts invalid", { passed: "two", failed: "three", total: "four" }],
+  ];
+  for (const [label, props] of cases) {
+    const out = render(props);
+    assert.ok(out, `${label}: renders`);
+    assert.match(out, /class="tested-chip tested-chip-unavailable"/, `${label}: state class`);
+    assert.doesNotMatch(out, /data-passed=/, `${label}: no data-passed`);
+    assert.doesNotMatch(out, /data-failed=/, `${label}: no data-failed`);
+    assert.doesNotMatch(out, /data-total=/, `${label}: no data-total`);
+    assert.doesNotMatch(out, new RegExp(`${COUNT_CLASS}-passed`), `${label}: no passed count`);
+    assert.doesNotMatch(out, new RegExp(`${COUNT_CLASS}-failed`), `${label}: no failed count`);
+    assert.doesNotMatch(out, new RegExp(`${COUNT_CLASS}-not-run`), `${label}: no not-run count`);
+    assert.doesNotMatch(out, /tested-chip-passed/, `${label}: not passed`);
+    assert.doesNotMatch(out, /tested-chip-failed/, `${label}: not failed`);
+    assert.doesNotMatch(out, /tested-chip-partial/, `${label}: not partial`);
+    assert.doesNotMatch(out, /tested-chip-unrun/, `${label}: not unrun`);
+    assert.doesNotMatch(out, /<script/, `${label}: never re-emits markup`);
+    assert.ok(out.includes(`<span class="${LABEL_CLASS}">${stringsOf("en").trust_level_unknown}</span>`), `${label}: neutral label`);
+  }
+});
+
+test("a total smaller than the completed counts is impossible and renders as unavailable", () => {
+  for (const total of [0, 1, "0", "1"]) {
+    const out = render({ passed: 2, failed: 0, total });
+    assert.ok(out, `total=${String(total)}`);
+    assert.match(out, /class="tested-chip tested-chip-unavailable"/, `total=${String(total)}: state`);
+    assert.doesNotMatch(out, /data-passed=/, `total=${String(total)}: no fabricated pass`);
+    assert.doesNotMatch(out, /data-total=/, `total=${String(total)}: no fabricated total`);
+    assert.doesNotMatch(out, new RegExp(`${COUNT_CLASS}-passed`), `total=${String(total)}: no passed count`);
+  }
+});
+
+test("an unsafe integer or a fractional count renders as unavailable, a valid boundary count does not", () => {
+  const unsafe = [
+    Number.MAX_SAFE_INTEGER + 1,
+    -(Number.MAX_SAFE_INTEGER + 1),
+    Number.MAX_SAFE_INTEGER * 2,
+    Number.POSITIVE_INFINITY,
+    Number.NEGATIVE_INFINITY,
+    Number.NaN,
+    1.5,
+    -0.5,
+    "9007199254740993",
+    "1e400",
+    "Infinity",
+  ] as const;
+  for (const value of unsafe) {
+    const out = render({ passed: value as number | string, failed: 0 });
+    assert.ok(out, `passed=${String(value)}`);
+    assert.match(out, /class="tested-chip tested-chip-unavailable"/, `passed=${String(value)}: state`);
+    assert.doesNotMatch(out, /data-passed=/, `passed=${String(value)}: no data-passed`);
+  }
+  const boundaries: readonly (number | string)[] = [0, "0", 1, Number.MAX_SAFE_INTEGER, String(Number.MAX_SAFE_INTEGER)];
+  for (const value of boundaries) {
+    const out = render({ passed: value, failed: 0 });
+    if (value === 0 || value === "0") {
+      assert.equal(out, null, `passed=${String(value)} is a valid zero with no results: hides`);
+      continue;
+    }
+    assert.ok(out, `passed=${String(value)} renders`);
+    assert.match(out, /class="tested-chip tested-chip-passed"/, `passed=${String(value)}: state`);
+  }
+});
+
+test("an unavailable chip from site data behaves the same as from props", () => {
+  const cases: readonly unknown[] = [
+    { passed: "two", failed: 0 },
+    { passed: 0, failed: -1 },
+    { passed: 3, failed: 0, total: 2 },
+    { passed: 1.5, failed: 0 },
+    { total: "" },
+  ];
+  for (const entry of cases) {
+    const site = examples({ "/guide/": entry });
+    const out = render({}, { site, url: "/guide/" });
+    assert.ok(out, `entry ${JSON.stringify(entry)}`);
+    assert.match(out, /class="tested-chip tested-chip-unavailable"/, `entry ${JSON.stringify(entry)}: state`);
+    assert.doesNotMatch(out, /data-passed=/, `entry ${JSON.stringify(entry)}: no data-passed`);
+    assert.doesNotMatch(out, /data-failed=/, `entry ${JSON.stringify(entry)}: no data-failed`);
+    assert.doesNotMatch(out, /data-total=/, `entry ${JSON.stringify(entry)}: no data-total`);
+  }
+});
+
+test("props win over site data even when they disagree on validity", () => {
+  const site = examples({ "/guide/": { passed: 3, failed: 0 } });
+  const malformedProps = render({ passed: "two", failed: 0 }, { site, url: "/guide/" });
+  assert.ok(malformedProps);
+  assert.match(malformedProps, /class="tested-chip tested-chip-unavailable"/);
+  assert.doesNotMatch(malformedProps, /3 passed/);
+
+  const siteIsBad = examples({ "/guide/": { passed: "two", failed: 0 } });
+  const goodProps = render({ passed: 3, failed: 0 }, { site: siteIsBad, url: "/guide/" });
+  assert.ok(goodProps);
+  assert.match(goodProps, /class="tested-chip tested-chip-passed"/);
+  assert.match(goodProps, /data-passed="3"/);
+});
+
+test("an unavailable chip keeps a valid lastPassed tooltip but never a fabricated count", () => {
+  const out = render({ passed: "two", failed: 0, lastPassed: "2026-11-09" });
+  assert.ok(out);
+  assert.match(out, /class="tested-chip tested-chip-unavailable"/);
+  assert.match(out, /title="Last passed November 9, 2026"/);
+  assert.ok(out.includes(`<span class="${SR_CLASS}">Last passed November 9, 2026</span>`));
+  assert.doesNotMatch(out, /data-passed=/);
+  assert.doesNotMatch(out, new RegExp(`${COUNT_CLASS}-passed`));
+
+  const invalidDate = render({ passed: "two", failed: 0, lastPassed: "not a date" });
+  assert.ok(invalidDate);
+  assert.match(invalidDate, /class="tested-chip tested-chip-unavailable"/);
+  assert.doesNotMatch(invalidDate, /title=/);
+});
+
+test("the unavailable state is localised, RTL-safe, and machine-identifiable by class alone", () => {
+  const cases = [
+    { lang: "en", label: "Unknown" },
+    { lang: "fa", label: "نامعلوم" },
+    { lang: "ar", label: "غير معروف" },
+  ] as const;
+  for (const { lang, label } of cases) {
+    const out = render({ passed: "two", failed: 0 }, { lang });
+    assert.ok(out, lang);
+    assert.match(out, /class="tested-chip tested-chip-unavailable"/, `${lang} state class`);
+    assert.ok(out.includes(`<span class="${LABEL_CLASS}">${label}</span>`), `${lang} label`);
+    assert.doesNotMatch(out, /data-passed=/, `${lang} hides fabricated count`);
+    assert.doesNotMatch(out, /data-failed=/, `${lang} hides fabricated failed`);
+    assert.doesNotMatch(out, /data-total=/, `${lang} hides fabricated total`);
+    // The unavailable icon is a circle, an upright tick, and a dot at the horizontal centre, so a
+    // mirrored reading is identical: the shape never depends on direction.
+    const paths = ICONS.unavailable.join("|");
+    assert.ok(paths.includes("a6.25 6.25 0 1 0 0 12.5"), `${lang} symmetric circle`);
+    assert.ok(!/h-?[0-9]/.test(paths), `${lang} no horizontal offsets`);
+  }
 });
 
 test("the counts come from site.data.examples when the props are absent", () => {
@@ -272,7 +416,15 @@ test("the unrun label and count follow every supported page language", () => {
 test("the i18n keys exist in every language and keep their placeholders", () => {
   for (const lang of ["en", "fa", "ar"] as const) {
     const table = stringsOf(lang);
-    for (const key of ["tested", "tested_partial", "tested_passed", "tested_failed", "tested_not_run", "tested_last_passed"]) {
+    for (const key of [
+      "tested",
+      "tested_partial",
+      "tested_passed",
+      "tested_failed",
+      "tested_not_run",
+      "tested_last_passed",
+      "trust_level_unknown",
+    ]) {
       assert.equal(typeof table[key], "string", `${lang}.${key}`);
       assert.notEqual(table[key]!.trim(), "", `${lang}.${key}`);
     }
@@ -289,45 +441,99 @@ test("values are escaped or rejected, never parsed as markup", () => {
   assert.doesNotMatch(out, /<script/);
   assert.doesNotMatch(out, /title=/);
 
-  assert.equal(render({ passed: '1"><script>alert(1)</script>', failed: 0 }), null);
+  const escaped = render({ passed: '1"><script>alert(1)</script>', failed: 0 });
+  assert.ok(escaped);
+  assert.match(escaped, /class="tested-chip tested-chip-unavailable"/);
+  assert.doesNotMatch(escaped, /<script/);
+  assert.doesNotMatch(escaped, /data-passed=/);
 });
 
 test("each state has a different icon, so the result never depends on colour alone", () => {
-  assert.deepEqual([...STATES], ["passed", "partial", "unrun", "failed"]);
+  assert.deepEqual([...STATES], ["passed", "partial", "unrun", "failed", "unavailable"]);
   assert.equal(new Set(STATES.map((state) => ICONS[state].join("|"))).size, STATES.length);
   for (const state of STATES) assert.ok(ICONS[state].length > 0);
 });
 
-test("counts and state helpers treat malformed values as untested", () => {
-  assert.equal(countOf(2), 2);
-  assert.equal(countOf("2"), 2);
-  assert.equal(countOf(" 2 "), 2);
-  assert.equal(countOf(undefined), 0);
-  assert.equal(countOf(""), 0);
-  assert.equal(countOf("-1"), 0);
-  assert.equal(countOf("1.5"), 0);
-  assert.equal(countOf("two"), 0);
-  assert.equal(countOf("1<script>"), 0);
+test("parseCount keeps presence, validity, and the numeric value apart", () => {
+  assert.deepEqual(parseCount(2), { present: true, valid: true, value: 2 });
+  assert.deepEqual(parseCount("2"), { present: true, valid: true, value: 2 });
+  assert.deepEqual(parseCount(" 2 "), { present: true, valid: true, value: 2 });
+  assert.deepEqual(parseCount(0), { present: true, valid: true, value: 0 });
+  assert.deepEqual(parseCount("0"), { present: true, valid: true, value: 0 });
+  assert.deepEqual(parseCount(Number.MAX_SAFE_INTEGER), {
+    present: true,
+    valid: true,
+    value: Number.MAX_SAFE_INTEGER,
+  });
+  assert.deepEqual(parseCount(String(Number.MAX_SAFE_INTEGER)), {
+    present: true,
+    valid: true,
+    value: Number.MAX_SAFE_INTEGER,
+  });
+  assert.deepEqual(parseCount(undefined), { present: false, valid: false, value: 0 });
+  assert.deepEqual(parseCount(null), { present: true, valid: false, value: 0 });
+  assert.deepEqual(parseCount(""), { present: true, valid: false, value: 0 });
+  assert.deepEqual(parseCount("   "), { present: true, valid: false, value: 0 });
+  assert.deepEqual(parseCount("-1"), { present: true, valid: false, value: 0 });
+  assert.deepEqual(parseCount(-1), { present: true, valid: false, value: 0 });
+  assert.deepEqual(parseCount("1.5"), { present: true, valid: false, value: 0 });
+  assert.deepEqual(parseCount(1.5), { present: true, valid: false, value: 0 });
+  assert.deepEqual(parseCount("two"), { present: true, valid: false, value: 0 });
+  assert.deepEqual(parseCount("1<script>"), { present: true, valid: false, value: 0 });
+  assert.deepEqual(parseCount(Number.POSITIVE_INFINITY), { present: true, valid: false, value: 0 });
+  assert.deepEqual(parseCount(Number.NaN), { present: true, valid: false, value: 0 });
+  assert.deepEqual(parseCount(Number.MAX_SAFE_INTEGER + 1), { present: true, valid: false, value: 0 });
+  assert.deepEqual(parseCount("9007199254740993"), { present: true, valid: false, value: 0 });
+  assert.deepEqual(parseCount("1e400"), { present: true, valid: false, value: 0 });
+  assert.deepEqual(parseCount(true), { present: true, valid: false, value: 0 });
+  assert.deepEqual(parseCount({}), { present: true, valid: false, value: 0 });
+  assert.deepEqual(parseCount([]), { present: true, valid: false, value: 0 });
+});
 
+test("countsOf marks malformed reports unavailable without fabricating counts", () => {
   assert.deepEqual(countsOf({ passed: 2, failed: 1 }), { passed: 2, failed: 1 });
   assert.deepEqual(countsOf({ passed: 2, failed: 0, total: 5 }), { passed: 2, failed: 0, total: 5 });
-  assert.deepEqual(countsOf({ passed: 2, failed: 0, total: 1 }), { passed: 2, failed: 0 });
   assert.deepEqual(countsOf({ total: 5 }), { passed: 0, failed: 0, total: 5 });
   assert.deepEqual(countsOf({ passed: 0, failed: 0, total: "5" }), { passed: 0, failed: 0, total: 5 });
-  assert.deepEqual(countsOf({ passed: "two", failed: "three", total: 5 }), { passed: 0, failed: 0, total: 5 });
-  assert.equal(countsOf({ total: 0 }), undefined);
-  assert.equal(countsOf({ total: "-5" }), undefined);
-  assert.equal(countsOf({ total: "five" }), undefined);
-  assert.deepEqual(countsOf({ passed: 2, failed: 0, total: 0 }), { passed: 2, failed: 0 });
   assert.deepEqual(countsOf({ passed: 2, failed: 0, lastPassed: "2026-11-09" }), {
     passed: 2,
     failed: 0,
     lastPassed: "2026-11-09",
   });
+  assert.equal(countsOf({ total: 0 }), undefined);
   assert.equal(countsOf({ passed: 0, failed: 0 }), undefined);
+  assert.equal(countsOf({ passed: 0, failed: 0, total: 0 }), undefined);
   assert.equal(countsOf(null), undefined);
   assert.equal(countsOf("2"), undefined);
   assert.equal(countsFor(undefined, undefined), undefined);
+
+  assert.deepEqual(countsOf({ passed: "two", failed: "three", total: 5 }), {
+    passed: 0,
+    failed: 0,
+    unavailable: true,
+  });
+  assert.deepEqual(countsOf({ total: "-5" }), { passed: 0, failed: 0, unavailable: true });
+  assert.deepEqual(countsOf({ total: "five" }), { passed: 0, failed: 0, unavailable: true });
+  assert.deepEqual(countsOf({ passed: -1, failed: 0 }), { passed: 0, failed: 0, unavailable: true });
+  assert.deepEqual(countsOf({ passed: 1.5, failed: 0 }), { passed: 0, failed: 0, unavailable: true });
+  assert.deepEqual(countsOf({ passed: 0, failed: "", total: 3 }), { passed: 0, failed: 0, unavailable: true });
+  assert.deepEqual(countsOf({ passed: 2, failed: 0, total: 1 }), { passed: 0, failed: 0, unavailable: true });
+  assert.deepEqual(countsOf({ passed: 2, failed: 0, total: 0 }), { passed: 0, failed: 0, unavailable: true });
+  assert.deepEqual(countsOf({ passed: 2, failed: 0, total: "x", lastPassed: "2026-11-09" }), {
+    passed: 0,
+    failed: 0,
+    unavailable: true,
+    lastPassed: "2026-11-09",
+  });
+});
+
+test("stateOf and notRunOf keep unavailable neutral and preserve the other states", () => {
+  assert.equal(stateOf({ passed: 0, failed: 0, unavailable: true }), "unavailable");
+  assert.equal(stateOf({ passed: 2, failed: 0, total: 1, unavailable: true }), "unavailable");
+  assert.equal(stateOf({ passed: 0, failed: 1, unavailable: true }), "unavailable");
+  assert.equal(notRunOf({ passed: 0, failed: 0, unavailable: true }), 0);
+  assert.equal(notRunOf({ passed: 2, failed: 1, unavailable: true }), 0);
+
   assert.equal(stateOf({ passed: 2, failed: 0 }), "passed");
   assert.equal(stateOf({ passed: 2, failed: 0, total: 5 }), "partial");
   assert.equal(stateOf({ passed: 0, failed: 0, total: 5 }), "unrun");
@@ -338,6 +544,7 @@ test("counts and state helpers treat malformed values as untested", () => {
   assert.equal(notRunOf({ passed: 2, failed: 1 }), 0);
   assert.equal(classNameOf("passed"), `${CHIP_CLASS} ${CHIP_CLASS}-passed`);
   assert.equal(classNameOf("unrun"), `${CHIP_CLASS} ${CHIP_CLASS}-unrun`);
+  assert.equal(classNameOf("unavailable"), `${CHIP_CLASS} ${CHIP_CLASS}-unavailable`);
 });
 
 test("style.css uses only token names from tokens/names.json", () => {
