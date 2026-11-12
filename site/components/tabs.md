@@ -33,13 +33,15 @@ winget install beacon
 :::
 ````
 
-`group` is the group's key. Give each group on a page its own key. The heading text is also the label the island syncs on, so two groups that both offer `Linux` switch together.
+`group` is the group's key. Give each group on a page its own key; when two groups share one — the same key twice, two names that sanitize alike, or no key at all — the first keeps the ids it published and each later group's ids gain a `-2`, `-3`, … suffix, so links never land on the wrong group. The heading text is also the label the island syncs on, so two groups that both offer `Linux` switch together.
+
+A heading may author its own link target: `### Install notes {#notes}` labels the tab `Install notes` and keeps `#notes` pointing at the section; a heading written with an `id` attribute is honored the same way. The fragment is carried onto the generated panel title, so it resolves with and without JavaScript. A malformed marker (`{#with space}`) stays as literal label text.
 
 ## Options
 
 | Option | Type | Default | What it does |
 | --- | --- | --- | --- |
-| `group` | string | generated | The group's key and the prefix for its element ids. |
+| `group` | string | generated | The group's key and the prefix for its element ids. Repeats on a page gain a suffix past the first group. |
 | `id` | string | — | Fallback id prefix when `group` is absent. |
 
 ## Example
@@ -61,6 +63,7 @@ Use the `windows` archive and add its folder to `Path`.
 ## Notes
 
 - Without JavaScript the tab list stays hidden and every section shows stacked under its title, so nothing is locked behind a control that does not run.
+- Every tab, panel, and title id is unique on the page: a group that repeats another's key renders under a suffixed key, and one group's ids can never move another group's selection.
 - Choosing a tab by hand is remembered in `localStorage["lateen-tabs"]` and switches every group on the page and on later pages that offers the same label.
 - `?tab=` in the URL chooses a label and beats what is remembered; `?lang=` works too, because the sync module is shared with code tabs.
 - Choosing a tab by hand also writes `?tab=<label>` into the address bar, keeping every other query parameter, and does not reload or move the page, so the address can be shared. A link that opens the page with that parameter starts on the same tab.

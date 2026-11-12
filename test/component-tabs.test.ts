@@ -5,14 +5,19 @@ import type { Page, Site, SiteConfig, SourcePos } from "@velella/mizzen/contract
 import tabs, {
   BODY_CLASS,
   DEFAULT_ID,
+  FRAGMENT_CLASS,
   TABS_CLASS,
   TITLE_CLASS,
+  bodyStart,
   directive,
+  disambiguate,
   groupKey,
   idBase,
   labelOf,
   sections,
+  tabsDirectives,
   type TabsProps,
+  uniqueKey,
 } from "../components/tabs/index.ts";
 import {
   STORAGE_KEY,
@@ -77,6 +82,22 @@ const BODY = [
 
 function render(props: TabsProps, body = BODY): string {
   return html(tabs({ props, page, site, html: body }));
+}
+
+/** One tabs directive the Markdown stage left in a page's html, at the source lines `line`–`endLine`. */
+function slTag(props: Record<string, string>, line: number, endLine: number): string {
+  const dataProps = JSON.stringify(props).replace(/"/g, "&#x22;");
+  return `<sl-component name="tabs" data-props="${dataProps}" data-src="docs/guide/install.md:${line}:1-${endLine}:3"></sl-component>`;
+}
+
+/** A group body whose first heading starts at source `line`, as the Markdown stage renders it. */
+function bodyAt(line: number): string {
+  return `<h3 data-src="docs/guide/install.md:${line}:1-${line + 2}:9">macOS</h3><p>brew install mizzen</p><h3>Windows</h3><p>winget install mizzen</p>`;
+}
+
+/** The component rendered inside a page whose html carries these Markdown-stage directives. */
+function renderOn(pageHtml: string, props: TabsProps, body: string): string {
+  return html(tabs({ props, page: { ...page, html: pageHtml }, site, html: body }));
 }
 
 type VNode = { type: unknown; props: { children?: unknown; [key: string]: unknown } };
@@ -144,18 +165,18 @@ class FakeEl implements TabsElement {
   }
 }
 
-/** A group with one tab and panel per label, the first tab selected. */
-function fakeGroup(labels: string[], { panels = labels.length, enhanced = true } = {}) {
+/** A group with one tab and panel per label, the first tab selected. `prefix` gives the ids the element names the component renders. */
+function fakeGroup(labels: string[], { panels = labels.length, enhanced = true, prefix = "" } = {}) {
   const list = new FakeEl("list");
   list.hidden = true;
   const tabs = labels.map((label, i) => {
-    const tab = new FakeEl(`t${i + 1}`, label);
+    const tab = new FakeEl(`${prefix}t${i + 1}`, label);
     tab.setAttribute("aria-selected", i === 0 ? "true" : "false");
     tab.setAttribute("tabindex", i === 0 ? "0" : "-1");
     return tab;
   });
   const bodies = labels.slice(0, panels).map((_, i) => {
-    const panel = new FakeEl(`p${i + 1}`);
+    const panel = new FakeEl(`${prefix}p${i + 1}`);
     panel.setAttribute("role", "tabpanel");
     panel.hidden = enhanced && i !== 0;
     return panel;
@@ -288,6 +309,118 @@ test("the component renders a hidden tab list and one labelled panel per heading
 test("the component keeps a body with no heading whole, with no tab list", () => {
   const out = render({}, "<p>just text</p>");
   assert.equal(out, `<div class="tabs" data-tabs-group="${DEFAULT_ID}"><div class="tabs-body"><p>just text</p></div></div>`);
+});
+
+test("tabsDirectives() reads every tabs directive's key and source start, in document order", () => {
+  const pageHtml = `${slTag({}, 1, 9)}\n${slTag({ group: "install tabs" }, 11, 19)}\n<sl-component name="callout" data-props="{&#x22;type&#x22;:&#x22;note&#x22;}" data-src="docs/guide/install.md:21:1-23:3"></sl-component>`;
+  assert.deepEqual(tabsDirectives(pageHtml), [
+    { base: DEFAULT_ID, start: { line: 1, column: 1 } },
+    { base: "install-tabs", start: { line: 11, column: 1 } },
+  ]);
+});
+
+test("tabsDirectives() ignores malformed props and spans without dropping the group", () => {
+  const pageHtml =
+    '<sl-component name="tabs" data-props="{oops" data-src="docs/guide/install.md:1:1-9:3"></sl-component>' +
+    '<sl-component name="tabs" data-props="{}" data-src="nowhere"></sl-component>';
+  assert.deepEqual(tabsDirectives(pageHtml), [
+    { base: DEFAULT_ID, start: { line: 1, column: 1 } },
+    { base: DEFAULT_ID, start: undefined },
+  ]);
+});
+
+test("bodyStart() reads the first heading's source position and nothing without one", () => {
+  assert.deepEqual(bodyStart(bodyAt(12)), { line: 12, column: 1 });
+  assert.equal(bodyStart(BODY), undefined, "a hand-written body without source spans has no position");
+  assert.equal(bodyStart("<p>no heading</p>"), undefined);
+});
+
+test("disambiguate() keeps the first key and gives later repeats free suffixes", () => {
+  assert.deepEqual(disambiguate(["tabs", "tabs", "tabs"]), ["tabs", "tabs-2", "tabs-3"]);
+  assert.deepEqual(disambiguate(["install", "install"]), ["install", "install-2"]);
+  assert.deepEqual(disambiguate(["نصب", "نصب"]), ["نصب", "نصب-2"]);
+  assert.deepEqual(disambiguate(["tabs", "tabs-2", "tabs"]), ["tabs", "tabs-2", "tabs-3"]);
+  assert.deepEqual(disambiguate(["install"]), ["install"], "a group alone on its key keeps it");
+});
+
+test("uniqueKey() locates each render among the page's directives", () => {
+  const pageHtml = `${slTag({}, 1, 9)}\n${slTag({}, 11, 19)}`;
+  assert.equal(uniqueKey(pageHtml, DEFAULT_ID, bodyAt(2)), "tabs", "the first ordinary group keeps its published key");
+  assert.equal(uniqueKey(pageHtml, DEFAULT_ID, bodyAt(12)), "tabs-2");
+  assert.equal(uniqueKey("", DEFAULT_ID, bodyAt(2)), DEFAULT_ID, "html without Markdown-stage markers passes through");
+  assert.equal(uniqueKey(pageHtml, DEFAULT_ID, BODY), DEFAULT_ID, "a body with no source position passes through");
+});
+
+test("groups repeating the default key render unique tab, panel, and title ids with correct aria relationships", () => {
+  const pageHtml = `${slTag({}, 1, 9)}\n${slTag({}, 11, 19)}`;
+  const first = renderOn(pageHtml, {}, bodyAt(2));
+  const second = renderOn(pageHtml, {}, bodyAt(12));
+
+  assert.match(first, /^<div class="tabs" data-tabs-group="tabs">/);
+  assert.match(second, /^<div class="tabs" data-tabs-group="tabs-2">/);
+  assert.match(second, /id="tabs-2-tab-1" aria-controls="tabs-2-panel-1"/);
+  assert.match(second, /role="tabpanel" id="tabs-2-panel-2" aria-labelledby="tabs-2-tab-2"/);
+  assert.match(second, /<h3 class="tabs-title" id="tabs-2-title-2">Windows<\/h3>/);
+
+  const ids = [...`${first}${second}`.matchAll(/id="([^"]*)"/g)].map((match) => match[1]);
+  assert.ok(ids.length > 0);
+  assert.equal(new Set(ids).size, ids.length, "no id repeats between the two groups");
+
+  assert.match(second, /<div role="tablist" hidden>/, "the no-JS state still hides the tab list");
+  assert.doesNotMatch(second, /<div role="tabpanel"[^>]*hidden/, "and still stacks every section");
+});
+
+test("repeated explicit and slug-equivalent keys are disambiguated per page", () => {
+  const pageHtml = `${slTag({ group: "install tabs!" }, 1, 9)}\n${slTag({ group: "install/tabs" }, 11, 19)}`;
+  assert.match(renderOn(pageHtml, { group: "install tabs!" }, bodyAt(2)), /id="install-tabs-tab-1"/);
+  assert.match(renderOn(pageHtml, { group: "install/tabs" }, bodyAt(12)), /id="install-tabs-2-tab-1"/);
+});
+
+test("repeated Unicode keys are disambiguated per page", () => {
+  const pageHtml = `${slTag({ group: "نصب" }, 1, 9)}\n${slTag({ group: "نصب" }, 11, 19)}`;
+  const first = renderOn(pageHtml, { group: "نصب" }, bodyAt(2));
+  const second = renderOn(pageHtml, { group: "نصب" }, bodyAt(12));
+  assert.match(first, /<div class="tabs" data-tabs-group="نصب">/);
+  assert.match(second, /aria-controls="نصب-2-panel-1"/);
+});
+
+test("a group beside an explicit key that reads like a suffix keeps both published ids", () => {
+  const pageHtml = `${slTag({}, 1, 9)}\n${slTag({ group: "tabs-2" }, 11, 19)}\n${slTag({}, 21, 29)}`;
+  assert.match(renderOn(pageHtml, {}, bodyAt(2)), /id="tabs-panel-1"/);
+  assert.match(renderOn(pageHtml, { group: "tabs-2" }, bodyAt(12)), /id="tabs-2-panel-1"/);
+  assert.match(renderOn(pageHtml, {}, bodyAt(22)), /id="tabs-3-panel-1"/, "the third default group steps around tabs-2");
+});
+
+test("the component puts an authored heading fragment on the generated panel title", () => {
+  const body = '<h3>Install notes {#notes}</h3><p>a</p><h3 id="plain">Plain</h3><p>b</p>';
+  const out = render({}, body);
+  assert.match(
+    out,
+    /<h3 class="tabs-title" id="tabs-title-1"><span class="tabs-fragment" id="notes"><\/span>Install notes<\/h3>/,
+  );
+  assert.match(
+    out,
+    /<h3 class="tabs-title" id="tabs-title-2"><span class="tabs-fragment" id="plain"><\/span>Plain<\/h3>/,
+  );
+  const buttons = [...out.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)];
+  assert.deepEqual(
+    buttons.map((match) => match[1]),
+    ["Install notes", "Plain"],
+    "the authored marker stays out of the synced label",
+  );
+});
+
+test("sections() reports the authored fragment and keeps a malformed one as plain text", () => {
+  assert.deepEqual(sections("<h3>Notes {#notes}</h3><p>a</p>"), [{ label: "Notes", html: "<p>a</p>", anchor: "notes" }]);
+  assert.deepEqual(sections('<h3 id="ok">X</h3><p>a</p>'), [{ label: "X", html: "<p>a</p>", anchor: "ok" }]);
+  assert.deepEqual(sections("<h3>Keep {#not an id}</h3><p>a</p>"), [{ label: "Keep {#not an id}", html: "<p>a</p>" }]);
+  assert.deepEqual(sections("<h3>{#only}</h3><p>a</p>"), [{ label: "{#only}", html: "<p>a</p>" }]);
+});
+
+test("a malformed fragment keeps the section readable without an anchor", () => {
+  const out = render({}, "<h3>Keep {#no id}</h3><p>x</p>");
+  assert.doesNotMatch(out, new RegExp(`class="${FRAGMENT_CLASS}"`));
+  assert.match(out, /<button\b[^>]*>Keep \{#no id\}<\/button>/);
 });
 
 test("activate() reveals the list and selects the first tab", () => {
@@ -486,6 +619,25 @@ test("a fragment inside a closed panel opens its group and beats ?tab= for that 
   assert.deepEqual(shown(b.panels), [false, true], "and leaves the other group alone");
 });
 
+test("an authored fragment and a disambiguated panel id each move only their own group", () => {
+  const a = fakeGroup(["macOS", "Windows"], { prefix: "tabs-" });
+  const b = fakeGroup(["npm", "pnpm"], { prefix: "tabs-2-" });
+  activate(a.group, false);
+  activate(b.group, false);
+  const panelOf = fakePanelOf([a, b], { notes: a.panels[1]! });
+
+  assert.equal(applyHash([a.group, b.group], panelOf, "#notes"), true);
+  assert.deepEqual(shown(a.panels), [false, true], "the fragment opens the panel that carries it");
+  assert.deepEqual(shown(b.panels), [true, false], "and leaves the other group's selection alone");
+
+  assert.equal(applyHash([a.group, b.group], panelOf, "#tabs-2-p2"), true);
+  assert.deepEqual(shown(b.panels), [false, true]);
+  assert.deepEqual(shown(a.panels), [false, true], "group a keeps what the first fragment left");
+
+  assert.equal(applyHash([a.group, b.group], panelOf, "#tabs-p1"), true);
+  assert.deepEqual(shown(a.panels), [true, false], "a panel id resolves by its owning group, never by position");
+});
+
 test("a hash change opens the panel that owns the new fragment, and an unknown one changes nothing", () => {
   const a = fakeGroup(["macOS", "Windows", "Linux"]);
   activate(a.group, false);
@@ -594,7 +746,7 @@ test("the titles are hidden only once the island has enhanced the group", () => 
 });
 
 test("every class the component writes has a rule in style.css", () => {
-  for (const cls of [TABS_CLASS, TITLE_CLASS, BODY_CLASS]) {
+  for (const cls of [TABS_CLASS, TITLE_CLASS, BODY_CLASS, FRAGMENT_CLASS]) {
     assert.match(styleCss, new RegExp(`\\.${cls}\\b`), cls);
   }
 });

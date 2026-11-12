@@ -82,6 +82,11 @@
   line-height: var(--type-leading-tight);
 }
 
+/* The empty span that carries an authored heading fragment: it takes no room in the title, it is only a target. */
+.tabs-fragment {
+  display: inline;
+}
+
 .tabs[data-enhanced] .tabs-title {
   display: none;
 }
