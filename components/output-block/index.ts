@@ -16,6 +16,9 @@ export const BAR_CLASS = "output-block-bar";
 /** Class on the `pre` that holds the output. */
 export const BODY_CLASS = "output-block-body";
 
+/** Marks the body for `client.ts`, which drops its tab stop when the output fits. */
+export const SCROLL_ATTRIBUTE = "data-output-scroll";
+
 /** Class on the copy button. It starts `hidden`; `client.ts` reveals it. */
 export const COPY_CLASS = "output-block-copy";
 
@@ -94,6 +97,10 @@ export function outputText(html: string): string {
  * invalid, or omitted — exactly as `evidence.ts` defines them, so an agent can tell a malformed declaration
  * from a missing one, and a block that declares no exit code is never taken for a successful command. The
  * visible recorded output is untouched by any of this.
+ *
+ * The body starts with a tab stop, so a wide result scrolls from the keyboard without JavaScript.
+ * `client.ts` drops that tab stop when the output fits and restores it when the body overflows; the
+ * named group above still carries the accessible name either way.
  */
 export default function outputBlock({ props, html, page }: ComponentProps<OutputBlockProps>) {
   const text = outputText(html);
@@ -137,7 +144,7 @@ export default function outputBlock({ props, html, page }: ComponentProps<Output
       ),
       h("span", { class: STATUS_CLASS, role: "status", "data-output-status": true }),
     ),
-    h("pre", { class: BODY_CLASS, tabindex: 0 }, h("code", null, text)),
+    h("pre", { class: BODY_CLASS, tabindex: 0, [SCROLL_ATTRIBUTE]: true }, h("code", null, text)),
     evidenceElement(props),
   );
 }

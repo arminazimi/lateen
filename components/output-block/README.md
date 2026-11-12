@@ -9,7 +9,16 @@ body is read as plain text, so it keeps its line breaks and HTML in it stays tex
   lengths come from tokens, and every property is logical.
 - `client.ts`: the copy island. It copies the body and nothing else, reveals the button that starts
   `hidden` only when the browser has a clipboard, and writes the result into a `role="status"` region.
-  Without JavaScript the output is still fully visible and the button stays hidden.
+  Without JavaScript the output is still fully visible and the button stays hidden. The same island
+  measures the body: a body that fits loses its extra tab stop, and an overflowing one keeps it so the
+  arrows scroll it. It re-measures on container and content resize.
+
+## Scrolling
+
+The body scrolls inside the block, never the page. It renders with a tab stop, so a wide result can be
+scrolled from the keyboard without JavaScript; `client.ts` removes that tab stop when the output fits and
+restores it when the body or its content grows past the block. The group's `label` names the block either
+way, and the body adds no landmark of its own.
 
 ## Variables
 
