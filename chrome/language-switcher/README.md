@@ -73,10 +73,16 @@ the page's own URL; the layout adds it only when the head does not already carry
 ## Marking and accessibility
 
 The current language's link carries `aria-current="true"` and the visible word from the theme's i18n
-(`language_current`, in English, Persian, and Arabic), so the mark is not colour alone. Every link
-carries `hreflang` and `lang` with its language code, and the list is a `nav` with the localised
-`language` label. The links are ordinary anchors and the list is always in the document: it is
-keyboard operable with no JavaScript and no `client.ts`.
+(`language_current`, in English, Persian, and Arabic), so the mark is not colour alone. The interface
+guidance - the landmark label, the current word, and the missing-translation text - is read in the
+language of the page being rendered (`page.lang`), not the site's default: a Persian page on an
+English-default site gets Persian guidance, a regional tag such as `fa-IR` reads the `fa` catalog,
+and a language no catalog ships falls back to English. Each guidance span is stamped with the language
+of the text it actually shows. Every link carries `hreflang` and `lang` with its language code, and
+the list is a `nav` with the localised `language` label. Language names keep their own `lang` and a
+`dir="auto"`, so a name in the other direction cannot reorder the guidance around it. The links are
+ordinary anchors and the list is always in the document: it is keyboard operable with no JavaScript
+and no `client.ts`.
 
 `style.css` is part of the chrome's shared CSS, which every page loads, so the switcher's rules reach
 a built page.
