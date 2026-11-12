@@ -43,9 +43,16 @@ A GitHub alert:
 | Name | Type | Default | What it does |
 | --- | --- | --- | --- |
 | `type` | `note`, `tip`, `important`, `warning`, or `caution` | `note` | The icon, color, and default title. `danger` is read as `caution`. |
-| `title` | string | the kind's name | Replaces the heading above the body. |
+| `title` | string | the kind's name | Replaces the heading above the body, and is the callout's accessible name. |
 
 The defaults are **Note**, **Tip**, **Important**, **Warning**, and **Caution**, read from `i18n/*.json` in the page's language. An author's `title` is shown as written. An unknown `type` falls back to `note`.
+
+## Accessibility
+
+- Every callout has the role `note` and takes its accessible name from the title it shows, through `aria-labelledby`. A screen reader announces "Warning, note" rather than an unnamed note, and the name matches the visible text.
+- The title element gets an id unique on the page: `callout-<type>-title` for the first callout of a kind, then `callout-<type>-title-2`, `-3`, and so on for repeats. A custom title does not change the scheme, so no two callouts share an id.
+- A callout is not an alert and not a live region: it is announced where it sits in the reading order, and never interrupts. The icon is decorative (`aria-hidden`), since the title carries the meaning.
+- The title is text, not HTML: an authored title is escaped, and mixed-direction titles keep the order the author wrote.
 
 ## Example
 
