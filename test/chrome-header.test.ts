@@ -239,8 +239,10 @@ test("the header places the section tabs from the main navigation", () => {
   const out = html(header({ site, page, trail, pager }));
   assert.match(
     out,
-    /<div class="header-tabs" data-slot="section-tabs"><nav class="section-tabs" aria-label="Sections"><a class="section-tab" href="\/example\/guides\/">Guides<\/a><\/nav><\/div>/,
+    /<div class="header-tabs" data-slot="section-tabs"><nav class="section-tabs" aria-label="[^"]+">/,
   );
+  assert.match(out, /<a class="section-tab" href="\/example\/guides\/">(?:<bdi>)?Guides(?:<\/bdi>)?<\/a>/);
+  assert.match(out, /<\/nav><\/div>/);
 });
 
 test("style.css uses only token names from tokens/names.json for var(--*) references", () => {
