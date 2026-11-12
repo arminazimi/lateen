@@ -40,3 +40,4 @@ When a table does have a caption, as produced by a pipeline or a component, the 
 - Inline code in cells is the clearest way to name a field, a path, or a value.
 - A table is never a layout tool; use [steps](../steps/) or a list for a sequence.
 - Without JavaScript the wrapper stays focusable, so a wide table can still be scrolled with the arrow keys. With JavaScript it drops that tab stop whenever the table fits, and adds it back when the viewport, zoom, or text size makes the table overflow.
+- One shared resize observer serves every table on the page, so a long page does not pay for an observer per table. When the browser has no observer API, one window resize listener stands in for it. Either one is released when the enhancement is torn down, and a teardown leaves each table showing the state it already had.
