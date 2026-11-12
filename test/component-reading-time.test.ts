@@ -11,11 +11,24 @@ import readingTime, {
   WORDS_KEY_PREFIX,
   countFrom,
   countsFor,
+  formatCount,
   numberFrom,
   pluralCategory,
   showWordsOf,
   type ReadingTimeProps,
 } from "../components/reading-time/index.ts";
+
+/** `count` with ASCII digits replaced by another digit set and `,` by another group separator. */
+function inDigits(count: number, base: number, group: string): string {
+  const ascii = count.toLocaleString("en-US", { useGrouping: true });
+  return ascii.replace(/\d/g, (d) => String.fromCodePoint(base + Number(d))).replace(/,/g, group);
+}
+
+/** Persian counts: extended Arabic-Indic digits (U+06F0) and the Persian thousands separator. */
+const faDigits = (count: number): string => inDigits(count, 0x06f0, "\u066c");
+
+/** Arabic counts: Arabic-Indic digits (U+0660) and the Arabic thousands separator. */
+const arDigits = (count: number): string => inDigits(count, 0x0660, "\u066c");
 
 type RenderOptions = {
   readonly lang?: string;
@@ -109,8 +122,8 @@ test("Persian uses one for 0 and 1 and other above that, and the noun does not c
   assert.equal(pluralCategory("fa", 1), "one");
   assert.equal(pluralCategory("fa", 2), "other");
   assert.equal(pluralCategory("fa-IR", 5), "other");
-  const one = stringsOf("fa")[`${TIME_KEY_PREFIX}one`]!.replace("{minutes}", "1");
-  const many = stringsOf("fa")[`${TIME_KEY_PREFIX}other`]!.replace("{minutes}", "5");
+  const one = stringsOf("fa")[`${TIME_KEY_PREFIX}one`]!.replace("{minutes}", faDigits(1));
+  const many = stringsOf("fa")[`${TIME_KEY_PREFIX}other`]!.replace("{minutes}", faDigits(5));
   assert.ok(render({ minutes: 1 }, { lang: "fa" })!.includes(`>${one}<`));
   assert.ok(render({ minutes: 5 }, { lang: "fa" })!.includes(`>${many}<`));
 });
@@ -128,9 +141,85 @@ test("Arabic uses zero, one, two, few, many, and other", () => {
   ];
   for (const [count, category] of cases) {
     assert.equal(pluralCategory("ar", count), category, `${count} is ${category}`);
-    const expected = stringsOf("ar")[`${TIME_KEY_PREFIX}${category}`]!.replace("{minutes}", String(count));
+    const expected = stringsOf("ar")[`${TIME_KEY_PREFIX}${category}`]!.replace("{minutes}", arDigits(count));
     assert.ok(render({ minutes: count }, { lang: "ar" })!.includes(`>${expected}<`), `${count} says "${expected}"`);
   }
+});
+
+test("visible counts use the page locale's digits while data attributes stay ASCII", () => {
+  const fa = render({ minutes: 5, words: 1234567, showWords: "" }, { lang: "fa" })!;
+  assert.match(fa, /data-minutes="5"/);
+  assert.match(fa, /data-words="1234567"/);
+  assert.ok(fa.includes(`>${faDigits(5)} دقیقه مطالعه<`), "minutes in Persian digits");
+  assert.ok(fa.includes(`>${faDigits(1234567)} واژه<`), "a large word count groups in Persian");
+
+  const ar = render({ minutes: 3, words: 11, showWords: "" }, { lang: "ar" })!;
+  assert.match(ar, /data-minutes="3"/);
+  assert.match(ar, /data-words="11"/);
+  assert.ok(ar.includes(stringsOf("ar").reading_time_few!.replace("{minutes}", arDigits(3))), "few, in Arabic digits");
+  assert.ok(ar.includes(`>${arDigits(11)} كلمة<`), "many words, in Arabic digits");
+
+  const en = render({ minutes: 2, words: 1234567, showWords: "" }, { lang: "en" })!;
+  assert.match(en, />2 minutes read</);
+  assert.match(en, />1,234,567 words</);
+  assert.match(en, /data-words="1234567"/);
+
+  // Every shipped language shows the same count in its own digits, with the same plural wording.
+  for (const [lang, digits] of [
+    ["en", (n: number): string => String(n)],
+    ["fa", faDigits],
+    ["ar", arDigits],
+  ] as const) {
+    const expected = stringsOf(lang)[`${TIME_KEY_PREFIX}${pluralCategory(lang, 42)}`]!.replace("{minutes}", digits(42));
+    assert.ok(render({ minutes: 42 }, { lang })!.includes(`>${expected}<`), `${lang} shows 42 as ${digits(42)}`);
+  }
+});
+
+test("regional tags and supported numbering-system extensions change digits, not plurals", () => {
+  assert.ok(render({ minutes: 5 }, { lang: "fa-IR" })!.includes(`>${faDigits(5)} دقیقه مطالعه<`));
+  assert.ok(
+    render({ minutes: 3 }, { lang: "ar-EG" })!.includes(stringsOf("ar").reading_time_few!.replace("{minutes}", arDigits(3))),
+  );
+  // A supported `-u-nu-` preference overrides the language's digits without touching the wording.
+  assert.ok(render({ minutes: 5 }, { lang: "fa-IR-u-nu-latn" })!.includes(">5 دقیقه مطالعه<"));
+  assert.ok(render({ minutes: 3 }, { lang: "ar-u-nu-latn" })!.includes("قراءة 3 دقائق"));
+  assert.ok(render({ minutes: 5 }, { lang: "en-u-nu-arab" })!.includes(`>${arDigits(5)} minutes read<`));
+  // Plural categories come from the value, not from the digits or the tag's extension.
+  assert.equal(pluralCategory("fa-IR-u-nu-latn", 1), "one");
+  assert.equal(pluralCategory("ar-u-nu-latn", 2), "two");
+  assert.equal(pluralCategory("en-u-nu-arab", 3), "other");
+});
+
+test("malformed tags and unsupported numbering preferences fail soft", () => {
+  for (const lang of ["", "not a tag", "en_US", "en-u-nu-", "de"]) {
+    const out = render({ minutes: 3 }, { lang })!;
+    assert.match(out, /data-minutes="3"/, `${JSON.stringify(lang)} keeps ASCII data`);
+    assert.match(out, />3 minutes read</, `${JSON.stringify(lang)} falls back to Latin digits`);
+  }
+  // A malformed tag never throws: its digits are the Latin fallback while the catalog keeps the
+  // documented primary-subtag fallback to Persian wording.
+  const brokenFa = render({ minutes: 3 }, { lang: "fa-IR-u-" })!;
+  assert.match(brokenFa, /data-minutes="3"/);
+  assert.ok(brokenFa.includes(">3 دقیقه مطالعه<"));
+  // A well-formed but unsupported preference keeps the language's own default digits.
+  assert.ok(render({ minutes: 5 }, { lang: "fa-u-nu-foobar" })!.includes(`>${faDigits(5)} دقیقه مطالعه<`));
+  assert.equal(formatCount("fa-u-nu-foobar", 5), faDigits(5));
+  assert.equal(formatCount("not a tag", 42), "42");
+});
+
+test("formatCount is deterministic and the per-tag cache survives repeated and mixed renders", () => {
+  for (const [lang, digits] of [
+    ["en", (n: number): string => n.toLocaleString("en-US", { useGrouping: true })],
+    ["fa", faDigits],
+    ["ar", arDigits],
+  ] as const) {
+    assert.equal(formatCount(lang, 1234567), digits(1234567), lang);
+    assert.equal(formatCount(lang, 1234567), digits(1234567), `${lang} again`);
+  }
+  const first = render({ minutes: 7 }, { lang: "fa" })!;
+  render({ minutes: 7 }, { lang: "en" });
+  render({ minutes: 7 }, { lang: "ar" });
+  assert.equal(render({ minutes: 7 }, { lang: "fa" }), first, "interleaved languages cannot corrupt the cache");
 });
 
 test("the word count is shown only with showWords, with its own plural form", () => {

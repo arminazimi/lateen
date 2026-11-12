@@ -66,6 +66,79 @@ export function pluralCategory(lang: string, count: number): PluralCategory {
   return categories.has(category) ? (category as PluralCategory) : "other";
 }
 
+/** How a language writes its counts: the locale shapes the digits and grouping, the numbering system the digits. */
+interface CountStyle {
+  locale: string;
+  numberingSystem: string;
+}
+
+/** The deterministic Latin-digit style, used for malformed tags and as the runtime-failure fallback. */
+const LATIN: CountStyle = { locale: "en-US", numberingSystem: "latn" };
+
+/**
+ * The default number style per language, the same locales and numbering systems `src/dates.ts` uses
+ * for calendar dates, so a page's dates and its counts never disagree on digit shapes.
+ */
+const COUNT_STYLES: Record<string, CountStyle> = {
+  ar: { locale: "ar-SA", numberingSystem: "arab" },
+  en: LATIN,
+  fa: { locale: "fa-IR", numberingSystem: "arabext" },
+};
+
+/** Numbering systems this runtime can format; anything else is an unsupported preference. */
+const NUMBERING_SYSTEMS: ReadonlySet<string> = new Set(Intl.supportedValuesOf("numberingSystem"));
+
+/**
+ * The count style for `lang`, honoring a `-u-nu-` preference the runtime supports, the way
+ * `src/dates.ts` honors calendar and numbering preferences for dates. Malformed tags use the Latin
+ * style, an unsupported preference falls back to the language's safe default digits, and an
+ * unknown-but-valid language keeps its own grouping on Latin digits, so a bad tag never throws.
+ */
+function countStyle(lang: string): CountStyle {
+  let locale: Intl.Locale;
+  try {
+    locale = new Intl.Locale(lang);
+  } catch {
+    return LATIN;
+  }
+  const base = COUNT_STYLES[locale.language] ?? { locale: locale.baseName, numberingSystem: "latn" };
+  const numberingSystem = locale.numberingSystem;
+  return {
+    locale: base.locale,
+    numberingSystem:
+      numberingSystem !== undefined && NUMBERING_SYSTEMS.has(numberingSystem) ? numberingSystem : base.numberingSystem,
+  };
+}
+
+/** Number formatters per language tag, so a page's tag is negotiated once. */
+const formatters = new Map<string, Intl.NumberFormat>();
+
+/** The formatter for a language tag, falling back to the Latin style when the runtime cannot build it. */
+function formatterOf(lang: string): Intl.NumberFormat {
+  const cached = formatters.get(lang);
+  if (cached !== undefined) return cached;
+  const style = countStyle(lang);
+  let created: Intl.NumberFormat;
+  try {
+    created = new Intl.NumberFormat(style.locale, { numberingSystem: style.numberingSystem });
+  } catch {
+    created = new Intl.NumberFormat(LATIN.locale, { numberingSystem: LATIN.numberingSystem });
+  }
+  formatters.set(lang, created);
+  return created;
+}
+
+/**
+ * The visible text of a count in `lang`'s numbering system: Persian and Arabic pages show their own
+ * digits, English shows Latin ones, and a supported `-u-nu-` extension on the tag overrides the
+ * language's default. Malformed tags and unsupported preferences fall back as `countStyle` does,
+ * and large counts group by the negotiated locale, never the host's. Plural selection and the
+ * machine-readable `data-*` attributes keep the number itself, not this text.
+ */
+export function formatCount(lang: string, count: number): string {
+  return formatterOf(lang).format(count);
+}
+
 /** A finite number from a number or a numeric string; anything else is undefined. */
 export function numberFrom(value: unknown): number | undefined {
   if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
@@ -140,7 +213,9 @@ export function showWordsOf(value: unknown): boolean {
  * A chip under the title with the page's reading time, and its word count when `showWords` is
  * set. The numbers come from `site.data["reading-time"]` by `page.url`; the directive's `minutes`
  * and `words` override them for a manual chip. The text comes from `i18n/*.json` in the page's
- * language, with the plural category chosen by `Intl.PluralRules`. Renders nothing when there is
+ * language, with the plural category chosen by `Intl.PluralRules` from the numeric value and the
+ * visible count written in the page locale's digits by {@link formatCount}. The `data-minutes`
+ * and `data-words` attributes keep the exact ASCII integers. Renders nothing when there is
  * no data for the page, or when the reading time is zero.
  */
 const readingTime: Component<ReadingTimeProps> = ({ props, page, site }) => {
@@ -156,13 +231,17 @@ const readingTime: Component<ReadingTimeProps> = ({ props, page, site }) => {
     h(
       "span",
       { class: "reading-time-minutes" },
-      t(page.lang, `${TIME_KEY_PREFIX}${timeCategory}`, { minutes }),
+      t(page.lang, `${TIME_KEY_PREFIX}${timeCategory}`, { minutes: formatCount(page.lang, minutes) }),
     ),
   ];
   if (showWords && words !== undefined) {
     const wordCategory = pluralCategory(page.lang, words);
     children.push(
-      h("span", { class: "reading-time-words" }, t(page.lang, `${WORDS_KEY_PREFIX}${wordCategory}`, { words })),
+      h(
+        "span",
+        { class: "reading-time-words" },
+        t(page.lang, `${WORDS_KEY_PREFIX}${wordCategory}`, { words: formatCount(page.lang, words) }),
+      ),
     );
   }
 

@@ -12,10 +12,16 @@ count. The doc layout places it automatically on every doc page that has an entr
   language; `pluralCategory` picks the CLDR category with `Intl.PluralRules`. English distinguishes
   one and other, Persian uses one for 0 and 1 and other above that (the noun does not change after
   a numeral), and Arabic uses zero, one, two, few (3 to 10), many (11 to 99), and other.
+  `formatCount` writes the visible numbers with `Intl.NumberFormat` in the page language's
+  numbering system — Persian `arabext`, Arabic `arab`, English `latn`, the same styles
+  `src/dates.ts` uses for dates — honoring a supported `-u-nu-` preference on the tag and falling
+  back softly on malformed tags and unsupported preferences. Plurals and the `data-minutes` and
+  `data-words` attributes keep the numeric value itself, so the machine-readable digits stay ASCII.
 - `style.css` draws the chip with tokens and logical properties.
 - `test/component-reading-time.test.ts` covers the fact lookup in every shape, the props override,
-  singular and plural text in English, Persian, and Arabic, the word count, missing and zero data,
-  escaping, and the chip's place in the doc layout.
+  singular and plural text in English, Persian, and Arabic, locale digits with regional tags,
+  `-u-nu-` extensions, large grouped counts, and fail-soft fallbacks, the ASCII data attributes,
+  the word count, missing and zero data, escaping, and the chip's place in the doc layout.
 
 A chip renders nothing when the data has no entry for the page or the reading time is 0, so a page
 with only front matter and no prose stays clean.

@@ -47,6 +47,15 @@ page's own reading time and word count.
 - The text comes from `i18n/*.json` in the page's language. English distinguishes one minute from
   several; Persian uses one form for 0 and 1 and the same noun above that, since a Persian noun
   stays singular after a numeral; Arabic follows the CLDR zero, one, two, few (3 to 10), many
-  (11 to 99), and other forms.
+  (11 to 99), and other forms. The plural is chosen from the numeric value, never from its text.
+- The visible minutes and words are written in the page language's digits — Persian `۵` and
+  Arabic `٥`, English `5` — with the same numbering systems the calendar dates use, and regional
+  tags like `fa-IR` or `ar-EG` inherit them. A supported `-u-nu-` preference on the language tag
+  overrides the digits, for example `fa-IR-u-nu-latn` shows `5` where `fa-IR` shows `۵`, and
+  `en-u-nu-arab` shows `٥` where `en` shows `5`; the wording and the plural category do not change. Large counts group by the
+  page's locale (`۱٬۲۳۴٬۵۶۷`), not the build machine's. A malformed tag or an unsupported
+  preference falls back to Latin digits; nothing ever throws.
+- `data-minutes` and `data-words` always keep the exact ASCII integers, whatever the visible
+  digits look like, so other tooling can read the chip.
 - A negative or unreadable `minutes` or `words` value falls back to the page's data, and a
   non-positive reading time renders nothing.
