@@ -32,8 +32,8 @@ The `card` helper in `components/cards/` takes:
 
 | Name | Type | Required | What it does |
 | --- | --- | --- | --- |
-| `href` | string | yes | Where the whole card goes. The card is one link. |
-| `title` | string | yes | The card's heading. |
+| `href` | string | yes | Where the whole card goes. The card is one link — but only when the destination is safe (see Notes). |
+| `title` | string | yes | The card's heading. Blank or whitespace-only titles never produce a link. |
 | `description` | string | no | Plain text under the heading. It cannot hold a link of its own. |
 | `icon` | HTML | no | A decorative icon, hidden from assistive technology. |
 
@@ -49,6 +49,8 @@ Use the home layout with `sections` in front matter, or a Markdown list of links
 
 ## Notes
 
+- Card destinations follow the theme's link-card policy: only root-relative paths (`/guide/`, not protocol-relative `//host`) and `http`/`https` addresses become links. Unsafe, malformed, or blank `href` values — and blank or whitespace-only `title` values — render the card as non-interactive content instead, so a card never becomes a `javascript:` navigation or an unnamed link. The description stays readable as plain text, including with JavaScript disabled.
 - Keep a card's description to one line. The whole card is a single link, so a nested link would be invalid.
 - Without an icon the card keeps the same layout; the icon is optional.
 - For a section overview inside a normal doc page, a list of links reads well and needs no front matter.
+- Valid cards show the standard focus ring across the whole card when tabbed to by keyboard.
