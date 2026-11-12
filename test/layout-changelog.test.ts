@@ -124,6 +124,28 @@ const out = (
 /** The index of a section by id; the TOC links `#id`, so `id="…"` names only the section. */
 const sectionAt = (page: string, id: string): number => page.indexOf(`<section class="changelog-entry" id="${id}"`);
 
+/** Every section id on the page, in document (newest-first) order. */
+function sectionIds(page: string): string[] {
+  return [...page.matchAll(/<section class="changelog-entry" id="([^"]+)"/g)].map((match) => match[1]!);
+}
+
+/** The version contents links, in display order. */
+function contentsHrefs(page: string): string[] {
+  const toc = new RegExp(
+    `<nav class="${TOC_CLASS}" aria-label="Versions">([\\s\\S]*?)<\\/nav>`,
+  ).exec(page);
+  assert.ok(toc, "expected the version contents");
+  return [...(toc[1] ?? "").matchAll(/<a href="#([^"]+)"/g)].map((match) => match[1]!);
+}
+
+/** Every contents link points at a section that exists on the page. */
+function assertContentsResolve(page: string): void {
+  const ids = sectionIds(page);
+  const hrefs = contentsHrefs(page);
+  assert.equal(hrefs.length, ids.length, "one contents link per section");
+  for (const href of hrefs) assert.ok(ids.includes(href), `#${href} points at a section`);
+}
+
 test("renders one changelog entry per release, newest version first", () => {
   const page = out({
     releases: [
@@ -208,6 +230,100 @@ test("the compact version contents sits above the releases and links to each anc
 test("mentions no version twice: one contents link and one section anchor per release", () => {
   const page = out({ releases: [{ version: "1.0.0" }, { version: "2.0.0" }] });
   assert.equal(page.match(/href="#v2-0-0"/g)?.length, 2, "the contents link and the entry's self link");
+});
+
+test("repeated releases get one contents link per section, in newest-first author order", () => {
+  const page = out({
+    releases: [
+      { version: "1.0.0", body: "<p>First listed.</p>" },
+      { version: "1.0.0", body: "<p>Second listed.</p>" },
+    ],
+  });
+
+  assert.deepEqual(sectionIds(page), ["v1-0-0", "v1-0-0-2"]);
+  assert.deepEqual(contentsHrefs(page), ["v1-0-0", "v1-0-0-2"]);
+  assertContentsResolve(page);
+  assert.ok(page.indexOf("First listed.") < page.indexOf("Second listed."), "author order breaks the tie");
+});
+
+test("sorted duplicates take suffixes in display order, not front-matter order", () => {
+  const page = out({
+    releases: [
+      { version: "1.0.0", body: "<p>Older first listed.</p>" },
+      { version: "2.0.0", body: "<p>Newest.</p>" },
+      { version: "1.0.0", body: "<p>Older second listed.</p>" },
+    ],
+  });
+
+  assert.deepEqual(sectionIds(page), ["v2-0-0", "v1-0-0", "v1-0-0-2"]);
+  assert.deepEqual(contentsHrefs(page), ["v2-0-0", "v1-0-0", "v1-0-0-2"]);
+  assertContentsResolve(page);
+
+  const order = ["Newest.", "Older first listed.", "Older second listed."].map((text) => page.indexOf(text));
+  assert.deepEqual([...order].sort((a, b) => a - b), order);
+});
+
+test("unversioned releases get distinct contents links that reach their own sections", () => {
+  const page = out({
+    releases: [{ body: "<p>Next first.</p>" }, { version: "1.0.0" }, { body: "<p>Next second.</p>" }],
+  });
+
+  assert.deepEqual(sectionIds(page), ["vunversioned", "vunversioned-2", "v1-0-0"]);
+  assert.deepEqual(contentsHrefs(page), ["vunversioned", "vunversioned-2", "v1-0-0"]);
+  assertContentsResolve(page);
+  assert.equal(page.match(/>Unreleased<\/a>/g)?.length, 2, "both unversioned releases keep the fallback text");
+  assert.ok(page.indexOf("Next first.") < page.indexOf("Next second."));
+});
+
+test("Unicode releases with the same slug keep their text and get reachable contents links", () => {
+  const page = out({
+    releases: [
+      { version: "نسخه ۲.۰.۰", body: "<p>دوم.</p>" },
+      { version: "نسخه ۳.۰.۰", body: "<p>سوم.</p>" },
+    ],
+  });
+
+  assert.deepEqual(sectionIds(page), ["vunversioned", "vunversioned-2"]);
+  assert.deepEqual(contentsHrefs(page), ["vunversioned", "vunversioned-2"]);
+  assertContentsResolve(page);
+  assert.match(page, /data-version="نسخه ۲\.۰\.۰"/);
+  assert.match(page, /data-version="نسخه ۳\.۰\.۰"/);
+  assert.equal(page.match(/>نسخه [۲۳]\.۰\.۰<\/a>/g)?.length, 2, "the contents keeps the authored version text");
+});
+
+test("a duplicated section keeps its evidence and names itself with its shared id", () => {
+  const page = out({
+    releases: [
+      { version: "1.2.0", date: "2026-01-01", categories: ["added"], body: "<p>One.</p>" },
+      { version: "1.2.0", date: "2026-02-01", categories: ["fixed"], body: "<p>Two.</p>" },
+    ],
+  });
+
+  for (const id of ["v1-2-0", "v1-2-0-2"]) {
+    assert.ok(sectionAt(page, id) >= 0, `section ${id}`);
+    assert.ok(page.includes(`href="#${id}"`), `self-link of ${id}`);
+    assert.ok(page.includes(`aria-labelledby="changelog-version-${id}"`), `accessible name of ${id}`);
+    assert.ok(page.includes(`<span id="changelog-version-${id}"`), `version text id of ${id}`);
+  }
+  assert.match(page, /datetime="2026-01-01">January 1, 2026<\/time>/);
+  assert.match(page, /datetime="2026-02-01">February 1, 2026<\/time>/);
+  assert.match(page, />Added<\/span>/);
+  assert.match(page, />Fixed<\/span>/);
+  assert.match(page, /<p>One\.<\/p>/);
+  assert.match(page, /<p>Two\.<\/p>/);
+  assert.equal(page.match(/>1\.2\.0<\/a>/g)?.length, 2, "one contents link per duplicate");
+});
+
+test("page ids are isolated: another page starts again at the base fragment", () => {
+  const frontMatter = {
+    releases: [{ version: "1.0.0" }, { version: "1.0.0" }, { version: "1.0.0" }],
+  };
+  const first = out(frontMatter);
+  const second = out(frontMatter);
+
+  assert.deepEqual(sectionIds(first), ["v1-0-0", "v1-0-0-2", "v1-0-0-3"]);
+  assert.deepEqual(sectionIds(second), ["v1-0-0", "v1-0-0-2", "v1-0-0-3"]);
+  assertContentsResolve(second);
 });
 
 test("falls back to the page body when front matter gives no releases", () => {

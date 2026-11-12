@@ -49,6 +49,9 @@ the release touches, and the entry text. It is a container directive, so the bod
   Give an entry an explicit `id` when the generated one is not readable enough, such as for a version with no
   Latin characters, which falls back to `vunversioned`. An explicit id is escaped to the characters an id may
   hold, and repeats of it are disambiguated the same way.
+- The rendered entry publishes its allocated id on its section vnode. The changelog layout builds its version
+  contents from those ids, so a repeated, slug-equivalent, or unversioned release's contents link always
+  reaches that release's section instead of the first one with the same base fragment.
 - A missing or blank version renders the heading text "Unreleased" and the id `vunversioned`; a later one
   gets `vunversioned-2`. It never renders a bare `v`.
 - A date that is missing, not a calendar date, or not written as an ISO date renders "Date unknown". Only a

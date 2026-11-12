@@ -243,6 +243,21 @@ test("repeated versions keep the published id first and disambiguate in page ord
   }
 });
 
+test("the rendered entry publishes the id it allocated on its section vnode", () => {
+  const page = pageFor();
+  const node = changelogEntry({ props: { version: "1.2.0" }, page, site, html: "" });
+  assert.equal(node.props.id, sectionId(html(node)));
+});
+
+test("page ids are isolated: another page starts again at the base fragment", () => {
+  const page = pageFor();
+  assert.equal(sectionId(renderOn(page, { version: "1.0.0" })), "v1-0-0");
+  assert.equal(sectionId(renderOn(page, { version: "1.0.0" })), "v1-0-0-2");
+
+  const other = pageFor();
+  assert.equal(sectionId(renderOn(other, { version: "1.0.0" })), "v1-0-0");
+});
+
 test("versions with equivalent slugs get distinct ids and keep their authored text", () => {
   const page = pageFor();
   const first = renderOn(page, { version: "1.2.0" });
