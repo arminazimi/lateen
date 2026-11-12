@@ -17,16 +17,36 @@ export function twinUrl(url: string): string | undefined {
   return `${url.endsWith("/") ? url : `${url}/`}index.md`;
 }
 
+/** The page URL with the site's base in front, only when the URL does not already carry it. */
+export function pageUrl(url: string, base = ""): string {
+  const root = base.replace(/\/+$/, "");
+  if (root === "" || url === root || url.startsWith(`${root}/`)) return url;
+  return `${root}${url}`;
+}
+
+/**
+ * The page's Markdown twin as the published site serves it: the twin rule applied to the
+ * base-aware page URL, so the base goes in exactly once. Engine page URLs already carry the base;
+ * a URL that does not, outside a subpath deployment, gets it here instead of staying
+ * root-relative. The same joining rule the command palette's page actions use and the provider
+ * menu applies to its absolute links, so every Markdown twin on the site names one address.
+ */
+export function markdownTwin(url: string, base = ""): string | undefined {
+  return twinUrl(pageUrl(url, base));
+}
+
 /**
  * Copy page as Markdown: a button that copies the page's Markdown twin, a plain link to the same
  * twin so the page works without JavaScript, and a status region the island announces on. The
- * button starts `hidden` and `client.ts` reveals it once it knows the browser has a clipboard, so a
- * visitor without JavaScript never sees a control that would do nothing. The `m` shortcut belongs to
- * the island too; the button carries it in `aria-keyshortcuts`.
+ * twin the link and the button share is resolved against the site's base exactly once, so a
+ * subpath deployment never offers a root-relative twin. The button starts `hidden` and `client.ts`
+ * reveals it once it knows the browser has a clipboard, so a visitor without JavaScript never sees
+ * a control that would do nothing. The `m` shortcut belongs to the island too; the button carries
+ * it in `aria-keyshortcuts`.
  */
-const copyMarkdown: Chrome = ({ page }) => {
+const copyMarkdown: Chrome = ({ site, page }) => {
   if (page.kind !== "doc") return null;
-  const markdown = twinUrl(page.url);
+  const markdown = markdownTwin(page.url, site.config.base);
   if (markdown === undefined) return null;
 
   const lang = page.lang;

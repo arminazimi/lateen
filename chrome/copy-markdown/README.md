@@ -7,7 +7,10 @@ off or the browser has no clipboard.
 ## Files
 
 - `index.ts`: the Preact component. Its default export is the chrome part. It renders nothing for a
-  page that is not a doc page (`page.kind !== "doc"`) or whose URL has no Markdown twin.
+  page that is not a doc page (`page.kind !== "doc"`) or whose URL has no Markdown twin. The twin
+  both the link and the button use is resolved against the site's base exactly once (`pageUrl`
+  adds `base` only when the page URL does not already carry it, the same rule the command palette
+  uses), so a subpath deployment never offers a root-relative twin and a base is never doubled.
 - `style.css`: the button, the link, and the status region, from design tokens only.
 - `island.ts`: the page copy island, shared with `chrome/page-agent-menu`. It fetches the twin on
   click or on `m`, writes it to the clipboard, clears the previous message and marks the
