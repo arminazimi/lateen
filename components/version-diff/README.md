@@ -6,13 +6,19 @@ alone. A moved change also shows its old and new position. The header names both
 `Base version` and `Target version`, and the changed text carries a visible `+` or `−` beside its
 Before or After label, so a copied or printed diff keeps the added and removed markers.
 
-An explicit comparison has one of three states, exposed as `data-diff-state`:
+An explicit comparison has one of four states, exposed as `data-diff-state`:
 
-- `changes`: at least one usable section change; the ordered list and its navigation render.
+- `changes`: at least one usable section change and nothing dropped; the ordered list and its
+  navigation render, with `data-changes-usable` counting the rendered changes and
+  `data-changes-dropped` at `0`.
+- `incomplete`: usable changes were read but other evidence entries were dropped as malformed; the
+  list and navigation still render, the counts are accurate, and a visible note (plus
+  `aria-describedby`) says the comparison is only partial. It is never presented as complete, and it
+  is neither `unchanged` nor `unavailable`.
 - `unchanged`: two usable versions and an explicit empty change list; the header and both versions
   render with the zero-change count, so a verified empty comparison is visible rather than hidden.
-- `unavailable`: a version is missing or equal, change evidence is absent, or a change list has no
-  usable entry; the viewer keeps the state visible instead of pretending the diff was empty.
+- `unavailable`: a version is missing or equal, change evidence is absent, or every change entry is
+  unusable; the viewer keeps the state visible instead of pretending the diff was empty.
 
 When no comparison was written at all (no `data`, no `from`/`to`/`changes`, and no `versionDiff`
 front matter) the viewer renders nothing.

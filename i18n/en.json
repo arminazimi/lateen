@@ -229,6 +229,7 @@
   "version_diff_changed": "Changed",
   "version_diff_count": "Change {current} of {total}",
   "version_diff_group": "Change navigation",
+  "version_diff_incomplete": "This version comparison is incomplete: {usable} usable changes are shown; {dropped} unreadable entries were dropped from the recorded diff.",
   "version_diff_moved": "Moved",
   "version_diff_moved_from": "From position {from}",
   "version_diff_moved_to": "To position {to}",

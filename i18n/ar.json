@@ -229,6 +229,7 @@
   "version_diff_changed": "مُغيَّر",
   "version_diff_count": "التغيير {current} من {total}",
   "version_diff_group": "التنقل بين التغييرات",
+  "version_diff_incomplete": "هذه المقارنة بين الإصدارين غير مكتملة: يُعرض {usable} تغييرًا صالحًا، وتم تجاهل {dropped} من المدخلات غير القابلة للقراءة في الفرق المسجّل.",
   "version_diff_moved": "منقول",
   "version_diff_moved_from": "من الموضع {from}",
   "version_diff_moved_to": "إلى الموضع {to}",

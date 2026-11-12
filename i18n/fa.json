@@ -229,6 +229,7 @@
   "version_diff_changed": "تغییر یافته",
   "version_diff_count": "تغییر {current} از {total}",
   "version_diff_group": "پیمایش تغییرها",
+  "version_diff_incomplete": "این مقایسهٔ نسخه‌ها ناقص است: {usable} تغییر قابل‌استفاده نمایش داده شده و {dropped} ورودی خوانانشدنی از دیف ثبت‌شده کنار گذاشته شده است.",
   "version_diff_moved": "جابه‌جا شده",
   "version_diff_moved_from": "از جایگاه {from}",
   "version_diff_moved_to": "به جایگاه {to}",

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import type { ComponentProps } from "@velella/mizzen/contracts";
 import { renderToString } from "preact-render-to-string";
-import { languages, stringsOf } from "../i18n/index.ts";
+import { languages, stringsOf, t } from "../i18n/index.ts";
 import versionDiff, {
   DEFAULT_ID,
   ICONS,
@@ -324,11 +324,167 @@ test("unavailable keeps usable versions and its translated state visible", () =>
   }
 });
 
+/* Mixed evidence: malformed entries beside usable ones in both the listed and the grouped shape. */
+
+test("mixed listed evidence renders incomplete with accurate usable and dropped counts", () => {
+  const mixed = JSON.stringify({
+    from: "v1",
+    to: "v2",
+    changes: [
+      { kind: "added", title: "Retries", after: "## Retries\n\nTry again." },
+      { kind: "renamed", title: "No such kind" },
+      { kind: "changed", title: "Install", before: "old", after: "new" },
+      "not a change",
+      { kind: "removed", title: "   " },
+    ],
+  });
+  const out = render({ data: mixed });
+  assert.ok(out);
+
+  // Machine-readable state and counts, on the viewer and on the note.
+  assert.match(out, /data-diff-state="incomplete"/);
+  assert.match(out, /<section class="version-diff"[^>]*data-changes-usable="2"/);
+  assert.match(out, /data-changes-dropped="3"/);
+  assert.doesNotMatch(out, /data-diff-state="changes"/);
+  assert.doesNotMatch(out, /data-diff-state="unchanged"/);
+  assert.doesNotMatch(out, /data-diff-state="unavailable"/);
+
+  // The visible note names the comparison partial and is referenced by the section.
+  assert.match(out, /aria-describedby="version-diff-note"/);
+  assert.match(
+    out,
+    /<p class="version-diff-note" id="version-diff-note"[^>]*data-changes-usable="2"[^>]*data-changes-dropped="3"/,
+  );
+  assert.ok(out.includes(`<span class="version-diff-note-label">${stringsOf("en").partial!}</span>`));
+  assert.ok(
+    out.includes(t("en", "version_diff_incomplete", { usable: 2, dropped: 3 })),
+    "the note explains the comparison and both counts",
+  );
+  assert.equal(out.includes(stringsOf("en").trust_why_partial!), false, "the Trust Panel message is for page trust, not a diff");
+
+  // Usable changes keep their stable anchors, excerpts, and before/after semantics.
+  assert.equal([...out.matchAll(/<li class="version-diff-item/g)].length, 2);
+  assert.match(out, /id="version-diff-change-1"/);
+  assert.match(out, /id="version-diff-change-2"/);
+  assert.match(out, /<h3 class="version-diff-item-title" id="version-diff-change-1-title">Retries<\/h3>/);
+  assert.ok(out.includes("Try again."));
+  assert.match(out, /<p class="version-diff-text" dir="auto">old<\/p>/);
+  assert.match(out, /<p class="version-diff-text" dir="auto">new<\/p>/);
+
+  // Nothing is invented for the dropped evidence, and the single state line does not appear.
+  assert.doesNotMatch(out, /No such kind/);
+  assert.doesNotMatch(out, /version-diff-state/);
+
+  // The list and navigation still render for the valid entries, controls hidden without JS.
+  assert.match(out, /<ol class="version-diff-list" id="version-diff-list"/);
+  assert.match(out, /<div class="version-diff-controls"[^>]*hidden/);
+  assert.match(out, /data-total="2"/);
+});
+
+test("mixed grouped evidence renders incomplete with accurate counts", () => {
+  const groupedMixed = JSON.stringify({
+    from: "v1",
+    to: "v2",
+    added: [{ heading: "Retries", text: "## Retries" }, { text: "no heading" }],
+    removed: [],
+    changed: [{ heading: "Install", oldText: "old", newText: "new" }, null],
+    moved: "broken",
+  });
+  const out = render({ data: groupedMixed });
+  assert.ok(out);
+  assert.match(out, /data-diff-state="incomplete"/);
+  assert.match(out, /data-changes-usable="2"/);
+  assert.match(out, /data-changes-dropped="3"/);
+  assert.equal([...out.matchAll(/<li class="version-diff-item/g)].length, 2);
+  assert.ok(out.includes(">Retries</h3>"));
+  assert.ok(out.includes(">Install</h3>"));
+  assert.ok(out.includes(stringsOf("en").partial!));
+});
+
+test("usable, wholly malformed, and empty evidence keep distinct states; only readable ones are counted", () => {
+  const usable = diffOf({ from: "v1", to: "v2", changes: [{ kind: "added", title: "A" }] });
+  assert.equal(usable.state, "changes");
+  assert.equal(usable.dropped, 0);
+
+  const partial = diffOf({ from: "v1", to: "v2", changes: [{ kind: "added", title: "A" }, 7] });
+  assert.equal(partial.state, "incomplete");
+  assert.equal(partial.changes.length, 1);
+  assert.equal(partial.dropped, 1);
+
+  const broken = diffOf({ from: "v1", to: "v2", changes: [{ kind: "bogus", title: "X" }, null] });
+  assert.equal(broken.state, "unavailable");
+  assert.equal(broken.changes.length, 0);
+  assert.equal(broken.dropped, 2);
+
+  const empty = diffOf({ from: "v1", to: "v2", changes: [] });
+  assert.equal(empty.state, "unchanged");
+  assert.equal(empty.dropped, 0);
+
+  // Only changes and incomplete carry the machine-readable counts and the note.
+  for (const [props, state] of [
+    [{ data: dataOf([]) }, "unchanged"],
+    [{ from: "v1", to: "v2", changes: "{" }, "unavailable"],
+  ] as const) {
+    const out = render(props);
+    assert.ok(out, state);
+    assert.match(out, new RegExp(`data-diff-state="${state}"`));
+    assert.doesNotMatch(out, /data-changes-usable/);
+    assert.doesNotMatch(out, /data-changes-dropped/);
+    assert.doesNotMatch(out, /version-diff-note/);
+  }
+});
+
+test("the incomplete note follows the page language in every language", () => {
+  const mixed = JSON.stringify({
+    from: "v1",
+    to: "v2",
+    changes: [{ kind: "added", title: "Retries" }, { kind: "bogus", title: "Dropped" }],
+  });
+  for (const lang of languages) {
+    const out = render({ data: mixed }, lang);
+    assert.ok(out, `${lang} renders`);
+    assert.match(out, /data-diff-state="incomplete"/);
+    assert.ok(
+      out.includes(`<span class="version-diff-note-label">${stringsOf(lang).partial!}</span>`),
+      `${lang} partial label`,
+    );
+    assert.ok(
+      out.includes(t(lang, "version_diff_incomplete", { usable: 1, dropped: 1 })),
+      `${lang} note text and counts`,
+    );
+    assert.equal(out.includes(stringsOf(lang).trust_why_partial!), false, `${lang} Trust Panel message is absent`);
+    assert.ok(out.includes(`>${stringsOf(lang).version_diff_added!}<`), `${lang} kept change label`);
+  }
+});
+
+test("incomplete evidence via separate attributes and front matter keeps the same shape", () => {
+  const separate = render({
+    from: "v1",
+    to: "v2",
+    changes: JSON.stringify([{ kind: "moved", title: "Upgrade", from: "3", to: "5" }, { nokind: true }]),
+  });
+  assert.ok(separate);
+  assert.match(separate, /data-diff-state="incomplete"/);
+  assert.match(separate, /data-changes-usable="1"/);
+  assert.match(separate, /data-changes-dropped="1"/);
+  assert.match(separate, /class="version-diff-item version-diff-item-moved"/);
+
+  const matter = render({}, "en", {
+    versionDiff: { from: "a", to: "b", changes: [{ kind: "removed", title: "Old", before: "gone" }, {}] },
+  });
+  assert.ok(matter);
+  assert.match(matter, /data-diff-state="incomplete"/);
+  assert.ok(matter.includes(">gone</p>"));
+  assert.ok(matter.includes(stringsOf("en").partial!));
+});
+
 test("a non-empty diff reports the changes state", () => {
-  assert.deepEqual([...STATES], ["changes", "unchanged", "unavailable"]);
+  assert.deepEqual([...STATES], ["changes", "incomplete", "unchanged", "unavailable"]);
   const out = render({ data: dataOf() });
   assert.ok(out);
   assert.match(out, /data-diff-state="changes"/);
+  assert.match(out, /data-changes-usable="4"/);
+  assert.match(out, /data-changes-dropped="0"/);
   assert.match(out, /version-diff-controls/);
   assert.match(out, /version-diff-list/);
 });
@@ -347,10 +503,11 @@ test("a change with an unknown kind or no section title is dropped", () => {
   };
   const diff = diffOf(raw);
   assert.deepEqual(diff, {
-    state: "changes",
+    state: "incomplete",
     from: "v1",
     to: "v2",
     changes: [{ kind: "added", title: "Kept" }],
+    dropped: 4,
   });
   assert.equal(kindOf(" Moved "), "moved");
   assert.equal(kindOf("deleted"), undefined);
@@ -360,8 +517,15 @@ test("a change with an unknown kind or no section title is dropped", () => {
     from: "v1",
     to: "v2",
     changes: [],
+    dropped: 0,
   });
-  assert.deepEqual(diffOf({ from: "v1", to: "v2" }), { state: "unavailable", from: "v1", to: "v2", changes: [] });
+  assert.deepEqual(diffOf({ from: "v1", to: "v2" }), {
+    state: "unavailable",
+    from: "v1",
+    to: "v2",
+    changes: [],
+    dropped: 0,
+  });
   assert.equal(diffOf("not a diff").state, "unavailable");
 });
 
@@ -623,4 +787,10 @@ test("style.css prints the markers and leaves the screen-only controls out", () 
   assert.match(css, /@media print\s*\{[^}]*\.version-diff-controls\s*\{[^}]*display:\s*none/s);
   assert.match(css, /\.version-diff-marker\s*\{[^}]*font-weight:\s*var\(--type-weight-bold\)/s);
   assert.match(css, /\.version-diff-version-value\s*\{[^}]*direction:\s*ltr/s);
+});
+
+test("style.css marks the incomplete note apart with its own colour token", () => {
+  assert.match(css, /\.version-diff-note\s*\{[^}]*padding-inline:\s*var\(--space-4\)/s);
+  assert.match(css, /\.version-diff-note\s*\{[^}]*border-block-end/s);
+  assert.match(css, /\.version-diff-note-label\s*\{[^}]*color:\s*var\(--color-warning\)/s);
 });
