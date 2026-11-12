@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { Fragment } from "preact";
 import type { ChromeProps, Page, Pager, RepositoryConfig, Site, SiteConfig, SourcePos, Trail } from "@velella/mizzen/contracts";
-import pageFooter, { isoDate } from "../chrome/page-footer/index.ts";
+import pageFooter, { dateEvidence, isoDate } from "../chrome/page-footer/index.ts";
 import { activate, copy, RESET_MS, type Clipboard, type CopyButton, type CopyEnv } from "../chrome/page-footer/client.ts";
 
 const pos: SourcePos = { file: "docs/guide/install.md", line: 3, column: 1, endLine: 9, endColumn: 1 };
@@ -51,6 +51,12 @@ function pageWith(frontMatter: Record<string, unknown> = {}, source: SourcePos =
 function props(page: Page, repo?: RepositoryConfig): ChromeProps {
   const site: Site = { config: siteConfig(repo), pages: [page], nav: {}, data: {} };
   return { site, page, trail, pager };
+}
+
+/** The same page in another language, with the direction that language reads in. */
+function propsIn(lang: string, frontMatter: Record<string, unknown>, repo?: RepositoryConfig): ChromeProps {
+  const page: Page = { ...pageWith(frontMatter), lang, dir: lang === "en" ? "ltr" : "rtl" };
+  return props(page, repo);
 }
 
 type VNode = { type: unknown; props: { children?: unknown; [key: string]: unknown } };
@@ -156,14 +162,124 @@ test("with neither a date nor a repository, no meta line is rendered", () => {
   assert.doesNotMatch(out, /page-footer-meta/);
 });
 
-test("isoDate reads ISO strings and Date objects, and nothing else", () => {
+test("isoDate reads whole ISO dates and date-times, and nothing else", () => {
   assert.equal(isoDate("2026-03-04"), "2026-03-04");
   assert.equal(isoDate("2026-03-04T10:00:00Z"), "2026-03-04");
+  assert.equal(isoDate("2026-03-04T10:00"), "2026-03-04");
+  assert.equal(isoDate("2026-03-04T10:00:00.250+05:30"), "2026-03-04");
   assert.equal(isoDate(new Date("2026-03-04T00:00:00Z")), "2026-03-04");
   assert.equal(isoDate(new Date("not a date")), undefined);
   assert.equal(isoDate("March 4"), undefined);
   assert.equal(isoDate(20260304), undefined);
   assert.equal(isoDate(undefined), undefined);
+});
+
+test("isoDate keeps leap years and month lengths honest", () => {
+  for (const value of ["2024-02-29", "2000-02-29", "2026-01-31", "2026-04-30", "2026-12-31"]) {
+    assert.equal(isoDate(value), value);
+  }
+  for (const value of ["2025-02-29", "1900-02-29", "2026-02-30", "2026-04-31", "2026-13-01", "2026-00-10", "2026-01-00"]) {
+    assert.equal(isoDate(value), undefined, value);
+  }
+});
+
+test("isoDate requires a whole ISO date-time whose parts stay in range", () => {
+  assert.equal(isoDate("2026-03-04T00:00:00-23:59"), "2026-03-04");
+  assert.equal(isoDate("2026-03-04T23:59:59Z"), "2026-03-04");
+  assert.equal(isoDate("2026-03-04T23:59:59.999999Z"), "2026-03-04");
+
+  for (const value of [
+    "2026-03-04T24:00:00Z",
+    "2026-03-04T10:60:00Z",
+    "2026-03-04T10:00:60Z",
+    "2026-03-04T10:00:00+24:00",
+    "2026-03-04T10:00:00+05:60",
+    "2026-03-04T",
+    "2026-03-04T10",
+    "2026-03-04T10:",
+    "2026-03-04Z",
+    "2026-03-04Textra",
+    "2026-03-04 10:00:00Z",
+  ]) {
+    assert.equal(isoDate(value), undefined, value);
+  }
+});
+
+test("dateEvidence separates rejected evidence from evidence that was never supplied", () => {
+  assert.deepEqual(dateEvidence("2026-03-04"), { date: "2026-03-04", status: "valid" });
+  assert.deepEqual(dateEvidence(new Date("2026-03-04T00:00:00Z")), { date: "2026-03-04", status: "valid" });
+
+  for (const value of ["2026-02-30", "March 4", true, 20260304, new Date("nope"), new Date(8.64e15), {}, []]) {
+    assert.deepEqual(dateEvidence(value), { date: undefined, status: "invalid" }, String(value));
+  }
+  for (const value of [undefined, null, "", "   "]) {
+    assert.deepEqual(dateEvidence(value), { date: undefined, status: "absent" });
+  }
+});
+
+test("an authored but impossible date shows the neutral wording, not a last updated claim", () => {
+  const out = html(pageFooter(props(pageWith({ last_modified_at: "2026-02-30" }), repository)));
+
+  assert.match(out, /<span class="page-footer-updated" data-date-status="invalid">Date unknown<\/span>/);
+  assert.doesNotMatch(out, /<time /);
+  assert.doesNotMatch(out, /Last updated/);
+});
+
+test("a malformed suffix or a value that is not a date never becomes a time claim", () => {
+  for (const value of ["2026-03-04Tgarbage", "2026-03-04T24:00:00Z", new Date("nope"), 20260304, {}]) {
+    const out = html(pageFooter(props(pageWith({ last_modified_at: value }), repository)));
+    assert.doesNotMatch(out, /<time /, String(value));
+    assert.match(out, /Date unknown/, String(value));
+  }
+});
+
+test("an absent date renders no claim and no neutral wording", () => {
+  for (const value of [undefined, null, "", "   "]) {
+    const out = html(pageFooter(props(pageWith({ last_modified_at: value }), repository)));
+    assert.doesNotMatch(out, /Date unknown|Last updated|<time /, String(value));
+    assert.match(out, /page-footer-edit/);
+  }
+});
+
+test("a rejected date uses the page's localized neutral wording", () => {
+  const fa = html(pageFooter(propsIn("fa", { last_modified_at: "2026-02-30" }, repository)));
+  assert.match(fa, /<span class="page-footer-updated" data-date-status="invalid">تاریخ نامشخص<\/span>/);
+  assert.doesNotMatch(fa, /<time /);
+
+  const ar = html(pageFooter(propsIn("ar", { last_modified_at: "2026-02-30" }, repository)));
+  assert.match(ar, /<span class="page-footer-updated" data-date-status="invalid">التاريخ غير معروف<\/span>/);
+  assert.doesNotMatch(ar, /<time /);
+});
+
+test("a valid date keeps its ISO value in Persian and Arabic pages", () => {
+  assert.match(html(pageFooter(propsIn("fa", { last_modified_at: "2024-02-29T23:59:59Z" }))), /<time datetime="2024-02-29">2024-02-29<\/time>/);
+  assert.match(html(pageFooter(propsIn("ar", { last_modified_at: "2024-02-29T23:59:59Z" }))), /<time datetime="2024-02-29">2024-02-29<\/time>/);
+});
+
+test("a rejected date leaves the footer's actions unchanged", () => {
+  const out = html(pageFooter(props(pageWith({ last_modified_at: "2026-02-30" }), repository)));
+
+  assert.match(out, /<a class="page-footer-edit" href="https:\/\/github\.com\/velella-sh\/lateen\/edit\/main\/docs\/guide\/install\.md">Edit this page on GitHub<\/a>/);
+  assert.match(out, /data-prompt="Edit docs\/guide\/install\.md:3\. Current text: .*Install.*\. Change:"/);
+  assert.match(out, /data-copied="Copied"/);
+  assert.match(out, /data-copy-failed="Press Ctrl\+C"/);
+  assert.match(out, /<p class="page-footer-feedback">Was this helpful\? <a href="https:\/\/github\.com\/velella-sh\/lateen\/issues\/new\?title=Feedback%3A%20Install&body=Page%3A%20%2Fexample%2Fguide%2Finstall%2F%0ASource%3A%20docs%2Fguide%2Finstall\.md%0A">Give feedback<\/a><\/p>/);
+});
+
+test("building the footer never reads the current clock", () => {
+  const page = pageWith({ last_modified_at: "2026-02-30" });
+  const original = Date.now;
+  try {
+    const first = html(pageFooter(props(page, repository)));
+    Date.now = () => 0;
+    const second = html(pageFooter(props(page, repository)));
+    Date.now = () => 4_102_444_800_000;
+    const third = html(pageFooter(props(page, repository)));
+    assert.equal(second, first);
+    assert.equal(third, first);
+  } finally {
+    Date.now = original;
+  }
 });
 
 test("style.css uses only token names from tokens/names.json for var(--*) references", () => {
