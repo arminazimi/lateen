@@ -11,14 +11,6 @@
     { "case": "fixture versions", "theme": "light", "rule": "color-contrast", "target": ".versions-status-dev > .versions-status-label" },
     { "case": "fixture versions", "theme": "light", "rule": "color-contrast", "target": ".versions-status-latest > .versions-status-label" },
     { "case": "docs variables form", "theme": "light", "rule": "scrollable-region-focusable", "target": "table" },
-    { "case": "docs variables form", "theme": "dark", "rule": "scrollable-region-focusable", "target": "table" },
-    { "case": "docs search open", "theme": "light", "rule": "aria-required-children", "target": ".search-results" },
-    { "case": "docs search open", "theme": "dark", "rule": "aria-required-children", "target": ".search-results" },
-    { "case": "docs search open", "theme": "dark", "rule": "color-contrast", "target": ".search-group-title" },
-    { "case": "docs search open", "theme": "dark", "rule": "color-contrast", "target": ".search-result.search-action:nth-child(7) > .search-action-button[role=\"option\"] > .search-action-hint" },
-    { "case": "docs search open", "theme": "dark", "rule": "color-contrast", "target": "button[data-palette-action=\"copy-markdown\"] > .search-action-hint" },
-    { "case": "docs search open", "theme": "dark", "rule": "color-contrast", "target": "button[data-palette-action=\"section-use-it\"] > .search-action-hint" },
-    { "case": "docs search open", "theme": "dark", "rule": "color-contrast", "target": "button[data-palette-action=\"theme-light\"] > .search-action-hint" },
-    { "case": "docs search open", "theme": "dark", "rule": "color-contrast", "target": "button[data-palette-action=\"theme-system\"] > .search-action-hint" }
+    { "case": "docs variables form", "theme": "dark", "rule": "scrollable-region-focusable", "target": "table" }
   ]
 }

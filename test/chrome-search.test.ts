@@ -1515,3 +1515,49 @@ test("the dark dialog's secondary text clears 4.5:1 on the raised surface it sit
   }
   assert.match(override, /color: var\(--color-text\);/);
 });
+
+test("the group heading and action hint clear AA in both themes, including a selected row", () => {
+  const color = JSON.parse(readFileSync(new URL("../tokens/color.json", import.meta.url), "utf8")) as Record<
+    string,
+    { $value?: string; $extensions?: { lateen?: { dark?: string } } }
+  >;
+  const light = JSON.parse(readFileSync(new URL("../tokens/color.light.json", import.meta.url), "utf8")) as Record<
+    string,
+    string
+  >;
+  const state = JSON.parse(readFileSync(new URL("../tokens/state.json", import.meta.url), "utf8")) as Record<
+    string,
+    { $value?: string; $extensions?: { lateen?: { dark?: string } } }
+  >;
+
+  const raised = { light: color["surface-raised"]?.$value, dark: color["surface-raised"]?.$extensions?.lateen?.dark };
+  const muted = light.muted;
+  const text = color.text?.$extensions?.lateen?.dark;
+  const hover = {
+    light: state["hover-bg"]?.$value,
+    dark: state["hover-bg"]?.$extensions?.lateen?.dark,
+  };
+  assert.ok(raised.light && raised.dark && muted && text && hover.light && hover.dark, "the tokens are present");
+
+  const blend = (overlay: string, background: string): string => {
+    const alpha = overlay.length === 9 ? parseInt(overlay.slice(7, 9), 16) / 255 : 1;
+    const channels = [1, 3, 5].map((at) =>
+      Math.round(parseInt(overlay.slice(at, at + 2), 16) * alpha + parseInt(background.slice(at, at + 2), 16) * (1 - alpha)),
+    );
+    return `#${channels.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
+  };
+
+  assert.ok(contrastRatio(muted!, raised.light!) >= 4.5, "light muted on raised");
+  assert.ok(contrastRatio(muted!, blend(hover.light!, raised.light!)) >= 4.5, "light muted on selection");
+  assert.ok(contrastRatio(text!, raised.dark!) >= 4.5, "dark text on raised");
+  assert.ok(contrastRatio(text!, blend(hover.dark!, raised.dark!)) >= 4.5, "dark text on selection");
+
+  const css = readFileSync(new URL("../chrome/search/style.css", import.meta.url), "utf8");
+  for (const selector of [".search-group-title", ".search-action-hint"]) {
+    const start = css.indexOf(`\n${selector} {`);
+    assert.ok(start !== -1, `${selector} rule exists`);
+    const rule = css.slice(start, css.indexOf("}", start));
+    assert.match(rule, /color: var\(--color-muted\);/, `${selector} uses muted in light`);
+    assert.match(css, new RegExp(`:root\\[data-theme="dark"\\] ${selector.replace(".", "\\.")}`), `${selector} has a dark override`);
+  }
+});
