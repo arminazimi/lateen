@@ -8,10 +8,14 @@ import {
   activate,
   DESKTOP_QUERY,
   trap,
+  type DrawerClickEvent,
   type DrawerControl,
   type DrawerDialog,
+  type DrawerEnv,
   type DrawerEvent,
   type DrawerFocusable,
+  type DrawerLink,
+  type DrawerTarget,
 } from "../chrome/drawer/client.ts";
 
 const pos: SourcePos = { file: "docs/guide/install.md", line: 3, column: 1, endLine: 9, endColumn: 1 };
@@ -116,6 +120,22 @@ test("the drawer shows the same sidebar links as the sidebar chrome", () => {
   assert.match(out, /<h2>Guide<\/h2>/);
 });
 
+test("the drawer markup is a no-JS sidebar: plain links, no scripts, nothing that only works when enhanced", () => {
+  const out = html(drawer(props(tree, "/home/")));
+
+  const anchors = [...out.matchAll(/<a\b[^>]*>/g)].map((match) => match[0]);
+  assert.ok(anchors.length >= 3, "the sidebar links are rendered as anchors");
+  for (const anchor of anchors) {
+    assert.match(anchor, /\shref="\/[^"]+"/, "each link is a plain href the browser can follow without JavaScript");
+    assert.doesNotMatch(anchor, /\son[a-z]+\b=/, "no inline handlers");
+    assert.doesNotMatch(anchor, /\shref="javascript:/, "no script URLs");
+    assert.doesNotMatch(anchor, /\sdata-[a-z-]+=/, "the drawer adds no JS-only hooks to the links");
+    assert.doesNotMatch(anchor, /\shidden\b/, "every link is reachable in the no-JS flow");
+  }
+  assert.doesNotMatch(out, /\son[a-z]+\s*=/, "the drawer markup carries no inline handlers at all");
+  assert.doesNotMatch(out, /data-enhanced/, "enhancement is applied by the script, not the markup");
+});
+
 /** A focusable element in the fake dialog, recording focus moves. */
 function control(name: string) {
   const fake = {
@@ -139,7 +159,7 @@ function control(name: string) {
 }
 
 /** A fake `<dialog>`: `showModal` and `close` flip `open`, and `close` fires the `close` listeners as a browser does. */
-function fakeDialog(items: DrawerFocusable[] = []) {
+function fakeDialog(items: DrawerFocusable[] = [], links: DrawerLink[] = []) {
   const listeners: Record<string, Array<(event: DrawerEvent) => void>> = {};
   const fake = {
     open: false,
@@ -147,6 +167,7 @@ function fakeDialog(items: DrawerFocusable[] = []) {
     shows: 0,
     closes: 0,
     items,
+    links,
     setAttribute(key: string, value: string) {
       fake.attrs[key] = value;
     },
@@ -162,13 +183,73 @@ function fakeDialog(items: DrawerFocusable[] = []) {
     },
     querySelectorAll(selector: string): Iterable<DrawerFocusable> {
       assert.match(selector, /a\[href\]/);
-      return fake.items;
+      return [...fake.items, ...fake.links];
     },
     addEventListener(type: string, listener: (event: DrawerEvent) => void) {
       (listeners[type] ??= []).push(listener);
     },
     fire(type: string, event: DrawerEvent) {
       for (const listener of listeners[type] ?? []) listener(event);
+    },
+  };
+  return fake;
+}
+
+/**
+ * A fake navigation link inside the drawer. `fire` plays the browser's click dispatch (an ordinary
+ * activation carries no modifiers and no `button`), and `prevented` says whether the drawer cancelled it.
+ */
+function link(href: string) {
+  const listeners: Array<(event: DrawerClickEvent) => void> = [];
+  const fake: {
+    href: string;
+    focused: number;
+    clicks: typeof listeners;
+    prevented?: boolean;
+    focus(): void;
+    addEventListener(type: string, listener: (event: DrawerClickEvent) => void): void;
+    fire(modifiers?: Partial<DrawerClickEvent>): void;
+  } = {
+    href,
+    focused: 0,
+    clicks: listeners,
+    focus() {
+      fake.focused += 1;
+    },
+    addEventListener(type: string, listener: (event: DrawerClickEvent) => void) {
+      assert.equal(type, "click");
+      listeners.push(listener);
+    },
+    fire(modifiers: Partial<DrawerClickEvent> = {}) {
+      const event: DrawerClickEvent = {
+        target: fake,
+        preventDefault() {
+          fake.prevented = true;
+        },
+        ...modifiers,
+      };
+      fake.prevented = false;
+      for (const listener of listeners) listener(event);
+    },
+  };
+  return fake;
+}
+
+/** The page the drawer sits on: its address, and the elements same-page links can land on. */
+function pageEnv(href: string, targets: Record<string, DrawerTarget> = {}): DrawerEnv {
+  return { location: { href }, locate: (fragment: string) => targets[fragment] };
+}
+
+/** A same-page destination, counting the drawer's moves on it. */
+function destination() {
+  const fake = {
+    scrolled: 0,
+    focused: 0,
+    scrollIntoView() {
+      fake.scrolled += 1;
+    },
+    focus() {
+      fake.focused += 1;
     },
   };
   return fake;
@@ -328,6 +409,192 @@ test("a viewport change that stays narrow, or arrives while the drawer is closed
   viewport.resize(false);
   assert.equal(dialog.open, true);
   assert.equal(dialog.closes, 0);
+});
+
+test("an ordinary page link click closes the drawer and clears aria-expanded without cancelling the click", () => {
+  const button = control("menu");
+  const page = link("https://example.test/guide/quickstart/");
+  const dialog = fakeDialog([], [page]);
+  activate({ dialog, button: button as unknown as DrawerControl }, pageEnv("https://example.test/guide/install/"));
+  button.clicks[0]!();
+
+  page.fire();
+
+  assert.equal(dialog.open, false);
+  assert.equal(button.attrs["aria-expanded"], "false");
+  assert.equal(page.prevented, false, "the browser still does the navigation");
+  assert.equal(button.focused, 1, "the close keeps the existing focus-return rule");
+});
+
+test("a same-page link closes the drawer and clears aria-expanded before the destination is revealed", () => {
+  const button = control("menu");
+  const at = destination();
+  const anchor = link("https://example.test/guide/install/#quickstart");
+  let ariaAtArrival: string | undefined;
+  let openAtArrival: boolean | undefined;
+  let dialog: ReturnType<typeof fakeDialog>;
+  const record: DrawerTarget = {
+    scrollIntoView() {
+      ariaAtArrival = button.attrs["aria-expanded"];
+      openAtArrival = dialog.open;
+      at.scrollIntoView();
+    },
+    focus: at.focus,
+  };
+  dialog = fakeDialog([], [anchor]);
+  activate({ dialog, button: button as unknown as DrawerControl }, pageEnv("https://example.test/guide/install/", {
+    quickstart: record,
+  }));
+  button.clicks[0]!();
+
+  anchor.fire();
+
+  assert.equal(ariaAtArrival, "false", "aria-expanded is cleared as the destination is revealed");
+  assert.equal(openAtArrival, false, "the dialog is closed before the destination is revealed");
+  assert.equal(at.scrolled, 1);
+  assert.equal(at.focused, 1);
+  assert.equal(button.focused, 0, "the destination takes focus, not the menu button");
+  assert.equal(anchor.prevented, false);
+});
+
+test("a same-page link with no target on the page still closes, with the usual focus return", () => {
+  const button = control("menu");
+  const anchor = link("https://example.test/guide/install/#missing");
+  const dialog = fakeDialog([], [anchor]);
+  activate({ dialog, button: button as unknown as DrawerControl }, pageEnv("https://example.test/guide/install/"));
+  button.clicks[0]!();
+
+  anchor.fire();
+
+  assert.equal(dialog.open, false);
+  assert.equal(button.attrs["aria-expanded"], "false");
+  assert.equal(button.focused, 1);
+});
+
+test("a link to the same page without a fragment closes like any other page link", () => {
+  const button = control("menu");
+  const anchor = link("https://example.test/guide/install/");
+  const dialog = fakeDialog([], [anchor]);
+  activate({ dialog, button: button as unknown as DrawerControl }, pageEnv("https://example.test/guide/install/"));
+  button.clicks[0]!();
+
+  anchor.fire();
+
+  assert.equal(dialog.open, false);
+  assert.equal(button.focused, 1);
+});
+
+test("a link to another page with a fragment is not treated as same-page arrival", () => {
+  const button = control("menu");
+  const at = destination();
+  const anchor = link("https://example.test/guide/quickstart/#install");
+  const dialog = fakeDialog([], [anchor]);
+  activate({ dialog, button: button as unknown as DrawerControl }, pageEnv("https://example.test/guide/install/", {
+    install: at,
+  }));
+  button.clicks[0]!();
+
+  anchor.fire();
+
+  assert.equal(dialog.open, false);
+  assert.equal(at.scrolled, 0, "the destination of another page is left to that page");
+  assert.equal(at.focused, 0);
+  assert.equal(button.focused, 1);
+});
+
+test("an external link click closes the drawer but keeps the browser's behavior", () => {
+  const button = control("menu");
+  const anchor = link("https://elsewhere.test/docs/");
+  const dialog = fakeDialog([], [anchor]);
+  activate({ dialog, button: button as unknown as DrawerControl }, pageEnv("https://example.test/guide/install/"));
+  button.clicks[0]!();
+
+  anchor.fire({ button: 0 });
+
+  assert.equal(dialog.open, false);
+  assert.equal(anchor.prevented, false);
+});
+
+test("modified and cancelled activations are not hijacked: the drawer stays open", () => {
+  const button = control("menu");
+  const anchor = link("https://example.test/guide/quickstart/");
+  const dialog = fakeDialog([], [anchor]);
+  activate({ dialog, button: button as unknown as DrawerControl }, pageEnv("https://example.test/guide/install/"));
+  button.clicks[0]!();
+
+  for (const modifiers of [
+    { ctrlKey: true },
+    { metaKey: true },
+    { shiftKey: true },
+    { altKey: true },
+    { button: 1 },
+    { defaultPrevented: true },
+  ]) {
+    anchor.fire(modifiers);
+    assert.equal(dialog.open, true, `the drawer survives ${JSON.stringify(modifiers)}`);
+  }
+  assert.equal(button.attrs["aria-expanded"], "true");
+});
+
+test("a keyboard-activated link closes the drawer like a pointer click", () => {
+  const button = control("menu");
+  const anchor = link("https://example.test/guide/quickstart/");
+  const dialog = fakeDialog([], [anchor]);
+  activate({ dialog, button: button as unknown as DrawerControl }, pageEnv("https://example.test/guide/install/"));
+  button.clicks[0]!();
+
+  // Enter or Space on the focused link makes the browser dispatch an unmodified click.
+  anchor.fire({ shiftKey: false });
+
+  assert.equal(dialog.open, false);
+  assert.equal(button.attrs["aria-expanded"], "false");
+});
+
+test("the drawer is wired once: links hear clicks without a second activation, and a crossing after a link close is quiet", () => {
+  const button = control("menu");
+  const at = destination();
+  const anchor = link("https://example.test/guide/install/#quickstart");
+  const dialog = fakeDialog([], [anchor]);
+  const viewport = fakeViewport(false);
+  activate(
+    { dialog, button: button as unknown as DrawerControl },
+    { ...pageEnv("https://example.test/guide/install/", { quickstart: at }), viewport },
+  );
+  assert.equal(anchor.clicks.length, 1, "activate wires each link once");
+
+  button.clicks[0]!();
+  anchor.fire();
+  assert.equal(dialog.closes, 1);
+
+  viewport.resize(true);
+  assert.equal(dialog.closes, 1, "the desktop transition leaves the already-closed drawer alone");
+  assert.equal(at.focused, 1);
+  assert.equal(button.focused, 0);
+});
+
+test("a control that is not a link is never treated as one", () => {
+  const button = control("menu");
+  const { items } = panel();
+  const dialog = fakeDialog(items);
+  activate({ dialog, button: button as unknown as DrawerControl }, pageEnv("https://example.test/guide/install/"));
+
+  for (const item of items) {
+    assert.equal((item as { clicks?: unknown[] }).clicks?.length ?? 0, 0, "plain controls hear no navigation wiring");
+  }
+});
+
+test("without a page env, links still close the drawer", () => {
+  const button = control("menu");
+  const anchor = link("#quickstart");
+  const dialog = fakeDialog([], [anchor]);
+  activate({ dialog, button: button as unknown as DrawerControl });
+  button.clicks[0]!();
+
+  anchor.fire();
+
+  assert.equal(dialog.open, false);
+  assert.equal(button.attrs["aria-expanded"], "false");
+  assert.equal(button.focused, 1, "with no page to arrive on, the usual focus return stands");
 });
 
 test("Tab past the last control wraps to the first; Shift+Tab before the first wraps to the last", () => {
