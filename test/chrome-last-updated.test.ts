@@ -9,10 +9,12 @@ import lastUpdated, {
   CONTRIBUTORS_CLASS,
   DATE_CLASS,
   MAX_CONTRIBUTORS,
+  UNAVAILABLE_CLASS,
   asOfOf,
   contributorsOf,
   dateOf,
   datesOf,
+  evidenceOf,
   isoDate,
   localeOf,
   relativeDate,
@@ -94,7 +96,7 @@ test("a front matter date shows the relative date from the build's as-of date", 
   assert.match(
     out,
     new RegExp(
-      `<p class="${CLASS}"><span class="${DATE_CLASS}" data-date-source="source">Updated <time datetime="2026-03-04" title="March 4, 2026" aria-label="March 4, 2026"><bdi>2 days ago</bdi></time></span></p>`,
+      `<p class="${CLASS}"><span class="${DATE_CLASS}" data-date-source="source" data-date-status="valid">Updated <time datetime="2026-03-04" title="March 4, 2026" aria-label="March 4, 2026"><bdi>2 days ago</bdi></time></span></p>`,
     ),
   );
 });
@@ -141,7 +143,7 @@ test("a review date is labelled as a review, with the same accessible exact valu
   assert.match(
     out,
     new RegExp(
-      `<span class="${DATE_CLASS}" data-date-source="review">Reviewed <time datetime="2026-03-04" title="March 4, 2026" aria-label="March 4, 2026"><bdi>2 days ago</bdi></time></span>`,
+      `<span class="${DATE_CLASS}" data-date-source="review" data-date-status="valid">Reviewed <time datetime="2026-03-04" title="March 4, 2026" aria-label="March 4, 2026"><bdi>2 days ago</bdi></time></span>`,
     ),
   );
 });
@@ -150,8 +152,8 @@ test("source and review dates show side by side, and a review on the source's da
   const both = render(pageWith({ last_modified_at: "2026-03-01" }), reviewers({ date: "2026-03-04" }));
 
   assert.ok(both);
-  assert.match(both, /data-date-source="source">Updated <time datetime="2026-03-01"/);
-  assert.match(both, /data-date-source="review">Reviewed <time datetime="2026-03-04"/);
+  assert.match(both, /data-date-source="source" data-date-status="valid">Updated <time datetime="2026-03-01"/);
+  assert.match(both, /data-date-source="review" data-date-status="valid">Reviewed <time datetime="2026-03-04"/);
 
   const sameDay = render(pageWith({ last_modified_at: "2026-03-04" }), reviewers({ date: "2026-03-04" }));
   assert.ok(sameDay);
@@ -164,19 +166,107 @@ test("a date after the build's as-of date stays absolute, so bad data never read
 
   assert.ok(out);
   assert.match(out, /title="March 8, 2026" aria-label="March 8, 2026"><bdi>March 8, 2026<\/bdi><\/time>/);
+  assert.match(out, /data-date-status="future"/);
   assert.doesNotMatch(out, /in 2 days/);
+
+  // A future review is evidence of a review date too, so it keeps its label and its exact value.
+  const futureReview = render(pageWith({ last_modified_at: "2026-03-01" }), {
+    ...reviewers({ date: "2026-03-08" }),
+    ...build("2026-03-06"),
+  });
+  assert.ok(futureReview);
+  assert.match(futureReview, /data-date-source="review" data-date-status="future">Reviewed/);
+  assert.doesNotMatch(futureReview, /in 2 days/);
 });
 
-test("an unreadable date falls back or is left out, never becoming a relative claim", () => {
-  const fallback = render(pageWith({ last_modified_at: "2026-02-30", updated: "2026-03-04" }), build("2026-03-06"));
-  assert.ok(fallback);
-  assert.match(fallback, /datetime="2026-03-04"/);
-  assert.match(fallback, /><bdi>2 days ago<\/bdi><\/time>/);
+test("an explicitly malformed date is shown as unavailable evidence, never as a date", () => {
+  const out = render(pageWith({ last_modified_at: "2026-02-30" }));
 
+  assert.ok(out);
+  assert.match(
+    out,
+    new RegExp(`<span class="${DATE_CLASS} ${UNAVAILABLE_CLASS}" data-date-source="source" data-date-status="invalid">`),
+  );
+  assert.match(out, new RegExp(`>${stringsOf("en").changelog_date_unknown ?? ""}</span>`));
+  // The rejected value is neither a `<time>` element, nor a freshness claim, nor machine-readable provenance.
+  assert.doesNotMatch(out, /<time|datetime=|Updated|2026-02-30|days? ago/);
+});
+
+test("a malformed review date says the review evidence is unusable without claiming a review", () => {
+  const out = render(pageWith({ last_modified_at: "2026-03-04" }), reviewers({ date: "March 4" }));
+
+  assert.ok(out);
+  assert.match(out, /data-date-source="source" data-date-status="valid">Updated <time datetime="2026-03-04"/);
+  assert.match(out, /data-date-source="review" data-date-status="invalid"/);
+  assert.equal([...out.matchAll(/<time /g)].length, 1, "only the readable date is a time element");
+  assert.doesNotMatch(out, /Reviewed|March 4(?!, 2026)/);
+});
+
+test("malformed evidence is distinguishable from evidence that was never supplied", () => {
+  const page = pageWith();
+  const site = (data: Readonly<Record<string, unknown>>) => props(page, data).site;
+
+  assert.deepEqual(evidenceOf(page, site(reviewers({ author: "Ada Lovelace" }))).map((entry) => entry.status), [
+    "absent",
+    "absent",
+  ]);
+
+  const malformed = evidenceOf(pageWith({ last_modified_at: "2026-02-30" }), site(reviewers({ date: "not a date" })));
+  assert.deepEqual(malformed, [
+    { date: undefined, status: "invalid", source: "source" },
+    { date: undefined, status: "invalid", source: "review" },
+  ]);
+
+  // Any value that is there but never reads as a calendar date is written-and-rejected evidence.
+  for (const value of ["2026-02-30", "March 4", "not a date", true, 20260304, new Date("nope"), {}, []] as const) {
+    assert.equal(evidenceOf(pageWith({ last_modified_at: value }), site({}))[0]?.status, "invalid", `${String(value)}`);
+  }
+
+  // Nothing an author meant to write — a missing key, an empty YAML field, a blank string — is absent.
+  for (const value of [undefined, null, "", "   "] as const) {
+    assert.equal(evidenceOf(pageWith({ last_modified_at: value, updated: value }), site({}))[0]?.status, "absent");
+  }
+  assert.equal(evidenceOf(pageWith(), site({ reviewers: { [PAGE_URL]: {} } }))[1]?.status, "absent");
+  assert.equal(evidenceOf(pageWith(), site({}))[1]?.status, "absent");
+});
+
+test("the as-of day splits valid from future evidence, and both keep their exact value", () => {
+  const page = pageWith({ last_modified_at: "2026-03-04" });
+  const review = reviewers({ date: "2026-03-09" });
+  const site = (data: Readonly<Record<string, unknown>>) => props(page, data).site;
+
+  assert.equal(evidenceOf(page, site({ ...review, ...build("2026-03-06") }))[0]?.status, "valid");
+  assert.equal(evidenceOf(page, site({ ...review, ...build("2026-03-04") }))[0]?.status, "valid");
+  assert.equal(evidenceOf(page, site(review))[0]?.status, "valid", "with no as-of date nothing is future");
+
+  const [source, reviewEvidence] = evidenceOf(page, site({ ...review, ...build("2026-03-06") }));
+  assert.deepEqual(source, { date: "2026-03-04", status: "valid", source: "source" });
+  assert.deepEqual(reviewEvidence, { date: "2026-03-09", status: "future", source: "review" });
+});
+
+test("a malformed value in the preferred key still falls back to a readable one", () => {
+  const page = pageWith({ last_modified_at: "2026-02-30", updated: "2026-03-04" });
+  const out = render(page, build("2026-03-06"));
+
+  assert.ok(out);
+  assert.match(out, /><bdi>2 days ago<\/bdi><\/time>/);
+  assert.doesNotMatch(out, new RegExp(UNAVAILABLE_CLASS));
+  assert.deepEqual(evidenceOf(page, props(page, build("2026-03-06")).site)[0], {
+    date: "2026-03-04",
+    status: "valid",
+    source: "source",
+  });
+});
+
+test("an unreadable date never becomes a relative claim", () => {
   const invalidReview = render(pageWith({ last_modified_at: "2026-03-04" }), reviewers({ date: "2026-02-31" }));
   assert.ok(invalidReview);
   assert.equal([...invalidReview.matchAll(/<time /g)].length, 1);
-  assert.doesNotMatch(invalidReview, /Reviewed/);
+  assert.doesNotMatch(invalidReview, /Reviewed|2026-02-31/);
+
+  const invalidOnly = render(pageWith({ last_modified_at: "2026-02-30" }), build("2026-03-06"));
+  assert.ok(invalidOnly);
+  assert.doesNotMatch(invalidOnly, /<time|days? ago/);
 });
 
 test("contributors come from author and the contributors array, sorted and deduplicated", () => {
@@ -210,10 +300,76 @@ test("contributors alone still render a line, without a date", () => {
   assert.doesNotMatch(out, /<time/);
 });
 
-test("the line renders nothing when both the date and the contributors are missing", () => {
+test("the line renders nothing when no date was written and there are no contributors", () => {
   assert.equal(render(pageWith()), null);
   assert.equal(render(pageWith(), { reviewers: { "/other/": { date: "2026-03-04", author: "Ada" } } }), null);
-  assert.equal(render(pageWith(), reviewers({ date: "2026-02-30" })), null);
+  assert.equal(render(pageWith(), reviewers({ author: "  " })), null);
+  assert.equal(render(pageWith({ last_modified_at: "" }), reviewers({ date: null })), null);
+
+  // Written-but-unreadable evidence is not "nothing": the page says the date is unavailable instead.
+  const out = render(pageWith(), reviewers({ date: "2026-02-30" }));
+  assert.ok(out);
+  assert.match(
+    out,
+    new RegExp(`^<p class="${CLASS}"><span class="${DATE_CLASS} ${UNAVAILABLE_CLASS}" data-date-source="review"`),
+  );
+});
+
+test("rejected evidence from both kinds stays separate, and a same-day review is still a duplicate", () => {
+  const both = render(pageWith({ last_modified_at: "not a date" }), reviewers({ date: "also not a date" }));
+  assert.ok(both);
+  assert.equal([...both.matchAll(new RegExp(UNAVAILABLE_CLASS, "g"))].length, 2);
+  assert.match(both, /data-date-source="source" data-date-status="invalid"/);
+  assert.match(both, /data-date-source="review" data-date-status="invalid"/);
+  assert.doesNotMatch(both, /<time|Updated|Reviewed/);
+
+  const sameDay = render(pageWith({ last_modified_at: "2026-03-04" }), reviewers({ date: "2026-03-04" }));
+  assert.ok(sameDay);
+  assert.equal([...sameDay.matchAll(/<time /g)].length, 1);
+  assert.doesNotMatch(sameDay, /Reviewed|Date unknown/);
+});
+
+test("the unavailable marker is localised, claims nothing, and never echoes the bad value", () => {
+  for (const lang of ["en", "fa", "ar"] as const) {
+    const page = pageWith({ last_modified_at: "2026-02-30T99:99:99" }, lang);
+    const out = render(page, reviewers({ author: "Ada Lovelace" }));
+    assert.ok(out, lang);
+    assert.ok(out.includes(stringsOf(lang).changelog_date_unknown ?? ""), `${lang} carries the neutral wording`);
+    assert.doesNotMatch(out, /<time|2026-02-30/);
+
+    // The page still names its contributor, so one rejected date cannot erase the rest of the line.
+    assert.ok(out.includes(stringsOf(lang).contributors_label ?? ""), `${lang} keeps the contributors`);
+  }
+});
+
+test("a malformed date is escaped like any other text: the line carries no markup of its own", () => {
+  const out = render(pageWith({ last_modified_at: '<script>alert("x")</script>' }));
+
+  assert.ok(out);
+  assert.doesNotMatch(out, /<script>/);
+  // The rejected value stays out of the page entirely; only the catalog wording is shown.
+  assert.doesNotMatch(out, /alert|&lt;script/);
+  assert.match(out, new RegExp(`>${stringsOf("en").changelog_date_unknown ?? ""}</span>`));
+});
+
+test("the line's text does not depend on the host clock or time zone", () => {
+  const page = pageWith({ last_modified_at: "2026-03-04" });
+  const data = { ...build("2026-03-06"), ...reviewers({ date: "2026-02-30", author: "Ada" }) };
+  const first = render(page, data);
+  assert.ok(first);
+
+  const zones = ["UTC", "Pacific/Kiritimati", "Pacific/Niue"];
+  const original = process.env.TZ;
+  try {
+    for (const zone of zones) {
+      process.env.TZ = zone;
+      assert.equal(render(page, data), first, zone);
+      assert.equal(dateOf(page, props(page, data).site), "2026-03-04", zone);
+    }
+  } finally {
+    if (original === undefined) delete process.env.TZ;
+    else process.env.TZ = original;
+  }
 });
 
 test("dateOf, datesOf, asOfOf, and contributorsOf read the data defensively", () => {
@@ -226,10 +382,16 @@ test("dateOf, datesOf, asOfOf, and contributorsOf read the data defensively", ()
   assert.equal(dateOf(page, site({ reviewers: [] })), undefined);
 
   assert.deepEqual(datesOf(pageWith({ last_modified_at: "2026-03-01" }), site(reviewers({ date: "2026-03-04" }))), [
-    { date: "2026-03-01", source: "source" },
-    { date: "2026-03-04", source: "review" },
+    { date: "2026-03-01", status: "valid", source: "source" },
+    { date: "2026-03-04", status: "valid", source: "review" },
   ]);
-  assert.deepEqual(datesOf(page, site(reviewers({ date: "2026-02-30" }))), []);
+  assert.deepEqual(datesOf(page, site(reviewers({ date: "2026-02-30" }))), [
+    { date: undefined, status: "invalid", source: "review" },
+  ]);
+  assert.deepEqual(datesOf(page, site({})), []);
+
+  // A rejected source date never stands in for the readable review date a page does have.
+  assert.equal(dateOf(pageWith({ last_modified_at: "not a date" }), site(reviewers({ date: "2026-03-04" }))), "2026-03-04");
 
   assert.equal(asOfOf(site(build("2026-03-06"))), "2026-03-06");
   assert.equal(asOfOf(site({ build: { asOf: "2026-03-06" } })), "2026-03-06");
