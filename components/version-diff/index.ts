@@ -10,8 +10,12 @@ export const KINDS = ["added", "removed", "changed", "moved"] as const;
 
 export type ChangeKind = (typeof KINDS)[number];
 
-/** The states an explicit comparison can be in; absent input renders nothing instead. */
-export const STATES = ["changes", "unchanged", "unavailable"] as const;
+/**
+ * The states an explicit comparison can be in; absent input renders nothing instead. `incomplete`
+ * sits between `changes` and `unchanged`: usable evidence was read, but some of it was dropped, so
+ * the comparison is never presented as complete.
+ */
+export const STATES = ["changes", "incomplete", "unchanged", "unavailable"] as const;
 
 export type DiffState = (typeof STATES)[number];
 
@@ -58,7 +62,11 @@ export interface VersionChange {
 
 /** One page's diff between two versions, and whether the evidence could be read. */
 export interface VersionDiff {
-  /** `changes` when a comparison found changes, `unchanged` for a verified empty one. */
+  /**
+   * `changes` when every change entry was readable, `incomplete` when usable entries were read but
+   * others were dropped, `unchanged` for a verified empty one, `unavailable` when nothing readable
+   * was left.
+   */
   readonly state: DiffState;
   /** The older version folder, such as `v1`, when the data named a usable one. */
   readonly from?: string;
@@ -66,6 +74,8 @@ export interface VersionDiff {
   readonly to?: string;
   /** The section differences, in the order the data lists them. */
   readonly changes: readonly VersionChange[];
+  /** Change entries written in the evidence that were dropped as unusable; zero when all were read. */
+  readonly dropped: number;
 }
 
 /**
@@ -212,9 +222,11 @@ function evidenceOf(value: Readonly<Record<string, unknown>>): Evidence {
  * A diff from a record: `{ from, to, changes }`, or the engine's grouped `{ from, to, added, removed,
  * changed, moved }`. Two usable versions with an explicit empty change list are `unchanged`; missing
  * or equal versions, absent change evidence, or change lists with no usable entry are `unavailable`.
+ * Usable entries beside dropped ones are `incomplete`, never `changes`: a partially unreadable
+ * comparison stays usable without being presented as complete.
  */
 export function diffOf(value: unknown): VersionDiff {
-  if (!isRecord(value)) return { state: "unavailable", changes: [] };
+  if (!isRecord(value)) return { state: "unavailable", changes: [], dropped: 0 };
 
   const from = textOf(value.from);
   const to = textOf(value.to);
@@ -224,17 +236,20 @@ export function diffOf(value: unknown): VersionDiff {
       ...(from === undefined ? {} : { from }),
       ...(to === undefined ? {} : { to }),
       changes: [],
+      dropped: 0,
     };
   }
 
   const evidence = evidenceOf(value);
   const state: DiffState =
     evidence.changes.length > 0
-      ? "changes"
+      ? evidence.dropped > 0
+        ? "incomplete"
+        : "changes"
       : evidence.present && evidence.dropped === 0
         ? "unchanged"
         : "unavailable";
-  return { state, from, to, changes: evidence.changes };
+  return { state, from, to, changes: evidence.changes, dropped: evidence.dropped };
 }
 
 /**
@@ -374,10 +389,13 @@ function changeItem(change: VersionChange, index: number, base: string, lang: st
  * An explicit empty comparison still renders its heading and both versions, with a zero-change
  * message and `data-diff-state="unchanged"`. Malformed evidence renders as `unavailable` instead of
  * disappearing, so it cannot be read as a verified empty diff; only input that was never written
- * renders nothing. `client.ts` is the island: it reveals Previous and Next buttons and a change
- * count, and the arrow keys, Home, and End move between changes with one change in the tab order at
- * a time. The wording comes from `i18n/*.json` in the page's language, and the stylesheet uses
- * logical properties only.
+ * renders nothing. Partially readable evidence — usable changes beside dropped ones, in either the
+ * listed or the grouped shape — renders `data-diff-state="incomplete"` with the list, the accurate
+ * `data-changes-usable` and `data-changes-dropped` counts, and a visible note naming the comparison
+ * partial, so it is never presented as complete. `client.ts` is the island: it reveals Previous and
+ * Next buttons and a change count, and the arrow keys, Home, and End move between changes with one
+ * change in the tab order at a time. The wording comes from `i18n/*.json` in the page's language,
+ * and the stylesheet uses logical properties only.
  */
 const versionDiff: Component<VersionDiffProps> = ({ props, page }) => {
   const diff = versionDiffFor(props, page.frontMatter);
@@ -386,7 +404,9 @@ const versionDiff: Component<VersionDiffProps> = ({ props, page }) => {
   const base = idBase(props.id);
   const titleId = `${base}-title`;
   const listId = `${base}-list`;
+  const noteId = `${base}-note`;
   const total = diff.changes.length;
+  const readable = diff.state === "changes" || diff.state === "incomplete";
   const { from, to } = diff;
 
   return h(
@@ -397,7 +417,11 @@ const versionDiff: Component<VersionDiffProps> = ({ props, page }) => {
       "data-diff-state": diff.state,
       ...(from === undefined ? {} : { "data-version-from": from }),
       ...(to === undefined ? {} : { "data-version-to": to }),
+      ...(readable
+        ? { "data-changes-usable": String(total), "data-changes-dropped": String(diff.dropped) }
+        : {}),
       "aria-labelledby": titleId,
+      ...(diff.state === "incomplete" ? { "aria-describedby": noteId } : {}),
     },
     h(
       "header",
@@ -422,7 +446,7 @@ const versionDiff: Component<VersionDiffProps> = ({ props, page }) => {
               to === undefined ? null : versionLabel("target", t(page.lang, "version_diff_target"), to),
             ),
       ),
-      diff.state !== "changes"
+      !readable
         ? null
         : h(
             "div",
@@ -467,7 +491,22 @@ const versionDiff: Component<VersionDiffProps> = ({ props, page }) => {
             ),
           ),
     ),
-    diff.state === "changes"
+    diff.state === "incomplete"
+      ? h(
+          "p",
+          {
+            class: "version-diff-note",
+            id: noteId,
+            "data-version-diff-note": "",
+            "data-changes-usable": String(total),
+            "data-changes-dropped": String(diff.dropped),
+          },
+          h("span", { class: "version-diff-note-label" }, t(page.lang, "partial")),
+          " ",
+          t(page.lang, "trust_why_partial"),
+        )
+      : null,
+    readable
       ? h(
           "ol",
           { class: "version-diff-list", id: listId, "data-version-diff-list": "" },
