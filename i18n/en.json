@@ -64,6 +64,7 @@
   "edit_page": "Edit this page",
   "edit_prompt": "Edit {source}. Current text: \"{text}\". Change:",
   "edited_on": "edited on",
+  "endpoint_in": "In",
   "example_request": "Example request",
   "example_response": "Example response",
   "feedback_already": "You already answered for this page.",

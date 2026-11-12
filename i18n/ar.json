@@ -64,6 +64,7 @@
   "edit_page": "تحرير هذه الصفحة",
   "edit_prompt": "حرّر الملف {source}. النص الحالي: «{text}». التغيير:",
   "edited_on": "عُدِّل في",
+  "endpoint_in": "في",
   "example_request": "مثال على الطلب",
   "example_response": "مثال على الاستجابة",
   "feedback_already": "لقد أجبت عن هذه الصفحة بالفعل.",

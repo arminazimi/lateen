@@ -104,6 +104,19 @@ test("the 404 recovery group is complete in every language", () => {
   }
 });
 
+test("the endpoint parameter metadata group is complete in every language", () => {
+  const keys = ["description", "endpoint_in", "no", "required", "type", "yes"] as const;
+  for (const lang of languages) {
+    const table = stringsOf(lang);
+    for (const key of keys) {
+      const text = table[key];
+      assert.ok(typeof text === "string" && text.trim() !== "", `${lang}.${key} must carry the endpoint label`);
+      assert.equal(text.replace(/\{\w+\}/g, "").match(/[<>{}]/), null, `${lang}.${key} must stay plain text`);
+      if (lang !== "en") assert.notEqual(text, english[key], `${lang}.${key} must be translated`);
+    }
+  }
+});
+
 test("the single-key shortcut preference names the same keys in every language", () => {
   for (const lang of languages) {
     const table = stringsOf(lang);

@@ -31,8 +31,8 @@ type Node = {
 };
 
 /** Render the endpoint the way the render host calls it: props from the directive plus the body HTML. */
-function render(props: EndpointProps, html = ""): Node {
-  return endpoint({ props, html } as unknown as ComponentProps<EndpointProps>) as unknown as Node;
+function render(props: EndpointProps, html = "", lang = "en"): Node {
+  return endpoint({ props, html, page: { lang } } as unknown as ComponentProps<EndpointProps>) as unknown as Node;
 }
 
 /** Every element in a rendered tree, depth first. Text and empty children are skipped. */
@@ -269,6 +269,134 @@ test("unauthored parameters get typed defaults and unknown metadata is ignored",
     ["In", "path"],
   ]);
   assert.deepEqual(metaOf(parameterItem(node, "slug")), []);
+});
+
+const LOCALIZED_PARAMETERS = JSON.stringify([
+  { name: "id", type: "uuid", required: true, description: "The user id." },
+  { name: "postId", type: "integer", required: false, description: "The post id." },
+]);
+
+/** The metadata rows of one parameter in a language, for the same authored metadata each time. */
+function localizedMeta(lang: string, name = "id"): [string, string][] {
+  const node = render(
+    { method: "GET", path: "/users/{id}/posts/:postId", parameters: LOCALIZED_PARAMETERS },
+    "",
+    lang,
+  );
+  return metaOf(parameterItem(node, name));
+}
+
+test("every parameter label and yes/no answer follows the page language", () => {
+  assert.deepEqual(localizedMeta("fa"), [
+    ["نوع", "uuid"],
+    ["الزامی", "بله"],
+    ["در", "path"],
+    ["توضیحات", "The user id."],
+  ]);
+  assert.deepEqual(localizedMeta("fa", "postId"), [
+    ["نوع", "integer"],
+    ["الزامی", "خیر"],
+    ["در", "path"],
+    ["توضیحات", "The post id."],
+  ]);
+  assert.deepEqual(localizedMeta("ar"), [
+    ["النوع", "uuid"],
+    ["مطلوب", "نعم"],
+    ["في", "path"],
+    ["الوصف", "The user id."],
+  ]);
+  assert.deepEqual(localizedMeta("ar", "postId"), [
+    ["النوع", "integer"],
+    ["مطلوب", "لا"],
+    ["في", "path"],
+    ["الوصف", "The post id."],
+  ]);
+});
+
+test("regional page languages read their base catalog without English labels", () => {
+  for (const [regional, base] of [
+    ["fa-IR", "fa"],
+    ["ar-EG", "ar"],
+    ["en-GB", "en"],
+  ] as const) {
+    assert.deepEqual(localizedMeta(regional), localizedMeta(base), `${regional} reads ${base}`);
+  }
+  const englishLabels = ["Type", "Required", "In", "Description", "Yes", "No"];
+  for (const lang of ["fa-IR", "ar-EG"]) {
+    for (const [label, answer] of localizedMeta(lang)) {
+      assert.ok(!englishLabels.includes(label), `${lang} label ${label} is not English`);
+      assert.ok(!englishLabels.includes(answer), `${lang} answer ${answer} is not English`);
+    }
+  }
+});
+
+test("right-to-left pages keep labels in the page direction and tokens left to right", () => {
+  const node = render(
+    { method: "GET", path: "/users/{id}/posts/:postId", parameters: LOCALIZED_PARAMETERS },
+    "",
+    "fa",
+  );
+  const item = parameterItem(node, "id");
+
+  assert.deepEqual(
+    elements(item)
+      .filter((element) => element.type === "dt")
+      .map((element) => [textOf(element), element.props.dir]),
+    [
+      ["نوع", undefined],
+      ["الزامی", undefined],
+      ["در", undefined],
+      ["توضیحات", undefined],
+    ],
+  );
+  assert.equal(withClass(item, "endpoint-param-type")[0]?.props.dir, "ltr", "the type stays a left-to-right token");
+  assert.equal(withClass(item, "endpoint-param-in")[0]?.props.dir, "ltr", "the location stays a left-to-right token");
+  assert.equal(textOf(withClass(item, "endpoint-param-in")[0]), "path", "the location stays a machine token");
+  assert.equal(withClass(item, "endpoint-param-required")[0]?.props.dir, undefined, "the answer follows the page");
+  assert.equal(withClass(item, "endpoint-param-description")[0]?.props.dir, undefined, "the description follows the page");
+});
+
+test("localized labels keep custom descriptions and unchanged structured operations", () => {
+  const fa = render(
+    { method: "GET", path: "/users/{id}/posts/:postId", parameters: LOCALIZED_PARAMETERS },
+    "",
+    "fa",
+  );
+  const ar = render(
+    { method: "GET", path: "/users/{id}/posts/:postId", parameters: LOCALIZED_PARAMETERS },
+    "",
+    "ar",
+  );
+
+  assert.deepEqual(operationOfNode(fa), {
+    id: "endpoint-get-users-id-posts-postid",
+    method: "GET",
+    path: "/users/{id}/posts/:postId",
+    parameters: [
+      { name: "id", type: "uuid", required: true, description: "The user id." },
+      { name: "postId", type: "integer", required: false, description: "The post id." },
+    ],
+  });
+  assert.deepEqual(operationOfNode(ar), operationOfNode(fa));
+  const json = operationJson(operationOfNode(fa));
+  for (const text of ["مطلوب", "الزامی", "نوع", "Required", "Type"]) {
+    assert.ok(!json.includes(text), `the operation JSON does not carry the label ${text}`);
+  }
+  assert.equal(textOf(withClass(parameterItem(fa, "id"), "endpoint-param-description")[0]), "The user id.");
+  assert.equal(textOf(withClass(parameterItem(ar, "id"), "endpoint-param-description")[0]), "The user id.");
+});
+
+test("a localized page with no metadata still shows the bare parameter list", () => {
+  const node = render({ method: "GET", path: "/a/{id}/b/:slug" }, "", "fa");
+  assert.deepEqual(withClass(node, "endpoint-param-meta"), []);
+  const [list] = withClass(node, "endpoint-params");
+  assert.deepEqual(
+    elements(list).filter((element) => element.type === "li").map((item) => [item.props["data-param"], textOf(item)]),
+    [
+      ["id", "id"],
+      ["slug", "slug"],
+    ],
+  );
 });
 
 test("metadata treats the first duplicate name as the one entry", () => {
