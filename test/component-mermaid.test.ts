@@ -16,6 +16,7 @@ import mermaid, {
   RENDER_OPTIONS,
   renderDiagram,
   type MermaidProps,
+  type MermaidRecord,
 } from "../components/mermaid/index.ts";
 import {
   CACHE_DIR_ENV,
@@ -35,6 +36,13 @@ function render(props: MermaidProps, lang = "en"): string {
   } as ComponentProps<MermaidProps>;
   const node = mermaid(input);
   return node === null ? "" : renderToString(node as never);
+}
+
+/** The record published inside a rendered diagram, as a consumer reads it. */
+function recordOf(out: string): MermaidRecord {
+  const match = /<script[^>]*data-mermaid-record[^>]*>([\s\S]*?)<\/script>/.exec(out);
+  assert.ok(match, "expected a diagram record");
+  return JSON.parse(match[1]!) as MermaidRecord;
 }
 
 const css = readFileSync(new URL("../components/mermaid/style.css", import.meta.url), "utf8");
@@ -114,7 +122,9 @@ test("a small flowchart renders inline SVG at build time, with its source kept",
   assert.match(out, /aria-label="Start goes to end"/);
   assert.match(out, /<details class="mermaid-source">/);
   assert.match(out, /<code class="language-mermaid">flowchart TD/);
-  assert.doesNotMatch(out, /<script/i);
+  // The only script is the inert record: the page never loads or runs a renderer.
+  assert.match(out, /<script type="application\/json" data-mermaid-record[ >]/);
+  assert.doesNotMatch(out, /<script(?![^>]*type="application\/json")/i);
 });
 
 test("alt text may start as a Mermaid comment", () => {
@@ -160,6 +170,96 @@ test("a changed source or render option renders a new diagram", () => {
 test("the figure can keep a source position", () => {
   const out = render({ source: FLOWCHART, src: "docs/flow.md:3:1-6:3" });
   assert.match(out, /data-src="docs\/flow.md:3:1-6:3"/);
+});
+
+test("the diagram record publishes a successful render with its complete source", () => {
+  const out = render({
+    source: `\r\n${FLOWCHART}  \r\n\r\n`,
+    alt: "Start goes to end",
+    src: "docs/flow.md:3:1-6:3",
+  });
+  assert.deepEqual(recordOf(out), {
+    component: "mermaid",
+    version: 1,
+    source: FLOWCHART,
+    alt: { text: "Start goes to end", origin: "prop" },
+    src: "docs/flow.md:3:1-6:3",
+    render: "rendered",
+  });
+});
+
+test("the record says where alt text came from, including an empty alternative", () => {
+  const derived = recordOf(render({ source: `%% alt: A tiny flow\n${FLOWCHART}` }));
+  assert.deepEqual(derived.alt, { text: "A tiny flow", origin: "comment" });
+
+  // An authored alt wins over the comment, exactly as the SVG's accessible name does.
+  const authored = recordOf(render({ source: `%% alt: Ignored\n${FLOWCHART}`, alt: "Authored" }));
+  assert.deepEqual(authored.alt, { text: "Authored", origin: "prop" });
+
+  const empty = recordOf(render({ source: FLOWCHART, alt: "   " }));
+  assert.deepEqual(empty.alt, { text: "", origin: "none" });
+});
+
+test("a missing source position is published as null, not an empty string", () => {
+  assert.equal(recordOf(render({ source: FLOWCHART })).src, null);
+  assert.equal(recordOf(render({ source: FLOWCHART, src: "  " })).src, null);
+});
+
+test("a failed diagram publishes the same complete source and an explicit failure", () => {
+  const source = "flowchart TD\n  Orphan -->";
+  const out = render({ source, alt: "Broken", src: "docs/broken.md:2:1-3:2" });
+  const record = recordOf(out);
+
+  assert.deepEqual(record, {
+    component: "mermaid",
+    version: 1,
+    source,
+    alt: { text: "Broken", origin: "prop" },
+    src: "docs/broken.md:2:1-3:2",
+    render: "failed",
+  });
+  assert.deepEqual(Object.keys(record).sort(), ["alt", "component", "render", "source", "src", "version"]);
+  // The renderer's own error is diagnostic only: it is not published as page content.
+  assert.doesNotMatch(out, /Parse error|Lexical error|renderer exited|invalid output/);
+  assert.match(out, /class="mermaid-fallback"/);
+  assert.match(out, /<details class="mermaid-source">/);
+  assert.match(out, /<code class="language-mermaid">flowchart TD/);
+});
+
+test("record JSON cannot close its script element", () => {
+  // A broken diagram, so the SVG's own text cannot be what holds the closing tag.
+  const source = 'flowchart TD\n  A["</script><script>alert(1)</script>"] -->';
+  const out = render({ source, alt: '</script>"quoted"', src: '</script>' });
+
+  assert.equal([...out.matchAll(/<script\b/g)].length, 1);
+  assert.equal([...out.matchAll(/<\/script>/g)].length, 1);
+  const record = recordOf(out);
+  assert.equal(record.source, source);
+  assert.equal(record.alt.text, '</script>"quoted"');
+  assert.equal(record.src, "</script>");
+});
+
+test("publishing the record renders nothing extra and keeps the SVG and source disclosure", () => {
+  const props: MermaidProps = {
+    source: "flowchart TD\n  A[Record] --> B[Cached]",
+    alt: "A recorded flow",
+    src: "docs/record.md:8:1-10:3",
+  };
+  const renders = diagramRenderCount();
+  const first = render(props);
+  assert.equal(diagramRenderCount(), renders + 1);
+
+  // The same diagram in another spelling is a cache hit: the record is published again without a render.
+  const second = render({ ...props, source: `\r\n${props.source!}  \r\n` });
+  assert.equal(diagramRenderCount(), renders + 1);
+  assert.equal(second, first);
+  assert.deepEqual(recordOf(second), recordOf(first));
+
+  assert.match(first, /<svg[^>]*role="img"/);
+  assert.match(first, /<title>A recorded flow<\/title>/);
+  assert.match(first, /aria-label="A recorded flow"/);
+  assert.match(first, /<details class="mermaid-source">/);
+  assert.match(first, /<code class="language-mermaid">flowchart TD/);
 });
 
 test("an invalid diagram falls back without throwing and keeps the source", () => {
