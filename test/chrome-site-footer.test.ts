@@ -7,12 +7,17 @@ import siteFooter from "../chrome/site-footer/index.ts";
 
 const pos: SourcePos = { file: "index.md", line: 1, column: 1, endLine: 1, endColumn: 1 };
 
-function configWith(options: Readonly<Record<string, unknown>>): SiteConfig {
+/** The direction a language reads in, for the fake page and site. */
+function dirOf(lang: string): "ltr" | "rtl" {
+  return /^(?:fa|ar|he|ur)(?:[-_]|$)/i.test(lang) ? "rtl" : "ltr";
+}
+
+function configWith(options: Readonly<Record<string, unknown>>, lang = "en"): SiteConfig {
   return {
     title: "Example",
     base: "/example",
-    lang: "en",
-    dir: "ltr",
+    lang,
+    dir: dirOf(lang),
     languages: [],
     source: ".",
     include: [],
@@ -42,9 +47,12 @@ const page: Page = {
 const trail: Trail = [];
 const pager: Pager = {};
 
-function props(options: Readonly<Record<string, unknown>>): ChromeProps {
-  const site: Site = { config: configWith(options), pages: [page], nav: {}, data: {} };
-  return { site, page, trail, pager };
+/** Props for a footer with `options`, read by a page in `pageLang` on a site configured in `siteLang`. */
+function props(options: Readonly<Record<string, unknown>>, pageLang = "en", siteLang = "en"): ChromeProps {
+  const config = configWith(options, siteLang);
+  const read: Page = { ...page, lang: pageLang, dir: dirOf(pageLang) };
+  const site: Site = { config, pages: [read], nav: {}, data: {} };
+  return { site, page: read, trail, pager };
 }
 
 type VNode = { type: unknown; props: { children?: unknown; [key: string]: unknown } };
@@ -113,12 +121,50 @@ test("links from the config keep their order, get the site base for root-relativ
     ),
   );
 
-  assert.match(out, /<nav class="site-footer-links" aria-label="Footer links"><ul>/);
+  assert.match(out, /<nav class="site-footer-links" aria-label="Links"><ul>/);
   assert.ok(out.indexOf("Changelog") < out.indexOf("Source"));
   assert.ok(out.indexOf("Source") < out.indexOf("Write"));
-  assert.match(out, /<a href="\/example\/changelog\/">Changelog<\/a>/);
-  assert.match(out, /<a href="https:\/\/github\.com\/velella-sh\/lateen" rel="noopener">Source<\/a>/);
-  assert.match(out, /<a href="mailto:hello@example\.com">Write<\/a>/);
+  assert.match(out, /<a href="\/example\/changelog\/"><bdi>Changelog<\/bdi><\/a>/);
+  assert.match(out, /<a href="https:\/\/github\.com\/velella-sh\/lateen" rel="noopener"><bdi>Source<\/bdi><\/a>/);
+  assert.match(out, /<a href="mailto:hello@example\.com"><bdi>Write<\/bdi><\/a>/);
+});
+
+test("names the link landmark in the page language, even when the site language differs", () => {
+  const footer = { links: [{ title: "Guide", url: "/guide/" }] };
+  const cases: readonly (readonly [pageLang: string, siteLang: string, label: string])[] = [
+    ["en", "fa", "Links"],
+    ["en-GB", "fa", "Links"],
+    ["fa", "en", "پیوندها"],
+    ["fa-IR", "en", "پیوندها"],
+    ["ar", "en", "روابط"],
+    ["ar-EG", "fa", "روابط"],
+  ];
+  for (const [pageLang, siteLang, label] of cases) {
+    const out = html(siteFooter(props({ footer }, pageLang, siteLang)));
+    assert.match(out, new RegExp(`<nav class="site-footer-links" aria-label="${label}">`), `${pageLang} on ${siteLang}`);
+  }
+});
+
+test("mixed-direction titles keep their characters and order, one isolated run per link", () => {
+  const titles = ["راهنمای شروع", "دليل البدء", "Getting started", "نسخه 2.0 (beta)", "API — واجهة برمجة", "…and more!"];
+  const out = html(siteFooter(props({ footer: { links: titles.map((title, index) => ({ title, url: `/link-${index}/` })) } })));
+
+  assert.equal(out.match(/<bdi>/g)?.length, titles.length);
+  let cursor = -1;
+  for (const [index, title] of titles.entries()) {
+    const at = out.indexOf(`<a href="/example/link-${index}/"><bdi>${title}</bdi></a>`);
+    assert.ok(at > cursor, title);
+    cursor = at;
+  }
+});
+
+test("reuses the existing links catalog message and adds no footer key", () => {
+  const expected: Record<string, string> = { en: "Links", fa: "پیوندها", ar: "روابط" };
+  for (const [lang, label] of Object.entries(expected)) {
+    const catalog = JSON.parse(readFileSync(new URL(`../i18n/${lang}.json`, import.meta.url), "utf8")) as Record<string, string>;
+    assert.equal(catalog.links, label);
+    assert.equal(Object.keys(catalog).some((key) => key.includes("footer")), false, `${lang} has a footer key`);
+  }
 });
 
 test("drops links with no title, no URL, or an unsafe URL", () => {
@@ -142,7 +188,7 @@ test("drops links with no title, no URL, or an unsafe URL", () => {
   );
 
   assert.equal(out.match(/<li>/g)?.length, 1);
-  assert.match(out, /<a href="\/example\/kept\/">Kept<\/a>/);
+  assert.match(out, /<a href="\/example\/kept\/"><bdi>Kept<\/bdi><\/a>/);
   assert.doesNotMatch(out, /javascript:|evil\.example|guide\/|no-title|missing-title|No URL/);
 });
 

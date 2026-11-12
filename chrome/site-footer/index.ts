@@ -1,7 +1,6 @@
 import { h } from "preact";
 import type { Chrome, SiteConfig } from "@velella/mizzen/contracts";
-
-const LABEL = "Footer links";
+import { t } from "../../i18n/index.ts";
 
 type FooterLink = { readonly title: string; readonly url: string };
 
@@ -52,8 +51,17 @@ function linksOf(footer: Footer): readonly FooterLink[] {
   return links;
 }
 
+/**
+ * The authored title of a footer link. `<bdi>` isolates its own base direction, so a right-to-left,
+ * left-to-right, or mixed run keeps its order next to the links and punctuation around it; the text
+ * and the link's URL are carried through unchanged.
+ */
+function title(text: string) {
+  return h("bdi", {}, text);
+}
+
 /** Footer line: copyright, license, and optional links from the theme options; renders nothing when the config sets none of them. */
-const siteFooter: Chrome = ({ site }) => {
+const siteFooter: Chrome = ({ site, page }) => {
   const { config } = site;
   const footer = footerOf(config);
   if (footer === undefined) return null;
@@ -75,7 +83,7 @@ const siteFooter: Chrome = ({ site }) => {
         ? null
         : h(
             "nav",
-            { class: "site-footer-links", "aria-label": LABEL },
+            { class: "site-footer-links", "aria-label": t(page.lang, "links") },
             h(
               "ul",
               null,
@@ -86,7 +94,7 @@ const siteFooter: Chrome = ({ site }) => {
                   h(
                     "a",
                     { href: hrefOf(config.base, link.url), rel: /^https?:\/\//i.test(link.url) ? "noopener" : undefined },
-                    link.title,
+                    title(link.title),
                   ),
                 ),
               ),
