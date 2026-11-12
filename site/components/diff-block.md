@@ -33,7 +33,11 @@ the diff.
 
 | Name | Type | Default | What it does |
 | --- | --- | --- | --- |
-| `id` | string | derived from the diff | Prefix for the block's label id. Give each identical block on a page its own id. |
+| `id` | string | derived from the diff | Prefix for the block's group and label ids. Repeated or slug-equivalent prefixes are numbered per page, so identical blocks need no ids. |
+
+Every block gets a group id and a label id that are unique on its page: the first block keeps its
+derived or authored prefix, and later repeats receive `-2`, `-3`, and so on in document order. Each
+group's `aria-labelledby` always points at its own label, and the numbering never crosses pages.
 
 ## Copy actions
 
