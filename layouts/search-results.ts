@@ -20,6 +20,13 @@ export function scriptValue(value: unknown): string {
  * searches, announces the count in the status region, and builds result links and excerpts from
  * text nodes. Pagefind's excerpts carry only its own `<mark>` emphasis, so the excerpt is parsed in
  * an inert `<template>` and only text and `<mark>` elements are copied into the page.
+ *
+ * The announcement uses the same mechanism as the search dialog (issue #108): every
+ * `search_count_*` plural-category message is serialized, the browser picks the page language's
+ * CLDR category with `Intl.PluralRules`, and the visible number follows the language's numbering
+ * preferences through `Intl.NumberFormat`. The one-result count keeps `search_results_one`, whose
+ * prose is written for exactly one result, and the empty, loading, and failure messages keep
+ * their own wording.
  */
 function clientScript(props: LayoutProps): string {
   const lang = props.page.lang;
@@ -27,10 +34,18 @@ function clientScript(props: LayoutProps): string {
     empty: patternOf(lang, "search_results_empty"),
     failed: t(lang, "search_results_failed"),
     loading: t(lang, "search_results_loading"),
-    many: patternOf(lang, "search_count"),
     one: t(lang, "search_results_one"),
+    counts: {
+      zero: patternOf(lang, "search_count_zero"),
+      one: patternOf(lang, "search_count_one"),
+      two: patternOf(lang, "search_count_two"),
+      few: patternOf(lang, "search_count_few"),
+      many: patternOf(lang, "search_count_many"),
+      other: patternOf(lang, "search_count_other"),
+    },
   };
   return `const base = ${scriptValue(props.site.config.base)};
+const lang = ${scriptValue(lang)};
 const messages = ${scriptValue(messages)};
 const input = document.querySelector("[data-search-input]");
 const status = document.querySelector("[data-search-status]");
@@ -41,6 +56,38 @@ if (input) input.value = query;
 function safeHref(url) {
   return url.startsWith("/") || url.startsWith("./") || url.startsWith("../") || /^https?:\\/\\//i.test(url) ? url : undefined;
 }
+
+/* count-path:start The count path is a self-contained block the layout's tests extract and run
+   against the runtime's real Intl data; it reads only the lang and messages declared above.
+   Mirrors the search dialog's pluralCategory (issue 108) with locale number formatting. */
+const PLURAL_CATEGORIES = ["zero", "one", "two", "few", "many", "other"];
+
+/** The CLDR plural category of count in the page language; a tag the runtime rejects reads other. */
+function pluralCategory(count) {
+  let category;
+  try {
+    category = new Intl.PluralRules(lang).select(Math.abs(Math.trunc(count)));
+  } catch {
+    return "other";
+  }
+  return PLURAL_CATEGORIES.includes(category) ? category : "other";
+}
+
+/** The count written the way the page language writes numbers; a tag the runtime rejects reads Western. */
+function visibleNumber(count) {
+  try {
+    return new Intl.NumberFormat(lang).format(count);
+  } catch {
+    return String(count);
+  }
+}
+
+/** The count message of the page language's plural category, with the n placeholder filled visibly. */
+function countMessage(count) {
+  const pattern = messages.counts[pluralCategory(count)] || messages.counts.other;
+  return pattern.replace("{n}", () => visibleNumber(count));
+}
+/* count-path:end */
 
 /** Copies text nodes and Pagefind's <mark> elements out of the inert excerpt template. */
 function copyExcerpt(node, target) {
@@ -90,7 +137,7 @@ if (status && list && query.trim() !== "") {
           ? messages.empty.replace("{query}", () => query)
           : records.length === 1
             ? messages.one
-            : messages.many.replace("{n}", () => String(records.length));
+            : countMessage(records.length);
     })
     .catch(() => {
       status.textContent = messages.failed;
