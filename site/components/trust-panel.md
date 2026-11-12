@@ -9,7 +9,8 @@ A trust panel tells a reader how much to trust a page: the examples it tested, w
 from the code it describes, who reviewed it last, which build produced the evidence, when it was
 generated, when a person last reviewed it, and why it has its level. The doc layout puts the chip under
 the title automatically when the page has an entry in `site.data.trust`; a page without an entry gets no
-chip.
+chip. An entry that is present but cannot be read still gets a chip: it shows the unknown level and an
+explicit invalid-evidence marker, so a data-quality problem is visible instead of silent.
 
 ## Syntax
 
@@ -38,6 +39,14 @@ The layout's panel reads the page's entry from `site.data.trust`, keyed by URL:
 The entry also works under a `pages` key, which wins when both shapes are present. When the engine's
 `trust.json` output (N14) lands, it will write the same shape.
 
+An entry that is present but unreadable — a bare string, list, number, or `null`, or a record with a
+missing or unrecognised `level` (a manual panel with an unreadable `level` behaves the same way) — is
+reported instead of hidden. The panel shows the unknown level and the unknown explanation, and marks
+the root with `data-trust-evidence="invalid"` alongside `data-trust-level="unknown"`. A malformed
+entry never contributes its own reasons, reviewer, build, dates, or action placeholders, and the panel
+does not show the page's examples or drift beside it, so none of it can read as a valid trust record.
+A page with no entry at all stays hidden.
+
 `buildId`, `generatedAt`, and `reviewedAt` are optional. When the entry omits them, the panel reads
 `site.data.build.id` and `site.data.build.generatedAt` (or `.date` / `.asOf`) from `_data/build.yml`, and
 the page's review date from `site.data.reviewers[url].date`. A valid build id is exposed as
@@ -53,7 +62,7 @@ into a verified one.
 
 | Name | Type | Default | What it does |
 | --- | --- | --- | --- |
-| `level` | `verified`, `review due`, or `at risk` | none | The chip's level. Any other value renders nothing. Spaces, case, and `_` are ignored. |
+| `level` | `verified`, `review due`, or `at risk` | none | The chip's level. Spaces, case, and `_` are ignored. A present value that names no level renders an unknown panel marked invalid. |
 | `reasons` | list, or a string split on line breaks or `|` | none | Why the page has this level. |
 | `lastReviewer` | string | none | Who reviewed the page last. |
 | `buildId` | string | none | The build that produced the evidence. |
