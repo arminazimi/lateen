@@ -41,6 +41,7 @@ import {
   type TrustPanelNode,
   type TrustSummary,
 } from "../components/trust-panel/client.ts";
+import { countsOf } from "../components/tested-chip/index.ts";
 
 /** A site with the data, theme options, and base the component reads. */
 function siteOf(data: Record<string, unknown>, options: Record<string, unknown> = {}, base = ""): Site {
@@ -271,6 +272,8 @@ test("malformed evidence is invalid evidence, never zero-valued success", () => 
     { failed: "" },
     { passed: true },
     { total: [] },
+    { passed: null },
+    { passed: Number.MAX_SAFE_INTEGER + 1 },
     "verified",
     [3, 1],
     3,
@@ -282,6 +285,23 @@ test("malformed evidence is invalid evidence, never zero-valued success", () => 
     assert.equal(dd.text, "Unknown", JSON.stringify(malformed));
     assert.doesNotMatch(dd.attrs, /data-trust-examples-passed=/, "invalid evidence exposes no counts");
   }
+});
+
+test("the count contract is shared with tested-chip: null and unsafe integers are invalid, a valid report agrees", () => {
+  for (const counts of [
+    { passed: null, failed: 0 },
+    { passed: Number.MAX_SAFE_INTEGER + 1, failed: 0 },
+    { passed: "9007199254740992", failed: 0 },
+  ]) {
+    assert.deepEqual(evidenceOf(counts), { state: "invalid" }, JSON.stringify(counts));
+    assert.equal(countsOf(counts)?.unavailable, true, `${JSON.stringify(counts)} is unavailable to the chip`);
+  }
+
+  const valid = { passed: 3, failed: 1 };
+  assert.deepEqual(evidenceOf(valid), { state: "failed", passed: 3, failed: 1, total: 4 });
+  const chip = countsOf(valid);
+  assert.deepEqual({ passed: chip?.passed, failed: chip?.failed }, { passed: 3, failed: 1 });
+  assert.equal(chip?.unavailable, undefined);
 });
 
 test("every evidence state reads and marks differently", () => {

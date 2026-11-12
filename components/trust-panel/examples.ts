@@ -1,5 +1,6 @@
 import type { Site } from "@velella/mizzen/contracts";
 import { t } from "../../i18n/index.ts";
+import { parseCount } from "../tested-chip/index.ts";
 
 /**
  * The examples evidence a page can have, in the tested-chip contract's vocabulary (the evidence
@@ -39,31 +40,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/** How one recorded field read: a valid count, not written at all, or written but unreadable. */
-type CountReading =
-  | { readonly kind: "ok"; readonly value: number }
-  | { readonly kind: "absent" }
-  | { readonly kind: "unreadable" };
-
-/**
- * One count as the tested-chip contract reads it: a non-negative integer, or one written as a
- * string. A field that is not written (`undefined` or `null`) is absent; anything else that is not
- * such a number (negative, fractional, blank, boolean, object, list) is unreadable, never a silent
- * zero.
- */
-function readCount(value: unknown): CountReading {
-  if (value === undefined || value === null) return { kind: "absent" };
-  if (typeof value === "number") {
-    return Number.isInteger(value) && value >= 0 ? { kind: "ok", value } : { kind: "unreadable" };
-  }
-  if (typeof value === "string") {
-    const text = value.trim();
-    const parsed = Number(text);
-    return text !== "" && Number.isInteger(parsed) && parsed >= 0 ? { kind: "ok", value: parsed } : { kind: "unreadable" };
-  }
-  return { kind: "unreadable" };
-}
-
 /** Invalid evidence: written but unreadable, so no count is exposed with it. */
 const INVALID: ExamplesEvidence = { state: "invalid" };
 
@@ -86,32 +62,34 @@ function stateOf(passed: number, failed: number, unrun: number): ExampleState {
 
 /**
  * The evidence one `site.data.examples` entry carries. A value that is written but not an object (a
- * bare string or list) is unreadable evidence, so it is `invalid`, not absent. Counts are consumed
- * conservatively: a `total` smaller than `passed + failed`, or an `unrun` that contradicts `total`,
- * is an impossible report and stays `invalid` instead of being corrected into a run result.
+ * bare string or list) is unreadable evidence, so it is `invalid`, not absent. `null` is present but
+ * unreadable too: only `undefined` means the field was never written. Counts use the tested-chip
+ * `parseCount` contract (whole, non-negative, safe integers), and a `total` smaller than
+ * `passed + failed`, or an `unrun` that contradicts `total`, is an impossible report and stays
+ * `invalid` instead of being corrected into a run result.
  */
 export function evidenceOf(value: unknown): ExamplesEvidence {
-  if (value === undefined || value === null) return ABSENT;
+  if (value === undefined) return ABSENT;
   if (!isRecord(value)) return INVALID;
 
-  const passed = readCount(value.passed);
-  const failed = readCount(value.failed);
-  const total = readCount(value.total);
-  const unrun = readCount(value.unrun);
+  const passed = parseCount(value.passed);
+  const failed = parseCount(value.failed);
+  const total = parseCount(value.total);
+  const unrun = parseCount(value.unrun);
   if (
-    passed.kind === "unreadable" ||
-    failed.kind === "unreadable" ||
-    total.kind === "unreadable" ||
-    unrun.kind === "unreadable"
+    (passed.present && !passed.valid) ||
+    (failed.present && !failed.valid) ||
+    (total.present && !total.valid) ||
+    (unrun.present && !unrun.valid)
   ) {
     return INVALID;
   }
 
-  const passedCount = passed.kind === "ok" ? passed.value : 0;
-  const failedCount = failed.kind === "ok" ? failed.value : 0;
+  const passedCount = passed.value;
+  const failedCount = failed.value;
   const done = passedCount + failedCount;
-  const counted = total.kind === "ok" ? total.value : undefined;
-  const skipped = unrun.kind === "ok" ? unrun.value : undefined;
+  const counted = total.present ? total.value : undefined;
+  const skipped = unrun.present ? unrun.value : undefined;
 
   let notRun: number;
   if (counted !== undefined) {
