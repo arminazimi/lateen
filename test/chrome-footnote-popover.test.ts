@@ -12,6 +12,7 @@ import {
   type FootnoteDocument,
   type FootnotePopover,
   type FootnoteRef,
+  type FootnoteTarget,
 } from "../chrome/footnote-popover/client.ts";
 import base from "../layouts/base.ts";
 
@@ -323,6 +324,151 @@ test("escape on a closed page changes nothing and does not prevent the key's own
   (raw as unknown as { dispatchEvent(event: unknown): boolean }).dispatchEvent(event);
   assert.equal(event.defaultPrevented, false);
   assert.equal(popover.hidden, true);
+});
+
+/** A document whose definitions count how often the island clones them. */
+function countingDoc(raw: Document) {
+  let clones = 0;
+  const doc = {
+    getElementById(id: string) {
+      const target = raw.getElementById(id);
+      if (target === null) return null;
+      return {
+        cloneNode(deep: boolean) {
+          clones += 1;
+          return target.cloneNode(deep) as unknown as FootnoteTarget;
+        },
+        querySelectorAll: (selector: string) => target.querySelectorAll(selector),
+        get textContent() {
+          return target.textContent;
+        },
+      };
+    },
+    addEventListener: (type: string, listener: unknown) =>
+      raw.addEventListener(type, listener as EventListener),
+    removeEventListener: (type: string, listener: unknown) =>
+      raw.removeEventListener(type, listener as EventListener),
+    get clones() {
+      return clones;
+    },
+  };
+  return doc;
+}
+
+const NOTE_3 = "Spaced note.";
+const ENCODED_REF =
+  '<p>Spaced<sup><a href="#note%20a" data-footnote-ref aria-describedby="footnote-label">1</a></sup> <sup><a href="#note a" data-footnote-ref>1</a></sup>.</p>';
+const ENCODED_DEFINITION =
+  '<section data-footnotes class="footnotes"><ol><li id="note a"><p>Spaced note. <a href="#user-content-fnref-1" data-footnote-backref aria-label="Back to reference 1">↩</a></p></li></ol></section>';
+
+test("repeated engagement with one reference copies its definition once and reuses the text", () => {
+  const { dom, raw, refElements, refs, popover } = domFor(REF + DEFINITION + POPOVER);
+  const doc = countingDoc(raw);
+  activate(refs, popover, doc as unknown as FootnoteDocument);
+
+  for (const type of ["pointerenter", "pointerleave", "pointerenter", "pointerleave", "pointerenter"]) {
+    firePointer(refElements[0], dom, type, "mouse");
+    if (type === "pointerenter") assert.equal(popover.textContent, NOTE);
+  }
+  fire(refElements[0], dom, "pointerleave");
+
+  assert.equal(doc.clones, 1, "three engagements copy the note once");
+  assert.equal(refs[0]?.getAttribute("aria-describedby"), "footnote-label", "the reference is put back");
+});
+
+test("alternating references keep one cached preview per definition", () => {
+  const { dom, raw, refElements, refs, popover } = domFor(REF + REF_2 + TWO_DEFINITIONS + POPOVER);
+  const doc = countingDoc(raw);
+  activate(refs, popover, doc as unknown as FootnoteDocument);
+
+  firePointer(refElements[0], dom, "pointerenter", "mouse");
+  assert.equal(popover.textContent, NOTE);
+  fire(refElements[0], dom, "pointerleave");
+
+  firePointer(refElements[1], dom, "pointerenter", "mouse");
+  assert.equal(popover.textContent, NOTE_2);
+  fire(refElements[1], dom, "pointerleave");
+
+  firePointer(refElements[0], dom, "pointerenter", "mouse");
+  assert.equal(popover.textContent, NOTE, "the first note comes back from its cache");
+  fire(refElements[0], dom, "pointerleave");
+
+  assert.equal(doc.clones, 2, "one copy per definition, not per engagement");
+});
+
+test("references to one definition share its cached text and leave the page's copy alone", () => {
+  const sameTarget =
+    '<p>One<sup><a href="#user-content-fn-1" data-footnote-ref aria-describedby="footnote-label">1</a></sup> two<sup><a href="#user-content-fn-1" data-footnote-ref>1</a></sup>.</p>';
+  const { dom, raw, refElements, refs, popover } = domFor(sameTarget + DEFINITION + POPOVER);
+  const doc = countingDoc(raw);
+  activate(refs, popover, doc as unknown as FootnoteDocument);
+
+  firePointer(refElements[0], dom, "pointerenter", "mouse");
+  assert.equal(popover.textContent, NOTE);
+
+  firePointer(refElements[1], dom, "pointerenter", "mouse");
+  assert.equal(popover.textContent, NOTE);
+  assert.equal(refElements[1]?.getAttribute("href"), "#user-content-fn-1", "the second reference still navigates");
+  assert.equal(doc.clones, 1, "both references share the one copy");
+
+  const definition = raw.getElementById("user-content-fn-1");
+  const backrefs = definition?.querySelectorAll("[data-footnote-backref]") ?? [];
+  assert.equal(backrefs.length, 1, "the definition keeps its back-link");
+  assert.equal(definition?.textContent?.trim(), NOTE + " ↩", "the definition's own text is unchanged");
+});
+
+test("percent-encoded and literal ids resolve to the same cached definition", () => {
+  const { dom, raw, refElements, refs, popover } = domFor(ENCODED_REF + ENCODED_DEFINITION + POPOVER);
+  const doc = countingDoc(raw);
+  activate(refs, popover, doc as unknown as FootnoteDocument);
+
+  firePointer(refElements[0], dom, "pointerenter", "mouse");
+  assert.equal(popover.textContent, NOTE_3, "the encoded id is decoded");
+  fire(refElements[0], dom, "pointerleave");
+
+  firePointer(refElements[1], dom, "pointerenter", "mouse");
+  assert.equal(popover.textContent, NOTE_3, "the literal id resolves to the same note");
+  fire(refElements[1], dom, "pointerleave");
+
+  assert.equal(doc.clones, 1, "target-id decoding keys one cached copy");
+});
+
+test("malformed and missing targets neither copy a definition nor show stale text", () => {
+  const broken =
+    '<p><a href="#missing" data-footnote-ref aria-describedby="footnote-label">?</a> <a href="https://example.com/#fn-9" data-footnote-ref aria-describedby="footnote-label">x</a> <a href="#" data-footnote-ref aria-describedby="footnote-label">!</a></p>';
+  const { dom, raw, refElements, refs, popover } = domFor(REF + broken + DEFINITION + POPOVER);
+  const doc = countingDoc(raw);
+  activate(refs, popover, doc as unknown as FootnoteDocument);
+
+  firePointer(refElements[0], dom, "pointerenter", "mouse");
+  assert.equal(popover.textContent, NOTE);
+  fire(refElements[0], dom, "pointerleave");
+
+  for (const index of [1, 2, 3]) {
+    firePointer(refElements[index], dom, "pointerenter", "mouse");
+    assert.equal(popover.hidden, true, "a malformed or missing target shows nothing");
+    fire(refElements[index], dom, "pointerleave");
+  }
+
+  assert.equal(doc.clones, 1, "only the real note was ever copied");
+  assert.equal(popover.textContent, "");
+});
+
+test("cleanup drops the cached previews, so a new activation copies the definition again", () => {
+  const { dom, raw, refElements, refs, popover } = domFor(REF + DEFINITION + POPOVER);
+  const doc = countingDoc(raw);
+
+  const stop = activate(refs, popover, doc as unknown as FootnoteDocument);
+  firePointer(refElements[0], dom, "pointerenter", "mouse");
+  assert.equal(popover.textContent, NOTE);
+  assert.equal(doc.clones, 1);
+  stop();
+  assert.equal(popover.hidden, true);
+
+  activate(refs, popover, doc as unknown as FootnoteDocument);
+  firePointer(refElements[0], dom, "pointerenter", "mouse");
+  assert.equal(popover.textContent, NOTE);
+  assert.equal(doc.clones, 2, "a fresh activation starts with an empty cache");
 });
 
 test("a missing or malformed target previews nothing and leaves no stale note behind", () => {

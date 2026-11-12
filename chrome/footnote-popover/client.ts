@@ -72,9 +72,7 @@ export function targetId(href: string): string | undefined {
  * page's own definition (and its back-link) is left exactly as GFM wrote it. Whitespace is
  * collapsed so a multi-line note reads as one sentence in the tooltip.
  */
-export function definitionText(doc: FootnoteDocument, href: string): string | undefined {
-  const id = targetId(href);
-  if (id === undefined) return undefined;
+function previewText(doc: FootnoteDocument, id: string): string | undefined {
   const target = doc.getElementById(id);
   if (target === null) return undefined;
 
@@ -82,6 +80,12 @@ export function definitionText(doc: FootnoteDocument, href: string): string | un
   for (const backref of Array.from(copy.querySelectorAll("[data-footnote-backref]"))) backref.remove();
   const text = (copy.textContent ?? "").replace(/\s+/g, " ").trim();
   return text === "" ? undefined : text;
+}
+
+/** The note's text for one link, or undefined when the link names no definition on this page. */
+export function definitionText(doc: FootnoteDocument, href: string): string | undefined {
+  const id = targetId(href);
+  return id === undefined ? undefined : previewText(doc, id);
 }
 
 /**
@@ -93,7 +97,8 @@ export function definitionText(doc: FootnoteDocument, href: string): string | un
  * copied beside the reference it describes, and the reference keeps its own description alongside
  * the tooltip's. Without a reference nothing is wired. Nothing here calls `preventDefault`, adds a
  * click handler, or takes focus, so a tap or click still navigates to the note, the back-link still
- * returns, and tab order is unchanged.
+ * returns, and tab order is unchanged. Each definition's preview is normalized once per activation
+ * and reused, so repeated engagements and several references to one note copy it only once.
  */
 export function activate(refs: readonly FootnoteRef[], popover: FootnotePopover, doc: FootnoteDocument): () => void {
   if (refs.length === 0) return () => undefined;
@@ -103,6 +108,16 @@ export function activate(refs: readonly FootnoteRef[], popover: FootnotePopover,
   let active: FootnoteRef | undefined;
   let shown: FootnoteRef | undefined;
   let previousDescription: string | null = null;
+
+  /** Normalized previews by resolved definition id; page definitions are static for one activation. */
+  const previews = new Map<string, string | undefined>();
+
+  const preview = (href: string): string | undefined => {
+    const id = targetId(href);
+    if (id === undefined) return undefined;
+    if (!previews.has(id)) previews.set(id, previewText(doc, id));
+    return previews.get(id);
+  };
 
   const hide = (): void => {
     if (shown === undefined) return;
@@ -124,7 +139,7 @@ export function activate(refs: readonly FootnoteRef[], popover: FootnotePopover,
   const sync = (): void => {
     const ref = current();
     const href = ref?.getAttribute("href");
-    const text = href == null ? undefined : definitionText(doc, href);
+    const text = href == null ? undefined : preview(href);
     if (ref === undefined || text === undefined) {
       hide();
       return;
@@ -204,6 +219,7 @@ export function activate(refs: readonly FootnoteRef[], popover: FootnotePopover,
     pointer = undefined;
     focused = undefined;
     active = undefined;
+    previews.clear();
     hide();
   };
 }
