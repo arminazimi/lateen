@@ -10,13 +10,16 @@ export const PAIRED_CLASS = "figure-paired";
 /** The class of the paired figure's dark image; `style.css` keeps it out of view in every theme. */
 export const DARK_IMAGE_CLASS = "figure-img figure-img-dark";
 
+/** The wrapper that owns a pair's one accessible identity; both images inside it are presentational. */
+export const PAIR_CLASS = "figure-pair";
+
 /** Props from the directive: `:::figure{src=… alt=… caption=…}` or `::figure{src=…}`. Every value is a string. */
 export type FigureProps = {
   /** The image. Without it the figure renders nothing. */
   src?: string;
   /** The image shown in dark mode. Without it, or when equal to `src`, one image is shown in both modes. */
   src_dark?: string;
-  /** Text alternative for the image. Empty when missing, which marks the image as decorative. In a paired figure it is exposed once, on the light image; the dark image stays presentational. */
+  /** Text alternative for the image. Empty when missing, which marks the image as decorative. In a paired figure it names the wrapper, and both images stay presentational. */
   alt?: string;
   /** Caption text. When missing, the body of the directive is the caption. */
   caption?: string;
@@ -89,10 +92,10 @@ function captionOf(props: FigureProps, html: string) {
 /**
  * An image with an optional caption and credit. It reserves its space with `width` and `height`, loads
  * lazily unless told otherwise, and with `src_dark` swaps to a second image in dark mode (`style.css`).
- * A pair keeps one accessible identity: the light image carries the alternative, the dark image is
- * presentational (`alt=""`, `aria-hidden`), so assistive technology meets the figure exactly once in
+ * A pair keeps one accessible identity on its wrapper (`role="img"`, `aria-label`), while both images
+ * are presentational (`alt=""`, `aria-hidden`), so assistive technology meets the figure exactly once in
  * either theme, with custom CSS, in forced colors, and before the styles load. The caption and credit
- * sit outside the images, so they stay readable and a credit link stays operable. The body arrives
+ * sit outside the wrapper, so they stay readable and a credit link stays operable. The body arrives
  * already rendered to HTML.
  */
 export default function figure({ props, html }: ComponentProps<FigureProps>) {
@@ -112,7 +115,8 @@ export default function figure({ props, html }: ComponentProps<FigureProps>) {
   const light = h("img", {
     class: paired ? "figure-img figure-img-light" : "figure-img",
     src,
-    alt,
+    alt: paired ? "" : alt,
+    "aria-hidden": paired ? "true" : undefined,
     srcset: typeof props.srcset === "string" && props.srcset !== "" ? props.srcset : undefined,
     sizes: typeof props.sizes === "string" && props.sizes !== "" ? props.sizes : undefined,
     ...shared,
@@ -120,12 +124,14 @@ export default function figure({ props, html }: ComponentProps<FigureProps>) {
   const dark = paired
     ? h("img", { class: DARK_IMAGE_CLASS, src: darkSrc, alt: "", "aria-hidden": "true", ...shared })
     : null;
+  const images = paired
+    ? h("div", { class: PAIR_CLASS, role: alt === "" ? undefined : "img", "aria-label": alt === "" ? undefined : alt }, light, dark)
+    : light;
 
   return h(
     "figure",
     { class: paired ? `${FIGURE_CLASS} ${PAIRED_CLASS}` : FIGURE_CLASS },
-    light,
-    dark,
+    images,
     captionOf(props, html),
   );
 }

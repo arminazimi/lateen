@@ -30,7 +30,7 @@ Or a leaf directive with `caption`:
 | Name | Type | Default | What it does |
 | --- | --- | --- | --- |
 | `src` | string | required | The image. Without it the figure renders nothing. |
-| `src_dark` | string | none | The image shown in dark mode. It is a second visual source only: the accessible name stays with the `src` image. When it equals `src`, one image is used in both modes. |
+| `src_dark` | string | none | The image shown in dark mode. It is a second visual source only: one wrapper carries the accessible name. When it equals `src`, one image is used in both modes. |
 | `alt` | string | empty | The text alternative. It is exposed once for the figure, whatever theme is shown. An empty value marks the image as decorative. |
 | `caption` | string | the body | The caption text. The body is used when `caption` is absent. |
 | `credit` | string | none | Who made the image, shown under the caption. |
@@ -49,11 +49,11 @@ Or a leaf directive with `caption`:
 ## Paired figures
 
 With `src_dark`, the figure writes both images and lets the theme choose which one to show. It still
-carries one accessible identity: the `alt` text names the `src` image, and the dark image is marked
+carries one accessible identity: the `alt` text names a wrapper with `role="img"`, and both images are
 presentational (`alt=""` and `aria-hidden`), so assistive technology meets the figure exactly once —
 in the light, dark, and system themes, in forced colors, under custom CSS, and before the stylesheet
-loads. The caption and the credit are the figure's own children, never part of the image pairing, so
-they stay readable and a credit link stays operable while its image is hidden.
+loads. The caption and the credit are the figure's own children, outside the wrapper, so they stay
+readable and a credit link stays operable while its image is hidden.
 
 ## Notes
 

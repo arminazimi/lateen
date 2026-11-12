@@ -16,8 +16,9 @@
 }
 
 /* A paired figure shows its light image in light mode and its dark image in dark mode, as the header logo does.
-   One accessible identity per pair: the dark image carries `alt=""` and `aria-hidden="true"` in the markup, so it
-   stays a second visual source only — in both themes, under custom CSS, in forced colors, and before styles load. */
+   One accessible identity per pair lives on the wrapper (`role="img"`, `aria-label`); both images are
+   presentational (`alt=""`, `aria-hidden="true"`) in the markup, so the hidden one only ever stops being a
+   visual source — in both themes, under custom CSS, in forced colors, and before styles load. */
 .figure-paired .figure-img-dark {
   display: none;
 }

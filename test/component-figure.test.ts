@@ -7,6 +7,7 @@ import type { ComponentProps } from "@velella/mizzen/contracts";
 import figure, {
   DARK_IMAGE_CLASS,
   FIGURE_CLASS,
+  PAIR_CLASS,
   PAIRED_CLASS,
   creditHref,
   dimension,
@@ -125,29 +126,45 @@ test("srcset and sizes are passed to the image", () => {
   assert.equal(img?.props.sizes, "50vw");
 });
 
-test("with src_dark the figure carries both images, and the dark one is marked", () => {
+test("with src_dark the figure carries both images inside one named wrapper", () => {
   const tree = render({ src: "/light.png", src_dark: "/dark.png", alt: "Diagram" }) as Tree;
   assert.equal(tree.props.class, "figure figure-paired");
-  const images = imagesOf(tree);
+  const pair = find(tree, PAIR_CLASS) as Tree;
+  assert.equal(pair.type, "div");
+  assert.equal(pair.props.role, "img");
+  assert.equal(pair.props["aria-label"], "Diagram");
+  const images = imagesOf(pair);
   assert.equal(images.length, 2);
   assert.equal(images[0]?.props.class, "figure-img figure-img-light");
   assert.equal(images[0]?.props.src, "/light.png");
-  assert.equal(images[0]?.props.alt, "Diagram");
   assert.equal(images[1]?.props.class, "figure-img figure-img-dark");
   assert.equal(images[1]?.props.src, "/dark.png");
   assert.equal(images[1]?.props.loading, "lazy");
 });
 
-test("a pair exposes its alternative once: the light image names the figure, the dark one is presentational", () => {
+test("a pair exposes its alternative once, on the wrapper, while both images are presentational", () => {
   const tree = render({ src: "/light.png", src_dark: "/dark.png", alt: "Diagram of the build" });
-  const images = imagesOf(tree);
+  const pair = find(tree, PAIR_CLASS) as Tree;
+  const images = imagesOf(pair);
   assert.equal(images.length, 2);
-  const named = images.filter((image) => image.props.alt === "Diagram of the build");
+  for (const image of images) {
+    assert.equal(image.props.alt, "");
+    assert.equal(image.props["aria-hidden"], "true");
+  }
+  const named = elements(tree).filter((element) => element.props["aria-label"] === "Diagram of the build");
   assert.equal(named.length, 1);
-  assert.equal(named[0]?.props.class, "figure-img figure-img-light");
-  const dark = find(tree, DARK_IMAGE_CLASS) as Tree;
-  assert.equal(dark.props.alt, "");
-  assert.equal(dark.props["aria-hidden"], "true");
+  assert.equal(named[0], pair);
+});
+
+test("the pair keeps its one name in the light, dark, and system themes", () => {
+  // The identity is markup, so theme CSS can swap the visible image without ever renaming or hiding the pair.
+  const tree = render({ src: "/light.png", src_dark: "/dark.png", alt: "Diagram" });
+  const pair = find(tree, PAIR_CLASS) as Tree;
+  assert.equal(pair.props.role, "img");
+  assert.equal(pair.props["aria-label"], "Diagram");
+  assert.doesNotMatch(css, /\.figure-pair\s*\{[^}]*display:\s*none/);
+  assert.match(css, /:root\[data-theme="dark"\] \.figure-paired \.figure-img-light\s*\{\s*display:\s*none/);
+  assert.match(css, /@media \(prefers-color-scheme: dark\) \{[\s\S]*?:root:not\(\[data-theme="light"\]\) \.figure-paired \.figure-img-dark\s*\{\s*display:\s*block/);
 });
 
 test("a single figure keeps its image named and not hidden", () => {
@@ -158,18 +175,21 @@ test("a single figure keeps its image named and not hidden", () => {
   assert.equal(elements(tree).some((element) => element.props.class === DARK_IMAGE_CLASS), false);
 });
 
-test("a decorative pair keeps both images decorative, and still hides the dark one from assistive technology", () => {
+test("a decorative pair keeps both images decorative, with no unnamed image wrapper", () => {
   const tree = render({ src: "/light.png", src_dark: "/dark.png" });
-  const images = imagesOf(tree);
+  const pair = find(tree, PAIR_CLASS) as Tree;
+  assert.equal(pair.props.role, undefined);
+  assert.equal(pair.props["aria-label"], undefined);
+  const images = imagesOf(pair);
   assert.equal(images.length, 2);
   for (const image of images) {
     assert.equal(image.props.alt, "");
+    assert.equal(image.props["aria-hidden"], "true");
     assert.ok(
       image.props.class === "figure-img figure-img-light" || image.props.class === DARK_IMAGE_CLASS,
       "both images keep their class",
     );
   }
-  assert.equal(find(tree, DARK_IMAGE_CLASS)?.props["aria-hidden"], "true");
 });
 
 test("the dark image gets the same size as the light one", () => {
@@ -237,7 +257,7 @@ function ownChildren(tree: Tree): Node[] {
   return (children as Node[]).filter((child) => child !== null && child !== undefined && child !== false);
 }
 
-test("the caption and credit are the figure's own children, outside the images", () => {
+test("the caption and credit are the figure's own children, outside the image wrapper", () => {
   const tree = render(
     { src: "/light.png", src_dark: "/dark.png", alt: "Diagram", credit: "Ada", credit_url: "https://example.com/ada" },
     "<p>A rich <em>caption</em> with <a href='/notes'>a link</a>.</p>",
@@ -247,11 +267,12 @@ test("the caption and credit are the figure's own children, outside the images",
   const children = ownChildren(tree);
   assert.deepEqual(
     children.map((child) => (child as Tree).type),
-    ["img", "img", "figcaption"],
+    ["div", "figcaption"],
   );
+  assert.equal((children[0] as Tree).props.class, PAIR_CLASS);
 
   // The figure relationship and the accessible content survive the pairing.
-  const figcaption = children[2] as Tree;
+  const figcaption = children[1] as Tree;
   const rich = find(figcaption, "figure-text") as Tree;
   const body = (rich.props.dangerouslySetInnerHTML as { __html: string }).__html;
   assert.match(body, /A rich <em>caption<\/em>/);
