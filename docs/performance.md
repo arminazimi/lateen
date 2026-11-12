@@ -1,7 +1,8 @@
-# Client and CSS performance budgets
+# Client, CSS, and font performance budgets
 
-Lateen ships a stylesheet bundle and a set of client islands with every page. This page explains how
-that weight is measured, where the numbers live, and when a budget may change.
+Lateen ships a stylesheet bundle, a set of client islands, and eight self-hosted webfont faces with
+every page. This page explains how that weight is measured, where the numbers live, and when a budget
+may change.
 
 The budgets are **regression baselines**, not product requirements. Nothing here says a page should
 weigh a particular number of bytes; the numbers record what the theme shipped when the baseline was
@@ -17,13 +18,16 @@ it:
 node scripts/performance-budget.ts
 ```
 
-It prints one row per route and asset class, then checks the result against
-`fixtures/performance/budget.json`. Exit code 0 means every route is within the budget. Exit code 1
-lists each problem with the route and the asset class it belongs to, for example:
+It prints one row per route and asset class, then one row per font file with the `@font-face` context
+that loads it, then checks the result against `fixtures/performance/budget.json`. Exit code 0 means
+every route is within the budget. Exit code 1 lists each problem with the route and the asset class it
+belongs to, and for a font the file itself, for example:
 
 ```text
 route /reference/: js/components loads 6 assets, the baseline is 5
 route /reference/: js/components is 4,600 B gzip, the baseline is 4,427 B (limit 4,491 B)
+route /reference/: font/self-hosted loads assets/theme/fonts/geist/geist-sans-latin-600-normal-….woff2 (Geist 600 normal), which is not in the budget; run `node scripts/performance-budget.ts --update`
+route /reference/: font/self-hosted assets/theme/fonts/geist/geist-sans-latin-400-normal-….woff2 is 24,900 B gzip, the baseline is 20,172 B (limit 20,236 B)
 ```
 
 ## The fixture
@@ -41,7 +45,7 @@ change belongs in the same pull request as a budget update, with an explanation.
 
 ## What is measured
 
-For each route, the script reads the built HTML and assigns what the page loads to one of five asset
+For each route, the script reads the built HTML and assigns what the page loads to one of six asset
 classes:
 
 | Class | A route counts |
@@ -51,18 +55,44 @@ classes:
 | `js/chrome` | Chrome islands (theme chrome such as the header, sidebar, and table of contents) and the modules they import. |
 | `js/components` | Islands of the components the page uses, and the modules they import. |
 | `js/inline` | Inline JavaScript the page evaluates, such as the theme script in `<head>`. |
+| `font/self-hosted` | The font files the stylesheets the page loads declare in an `@font-face`. |
 
 For every class the run records:
 
 - **raw** — bytes as written.
-- **gzip** — bytes after gzip level 9, summed per asset because each stylesheet and module is its own
-  response. Inline JavaScript is compressed on its own for comparison; it travels inside the HTML
+- **gzip** — bytes after gzip level 9, summed per asset because each stylesheet, module, and font is its
+  own response. Inline JavaScript is compressed on its own for comparison; it travels inside the HTML
   document rather than as a separate request.
-- **count** — stylesheets, module files the page loads at startup, or inline scripts. A module a page
-  does not reach is not counted, and a module imported by two islands is counted once.
+- **count** — stylesheets, module files the page loads at startup, inline scripts, or font files. A
+  module a page does not reach is not counted, and a module imported by two islands is counted once.
 
-Fonts, images, and the HTML prose are outside the budget. The measurement is a transfer-and-startup
-proxy: it does not time a browser, a device, or a network.
+The font class also records the files behind its totals, so `budget.json` lists every font response
+with its URL, the stylesheet that declares it, and the family, weight, style, `font-display`, and
+`format()` of the face that asked for it.
+
+### How fonts are counted
+
+- A font is discovered from the stylesheets the route actually loads, never from the theme's font
+  folder. A face declared in a stylesheet no page links is not measured.
+- One file is one response per route, however many faces or stylesheets declare it. Two faces that name
+  the same file count once, and so does a file both the base and the page bundle declare. A `<link
+  rel="preload" as="font">` of a file the CSS already declares adds a reference, not a second transfer.
+- A face with only a `local()` source — the size-adjusted fallbacks the theme ships — transfers nothing
+  and is not counted, and neither is a face inside a CSS comment.
+- URLs are read as the browser reads them: percent-escapes (`%20`) and CSS escapes (`\20 `) resolve to
+  the file the build emitted, a query string or fragment is dropped, and a relative URL is resolved
+  against the stylesheet that writes it. A site served under a base path writes `/docs/assets/…` URLs
+  while the build emits `assets/…`; the leading segments that only carry the base are dropped.
+- A font that cannot be resolved fails the run by name. An external URL (`https://…`, `//…`, or a
+  `data:` URI) is outside this budget and also fails: the theme self-hosts, and a remote face is a
+  privacy and availability question before it is a byte question.
+
+Images and the HTML prose stay outside the budget. The measurement is a transfer-and-startup proxy: it
+does not time a browser, a device, or a network. The font numbers are an upper bound on purpose: they
+count every face the loaded CSS declares, including one a browser may skip because its `unicode-range`
+(U+0600 and friends on a Latin page) or its `font-display: optional` timing keeps it out of the first
+paint. What the budget guards is the weight the theme declares, which is what a typography change
+controls.
 
 ## Adjustment policy
 
@@ -85,6 +115,12 @@ clean checkout on another Node release does not fail for a byte; it is not a gro
 
 Module counts are checked without that headroom: an island added to a route is a new request and a new
 module to evaluate, whatever its size.
+
+Fonts are checked twice: once as a class, against the totals above, and once file by file, with the same
+`64` bytes of gzip headroom per file. The per-file pass is what makes a swapped or renamed face fail even
+when the totals happen to stay level, and it also fails a baseline entry the route no longer loads, so a
+shrink cannot leave a face in `budget.json` that nothing measures any more. `--update` rewrites the whole
+list from the run, so the recorded files, URLs, and face context always match what the fixture builds.
 
 ## Mermaid build cache
 
