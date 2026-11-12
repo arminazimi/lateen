@@ -10,9 +10,14 @@ import schemaTable, {
   copyValueOf,
   directive,
   fieldId,
+  fieldNodeOf,
+  fieldsJson,
+  fieldsPayloadOf,
   idBase,
   lookup,
   schemaRows,
+  type SchemaFieldNode,
+  type SchemaFieldsPayload,
   type SchemaRow,
   type SchemaTableProps,
 } from "../components/schema-table/index.ts";
@@ -333,6 +338,237 @@ test("a schema with no properties renders a note, not an empty table", () => {
   const tree = render({ data: "empty" }, { empty: { type: "object" } });
   assert.equal(tree.props.class, MISSING_CLASS);
   assert.match(textOf(tree.props.children), /has no properties/);
+});
+
+/** The inert fields script the component publishes, parsed back into its payload. */
+function payloadOf(tree: Tree): SchemaFieldsPayload {
+  const [script] = nodes(tree).filter(
+    (node) => node.type === "script" && node.props["data-schema-fields"] !== undefined,
+  );
+  assert.ok(script, "fields script rendered");
+  const html = (script.props.dangerouslySetInnerHTML as { __html: string } | undefined)?.__html;
+  assert.ok(html, "script carries the payload");
+  return JSON.parse(html) as SchemaFieldsPayload;
+}
+
+/** The raw text of the published script, before parsing. */
+function rawJson(tree: Tree): string {
+  const [script] = nodes(tree).filter(
+    (node) => node.type === "script" && node.props["data-schema-fields"] !== undefined,
+  );
+  assert.ok(script, "fields script rendered");
+  return ((script.props.dangerouslySetInnerHTML as { __html: string }).__html ?? "");
+}
+
+/** One published field by its dotted path, searched through the tree. */
+function searchField(fields: readonly SchemaFieldNode[], path: string): SchemaFieldNode | undefined {
+  for (const field of fields) {
+    if (field.path === path) return field;
+    const nested = searchField(field.children, path);
+    if (nested !== undefined) return nested;
+  }
+  return undefined;
+}
+
+function findField(fields: readonly SchemaFieldNode[], path: string): SchemaFieldNode {
+  const found = searchField(fields, path);
+  if (found === undefined) throw new Error(`no published field ${path}`);
+  return found;
+}
+
+/** Every published path, outermost first, in table order. */
+function publishedPaths(fields: readonly SchemaFieldNode[]): string[] {
+  return fields.flatMap((field) => [field.path, ...publishedPaths(field.children)]);
+}
+
+test("the rendered table carries an inert JSON script with the schema's path", () => {
+  const tree = render({ data: "widget" }, { widget });
+  const [script] = nodes(tree).filter(
+    (node) => node.type === "script" && node.props["data-schema-fields"] !== undefined,
+  );
+  assert.ok(script);
+  assert.equal(script.props.type, "application/json");
+  const payload = payloadOf(tree);
+  assert.equal(payload.component, "schema-table");
+  assert.equal(payload.version, 1);
+  assert.equal(payload.data, "widget");
+});
+
+test("every visible row is published with its path, anchor, and copy value intact", () => {
+  const tree = render({ data: "widget" }, { widget });
+  const payload = payloadOf(tree);
+  const domRows = nodes(tree).filter((node) => node.type === "tr" && node.props["data-field"]);
+  assert.deepEqual(publishedPaths(payload.fields), domRows.map((row) => row.props["data-field"]));
+  for (const row of domRows) {
+    const field = findField(payload.fields, String(row.props["data-field"]));
+    assert.equal(field.anchor, row.props.id);
+    assert.equal(field.copyValue, row.props["data-copy-value"]);
+    assert.equal(field.type, String(row.props["data-copy-value"]).slice(String(row.props["data-field"]).length + 2));
+  }
+});
+
+test("the JSON keeps nesting and order: arrays, objects, and their item fields", () => {
+  const tree = render(
+    { data: "s" },
+    {
+      s: {
+        properties: {
+          steps: { type: "array", items: { type: "object", required: ["title"], properties: { title: { type: "string" } } } },
+          owner: { type: "object", properties: { name: { type: "string" }, email: { type: "string" } } },
+        },
+      },
+    },
+  );
+  const payload = payloadOf(tree);
+  assert.deepEqual(payload.fields.map((field) => field.name), ["steps", "owner"]);
+  const steps = findField(payload.fields, "steps");
+  assert.deepEqual(
+    steps.children.map((child) => [child.path, child.depth, child.required, child.truncated]),
+    [["steps.title", 1, true, null]],
+  );
+  assert.deepEqual(
+    findField(payload.fields, "owner").children.map((child) => child.path),
+    ["owner.name", "owner.email"],
+  );
+});
+
+test("absent, null, false, and empty-string defaults are told apart in the JSON", () => {
+  const tree = render(
+    { data: "s" },
+    {
+      s: {
+        properties: {
+          absent: { type: "string" },
+          nulld: { type: "string", default: null },
+          no: { type: "boolean", default: false },
+          blank: { type: "string", default: "" },
+          zero: { type: "integer", default: 0 },
+        },
+      },
+    },
+  );
+  const payload = payloadOf(tree);
+  assert.deepEqual(findField(payload.fields, "absent").default, { present: false, hasValue: false });
+  assert.deepEqual(findField(payload.fields, "nulld").default, { present: true, hasValue: true, value: null });
+  assert.deepEqual(findField(payload.fields, "no").default, { present: true, hasValue: true, value: false });
+  assert.deepEqual(findField(payload.fields, "blank").default, { present: true, hasValue: true, value: "" });
+  assert.deepEqual(findField(payload.fields, "zero").default, { present: true, hasValue: true, value: 0 });
+});
+
+test("enum and const values, and the description, are published per field", () => {
+  const tree = render(
+    { data: "s" },
+    { s: { properties: { color: { enum: ["red", "blue"], description: "Pick one." }, kind: { const: "item" } } } },
+  );
+  const payload = payloadOf(tree);
+  assert.deepEqual(findField(payload.fields, "color").values, ["red", "blue"]);
+  assert.equal(findField(payload.fields, "color").description, "Pick one.");
+  assert.deepEqual(findField(payload.fields, "kind").values, ["item"]);
+  assert.equal(findField(payload.fields, "kind").description, "");
+});
+
+test("Unicode names, values, and descriptions survive publication", () => {
+  const tree = render(
+    { data: "s" },
+    { s: { properties: { حجم: { type: "string", enum: ["كبير 🎉"], description: "وصف." } } } },
+  );
+  const field = findField(payloadOf(tree).fields, "حجم");
+  assert.equal(field.name, "حجم");
+  assert.deepEqual(field.values, ["كبير 🎉"]);
+  assert.equal(field.description, "وصف.");
+  assert.equal(field.anchor, "schema-s-field-حجم");
+});
+
+test("a recursive reference is published as a cycle, not as a leaf with no story", () => {
+  const tree = render(
+    { data: "s" },
+    { s: { properties: { child: { type: "object", properties: { next: { $ref: "#" } } } } } },
+  );
+  const looped = findField(payloadOf(tree).fields, "child.next.child.next");
+  assert.deepEqual(looped.children, []);
+  assert.equal(looped.truncated, "cycle");
+  assert.equal(findField(payloadOf(tree).fields, "child").truncated, null);
+});
+
+test("the depth limit is marked honestly at the row that stopped expanding", () => {
+  let schema: Record<string, unknown> = { type: "object", properties: { leaf: { type: "string" } } };
+  for (let i = 0; i < 20; i++) schema = { type: "object", properties: { level: schema } };
+  const tree = render({ data: "s" }, { s: schema });
+  const payload = payloadOf(tree);
+  const deepest = payload.fields[0];
+  assert.ok(deepest);
+  assert.equal(deepest.truncated, null);
+  const marks = publishedPaths(payload.fields).map((path) => findField(payload.fields, path).truncated);
+  assert.equal(marks.filter((mark) => mark === "depth").length, 1);
+  const at = publishedPaths(payload.fields).findIndex((_path, index) => marks[index] === "depth");
+  assert.ok(at >= 0);
+});
+
+test("script-like values cannot terminate the data block", () => {
+  const evil = "</script><script>alert(1)</script>";
+  const tree = render(
+    { data: "s" },
+    { s: { properties: { x: { type: "string", description: evil, enum: ["a<b", "</script>"] } } } },
+  );
+  const raw = rawJson(tree);
+  assert.ok(!raw.toLowerCase().includes("</script"), "raw payload closes no script tag");
+  const field = findField(payloadOf(tree).fields, "x");
+  assert.equal(field.description, evil);
+  assert.deepEqual(field.values, ["a<b", "</script>"]);
+});
+
+test("a malformed schema publishes exactly what the table shows", () => {
+  const tree = render(
+    { data: "s" },
+    {
+      s: {
+        required: "not-an-array",
+        properties: {
+          broken: null,
+          alsobroken: "a string is not a schema",
+          odd: { enum: "not-an-array", type: 5, items: "not-an-object" },
+        },
+      },
+    },
+  );
+  const payload = payloadOf(tree);
+  assert.deepEqual(publishedPaths(payload.fields), ["odd"]);
+  const odd = findField(payload.fields, "odd");
+  assert.equal(odd.required, false);
+  assert.deepEqual(odd.values, []);
+  assert.equal(odd.type, "enum");
+  assert.equal(odd.truncated, null);
+});
+
+test("fieldsPayloadOf, fieldNodeOf, and fieldsJson describe rows without the DOM", () => {
+  const rows = schemaRows(widget);
+  const payload = fieldsPayloadOf("widget", "schema-widget", rows);
+  assert.equal(payload.fields.length, 6);
+  const raw = fieldsJson(payload);
+  assert.ok(!raw.includes("<"), "the writer escapes every angle bracket");
+  const size = findField((JSON.parse(raw) as SchemaFieldsPayload).fields, "size");
+  const row = rows.find((candidate) => candidate.name === "size");
+  assert.ok(row);
+  assert.deepEqual(size, fieldNodeOf(row, "schema-widget"));
+  assert.equal(size.copyValue, "size: integer");
+});
+
+test("no table means no JSON: notes for missing data, schema, and properties carry no script", () => {
+  for (const tree of [render({}, { widget }), render({ data: "missing" }, { widget }), render({ data: "empty" }, { empty: { type: "object" } })]) {
+    assert.equal(tree.type, "p");
+    assert.equal(tree.props.class, MISSING_CLASS);
+    assert.equal(nodes(tree).filter((node) => node.type === "script").length, 0);
+  }
+});
+
+test("the JSON is server-rendered markup: it needs no JavaScript to exist", () => {
+  const tree = render({ data: "widget" }, { widget });
+  const wrapper = tree;
+  assert.equal(wrapper.props.class, WRAPPER_CLASS);
+  // The script is a static child of the region vnode; nothing in it depends on client events.
+  const raw = rawJson(tree);
+  assert.ok(raw.includes('"data":"widget"'));
+  assert.equal(nodes(tree).filter((node) => node.type === "script").length, 1);
 });
 
 test("style.css styles the wrapper, the table, and the depth classes", () => {
