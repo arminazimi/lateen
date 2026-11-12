@@ -23,6 +23,29 @@ const MAX_INDENT = 3;
 /** Hops allowed when following `$ref` chains, and when describing nested `items`. */
 const MAX_HOPS = 16;
 
+/** Class on the visible marker for a reference that was not expanded. */
+export const REF_CLASS = "schema-ref";
+
+/** Class on the resolution state word inside a reference marker. */
+export const REF_STATE_CLASS = "schema-ref-state";
+
+/**
+ * How expansion treated an authored `$ref`: `resolved` read the local target; `unresolved` found no
+ * target; `external` pointed outside this document; `malformed` was not a usable local pointer;
+ * `cycle` looped back on itself; `depth` hit a deterministic expansion limit.
+ */
+export const REF_STATES = ["resolved", "unresolved", "external", "malformed", "cycle", "depth"] as const;
+
+export type RefState = (typeof REF_STATES)[number];
+
+/** The `$ref` a schema authored, and what expansion did with it. */
+export interface SchemaRef {
+  /** The reference as authored; JSON text when the value is not a string. */
+  readonly value: string;
+  /** How expansion treated it. */
+  readonly state: RefState;
+}
+
 export type SchemaTableProps = {
   /** Path of the schema in `_data`, without the extension: `widget` or `guides/steps`. */
   data?: string;
@@ -41,7 +64,7 @@ export interface SchemaRow {
   readonly path: string;
   /** The property name as written in the schema. */
   readonly name: string;
-  /** Type as text: `string`, `string | null`, `string[]`, `enum`, or `any`. */
+  /** Type as text: `string`, `string | null`, `string[]`, `enum`, `unknown`, or `any`. */
   readonly type: string;
   /** True when the parent schema lists the property in `required`. */
   readonly required: boolean;
@@ -55,6 +78,8 @@ export interface SchemaRow {
   readonly values: readonly unknown[];
   /** 0 for top-level properties, 1 for their properties, and so on. */
   readonly depth: number;
+  /** The `$ref` the property authored and how it was treated, or null when it authored none. */
+  readonly ref: SchemaRef | null;
   /** Properties of this property (object properties, or the properties of array `items`). */
   readonly children: readonly SchemaRow[];
   /**
@@ -69,28 +94,89 @@ function isJson(value: unknown): value is Json {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/** The reference as text: strings stay as written, any other JSON value becomes its JSON text. */
+function authoredText(value: unknown): string {
+  return typeof value === "string" ? value : JSON.stringify(value) ?? String(value);
+}
+
+/** The tokens of a local JSON pointer, with `~1` and `~0` decoded; undefined when it is not one. */
+function pointerParts(ref: string): string[] | undefined {
+  if (!ref.startsWith("#")) return undefined;
+  const fragment = ref.slice(1);
+  if (fragment === "") return [];
+  if (!fragment.startsWith("/")) return undefined;
+  const parts = fragment.slice(1).split("/");
+  // A `~` must be followed by `0` or `1`; anything else is not a JSON pointer.
+  if (parts.some((part) => /~(?:[^01]|$)/.test(part))) return undefined;
+  return parts.map((part) => part.replace(/~1/g, "/").replace(/~0/g, "~"));
+}
+
+/** True when a local reference uses pointer syntax but one of its `~` escapes is invalid. */
+function malformedPointer(ref: string): boolean {
+  const fragment = ref.slice(1);
+  if (!fragment.startsWith("/")) return false;
+  return fragment
+    .slice(1)
+    .split("/")
+    .some((part) => /~(?:[^01]|$)/.test(part));
+}
+
 /** Follows the JSON pointer `#/$defs/name` (or `#/definitions/name`) inside the same document. */
 function pointerTarget(root: Json, ref: string): unknown {
-  if (!ref.startsWith("#")) return undefined;
-  const parts = ref.slice(1).split("/").filter((part) => part !== "");
+  const parts = pointerParts(ref);
+  if (parts === undefined) return undefined;
   let node: unknown = root;
-  for (const raw of parts) {
-    const key = raw.replace(/~1/g, "/").replace(/~0/g, "~");
+  for (const key of parts) {
     if (!isJson(node) || !Object.hasOwn(node, key)) return undefined;
     node = node[key];
   }
   return node;
 }
 
+/** A schema with its `$ref` chain applied, and the reference the row authored. */
+interface Resolution {
+  readonly schema: Json;
+  readonly ref: SchemaRef | null;
+}
+
+/** The schema without its own `$ref`, keeping the keywords written next to it. */
+function withoutRef(schema: Json): Json {
+  if (!Object.hasOwn(schema, "$ref")) return schema;
+  const { $ref: _ref, ...local } = schema;
+  return local;
+}
+
 /**
- * The schema with its `$ref` applied: the target's keywords, overridden by any keyword the referring
- * schema sets next to the `$ref`. A `$ref` that does not resolve in this document is ignored.
+ * Resolves a local `$ref` chain and reports exactly how it ended. The target's keywords are
+ * overridden by any keyword the referring schema sets next to the `$ref`. External, malformed,
+ * missing, cyclic, and limit-cut references are never fetched or guessed at.
  */
+function resolve(schema: Json, root: Json, hops = 0, seen: ReadonlySet<string> = new Set()): Resolution {
+  if (!Object.hasOwn(schema, "$ref")) return { schema, ref: null };
+  const authored = schema.$ref;
+  const value = authoredText(authored);
+  const ended = (state: RefState): Resolution => ({ schema: withoutRef(schema), ref: { value, state } });
+
+  if (typeof authored !== "string") return ended("malformed");
+  if (!authored.startsWith("#")) return ended("external");
+  if (seen.has(authored)) return ended("cycle");
+  if (hops > MAX_HOPS) return ended("depth");
+  if (malformedPointer(authored)) return ended("malformed");
+  // A plain-name fragment such as `#notes` is local but not a pointer this reader can follow.
+  if (pointerParts(authored) === undefined) return ended("unresolved");
+  const target = pointerTarget(root, authored);
+  if (!isJson(target)) return ended("unresolved");
+
+  const next = resolve(target, root, hops + 1, new Set([...seen, authored]));
+  return {
+    schema: { ...next.schema, ...withoutRef(schema) },
+    ref: { value, state: next.ref?.state ?? "resolved" },
+  };
+}
+
+/** The schema with its `$ref` applied. Non-resolving references contribute no keywords. */
 function view(schema: Json, root: Json, hops = 0): Json {
-  if (typeof schema.$ref !== "string" || hops > MAX_HOPS) return schema;
-  const { $ref, ...local } = schema;
-  const target = pointerTarget(root, $ref);
-  return { ...(isJson(target) ? view(target, root, hops + 1) : {}), ...local };
+  return resolve(schema, root, hops).schema;
 }
 
 /** The values a schema allows: its `enum`, or its single `const`. */
@@ -100,23 +186,29 @@ function valuesOf(schema: Json): readonly unknown[] {
   return [];
 }
 
-/** The schema's type as text. Arrays read as `item[]`; unions join with `|`. */
+/**
+ * The schema's type as text. Arrays read as `item[]`; unions join with `|`. A reference that did not
+ * resolve reads `unknown`, never a bare `any` that would claim the field is unconstrained.
+ */
 function typeOf(schema: Json, root: Json, depth = 0): string {
-  if (depth > MAX_HOPS) return "any";
-  if (typeof schema.type === "string") {
-    if (schema.type === "array" && isJson(schema.items)) {
-      return `${typeOf(view(schema.items, root), root, depth + 1)}[]`;
+  if (depth > MAX_HOPS) return "unknown";
+  const resolved = resolve(schema, root);
+  const own = resolved.schema;
+  if (typeof own.type === "string") {
+    if (own.type === "array" && isJson(own.items)) {
+      return `${typeOf(own.items, root, depth + 1)}[]`;
     }
-    return schema.type;
+    return own.type;
   }
-  if (Array.isArray(schema.type)) return schema.type.map(String).join(" | ");
+  if (Array.isArray(own.type)) return own.type.map(String).join(" | ");
   const members = [
-    ...(Array.isArray(schema.anyOf) ? schema.anyOf : []),
-    ...(Array.isArray(schema.oneOf) ? schema.oneOf : []),
+    ...(Array.isArray(own.anyOf) ? own.anyOf : []),
+    ...(Array.isArray(own.oneOf) ? own.oneOf : []),
   ];
-  const memberTypes = members.filter(isJson).map((member) => typeOf(view(member, root), root, depth + 1));
+  const memberTypes = members.filter(isJson).map((member) => typeOf(member, root, depth + 1));
   if (memberTypes.length > 0) return memberTypes.join(" | ");
-  if (Object.hasOwn(schema, "enum") || Object.hasOwn(schema, "const")) return "enum";
+  if (Object.hasOwn(own, "enum") || Object.hasOwn(own, "const")) return "enum";
+  if (resolved.ref !== null && resolved.ref.state !== "resolved") return "unknown";
   return "any";
 }
 
@@ -163,27 +255,45 @@ function rowOf(
   prefix: string,
 ): SchemaRow {
   const path = prefix === "" ? name : `${prefix}.${name}`;
-  const ref = typeof prop.$ref === "string" ? prop.$ref : undefined;
+  const authored = typeof prop.$ref === "string" ? prop.$ref : undefined;
   // A `$ref` already on the way down is a cycle: show the row, but do not expand it again.
-  const cyclic = ref !== undefined && active.has(ref);
-  const nested = ref === undefined ? active : new Set([...active, ref]);
-  const resolved = view(prop, root);
+  const cyclic = authored !== undefined && active.has(authored);
+  const nested = authored === undefined ? active : new Set([...active, authored]);
+  const resolution = resolve(prop, root);
+  const resolved = resolution.schema;
   const atDepthLimit = depth + 1 > MAX_DEPTH;
+  const truncated = cyclic ? "cycle" : atDepthLimit && mayHaveChildren(resolved, root) ? "depth" : null;
+  // An unresolved reference keeps its own state; a resolved one says whether expansion was cut off.
+  const ref: SchemaRef | null =
+    resolution.ref === null
+      ? null
+      : {
+          value: resolution.ref.value,
+          state:
+            cyclic
+              ? "cycle"
+              : resolution.ref.state !== "resolved"
+                ? resolution.ref.state
+                : truncated === "depth"
+                  ? "depth"
+                  : "resolved",
+        };
   const children =
     cyclic || atDepthLimit ? [] : childRows(resolved, root, depth + 1, nested, path);
 
   return {
     path,
     name,
-    type: typeOf(resolved, root),
+    type: typeOf(prop, root),
     required,
     hasDefault: Object.hasOwn(resolved, "default"),
     defaultValue: resolved.default,
     description: typeof resolved.description === "string" ? resolved.description : "",
     values: valuesOf(resolved),
     depth,
+    ref,
     children,
-    truncated: cyclic ? "cycle" : atDepthLimit && mayHaveChildren(resolved, root) ? "depth" : null,
+    truncated,
   };
 }
 
@@ -251,7 +361,7 @@ export interface SchemaFieldNode {
   readonly anchor: string;
   /** 0 for top-level properties, 1 for their properties, and so on. */
   readonly depth: number;
-  /** Type as text, exactly the table shows it: `string`, `string | null`, `string[]`, `enum`, `any`. */
+  /** Type as text, exactly the table shows it: `string`, `string | null`, `string[]`, `enum`, `unknown`, `any`. */
   readonly type: string;
   /** The row's current copy value, `path: type`, unchanged. */
   readonly copyValue: string;
@@ -267,6 +377,8 @@ export interface SchemaFieldNode {
   readonly values: readonly unknown[];
   /** The `description` text, or an empty string. */
   readonly description: string;
+  /** The `$ref` the field authored and how it was treated, or null when it authored none. */
+  readonly ref: SchemaRef | null;
   /** `"cycle"` or `"depth"` when expansion stopped early; `null` when `children` is the full story. */
   readonly truncated: "cycle" | "depth" | null;
   /** Fields nested under this one, in schema order; empty when `truncated` explains why. */
@@ -277,8 +389,8 @@ export interface SchemaFieldNode {
 export interface SchemaFieldsPayload {
   /** Names the component, so a consumer knows how to read the rest. */
   readonly component: "schema-table";
-  /** Shape version; bumped when the meaning of a field changes. */
-  readonly version: 1;
+  /** Shape version; bumped when the meaning of a field changes. Version 2 adds `ref` and `unknown` types. */
+  readonly version: 2;
   /** The schema's path under `_data`, as the directive wrote it. */
   readonly data: string;
   /** Top-level fields in table order, nested fields under each as `children`. */
@@ -302,6 +414,7 @@ export function fieldNodeOf(row: SchemaRow, base: string): SchemaFieldNode {
     },
     values: [...row.values],
     description: row.description,
+    ref: row.ref,
     truncated: row.truncated,
     children: row.children.map((child) => fieldNodeOf(child, base)),
   };
@@ -309,7 +422,7 @@ export function fieldNodeOf(row: SchemaRow, base: string): SchemaFieldNode {
 
 /** The payload for one table: every visible field, with nesting and order kept as the table shows them. */
 export function fieldsPayloadOf(data: string, base: string, rows: readonly SchemaRow[]): SchemaFieldsPayload {
-  return { component: "schema-table", version: 1, data, fields: rows.map((row) => fieldNodeOf(row, base)) };
+  return { component: "schema-table", version: 2, data, fields: rows.map((row) => fieldNodeOf(row, base)) };
 }
 
 /** JSON safe inside a `<script>` element: a `<` can never close the tag early. */
@@ -324,6 +437,17 @@ function show(value: unknown): string {
 
 function flatten(rows: readonly SchemaRow[]): SchemaRow[] {
   return rows.flatMap((row) => [row, ...flatten(row.children)]);
+}
+
+/** The visible marker for a reference that was not expanded: its authored value and how it ended. */
+function refNode(ref: SchemaRef) {
+  return h(
+    "span",
+    { class: REF_CLASS, dir: "ltr" },
+    h("code", null, `$ref ${ref.value}`),
+    " ",
+    h("span", { class: REF_STATE_CLASS }, ref.state),
+  );
 }
 
 function rowNode(row: SchemaRow, base: string, lang: string) {
@@ -343,9 +467,15 @@ function rowNode(row: SchemaRow, base: string, lang: string) {
       id: fieldId(base, row.path),
       "data-field": row.path,
       "data-copy-value": copyValueOf(row),
+      ...(row.ref === null ? {} : { "data-ref": row.ref.value, "data-ref-state": row.ref.state }),
     },
     h("th", { scope: "row", class: "schema-name", id: ownHeader, ...headerHeaders }, h("code", { dir: "ltr" }, row.name)),
-    h("td", { ...headersOf("type") }, h("code", { class: "schema-type", dir: "ltr" }, row.type)),
+    h(
+      "td",
+      { ...headersOf("type") },
+      h("code", { class: "schema-type", dir: "ltr" }, row.type),
+      row.ref !== null && row.ref.state !== "resolved" ? refNode(row.ref) : null,
+    ),
     h("td", { class: "schema-required", ...headersOf("required") }, row.required ? t(lang, "required") : null),
     h(
       "td",
@@ -373,8 +503,9 @@ function rowNode(row: SchemaRow, base: string, lang: string) {
  * parent. `data` is the file's path under `_data` without its extension; `guides/steps` reads
  * `_data/guides/steps.yml`. The table needs no JavaScript and reads the same in right-to-left text; its
  * headers and messages come from the page language's catalog. An inert JSON script publishes the same
- * fields — paths, types, required state, defaults, allowed values, descriptions, hierarchy, and honest
- * truncation marks — so agents read the evidence without scraping formatted cells.
+ * fields — paths, types, required state, defaults, allowed values, descriptions, hierarchy, authored
+ * references with their resolution state, and honest truncation marks — so agents read the evidence
+ * without scraping formatted cells.
  */
 export default function schemaTable({ props, site, page }: ComponentProps<SchemaTableProps>) {
   const lang = page.lang;

@@ -73,6 +73,17 @@
   white-space: nowrap;
 }
 
+.schema-ref {
+  display: block;
+  margin-block-start: var(--space-1);
+  color: var(--color-muted);
+  font-size: var(--type-size-xs);
+}
+
+.schema-ref-state {
+  font-family: var(--type-font-mono);
+}
+
 .schema-description > span {
   display: block;
 }

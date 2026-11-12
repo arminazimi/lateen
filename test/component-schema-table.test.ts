@@ -2,8 +2,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import type { ComponentProps } from "@velella/mizzen/contracts";
+import { renderToString } from "preact-render-to-string";
 import schemaTable, {
   MISSING_CLASS,
+  REF_CLASS,
+  REF_STATE_CLASS,
   TABLE_CLASS,
   WRAPPER_CLASS,
   ancestorPaths,
@@ -187,6 +190,211 @@ test("a $ref to #/$defs is followed, and keywords next to it win", () => {
   assert.equal(rowNamed(rows, "first").type, "string");
   assert.equal(rowNamed(rows, "first").description, "A name.");
   assert.equal(rowNamed(rows, "second").description, "Overridden.");
+  assert.deepEqual(rowNamed(rows, "first").ref, { value: "#/$defs/name", state: "resolved" });
+  assert.deepEqual(rowNamed(rows, "second").ref, { value: "#/$defs/name", state: "resolved" });
+});
+
+test("a resolved local $ref keeps its authored value and state in the DOM and payload", () => {
+  const schema = {
+    $defs: { name: { type: "string" } },
+    properties: { first: { $ref: "#/$defs/name" } },
+  };
+  const tree = render({ data: "s" }, { s: schema });
+  const row = nodes(tree).find((node) => node.props["data-field"] === "first");
+  assert.equal(row?.props["data-ref"], "#/$defs/name");
+  assert.equal(row?.props["data-ref-state"], "resolved");
+  // A resolved reference shows its target's type without a warning marker.
+  assert.equal(nodes(tree).filter((node) => node.props.class === REF_CLASS).length, 0);
+  assert.deepEqual(findField(payloadOf(tree).fields, "first").ref, {
+    value: "#/$defs/name",
+    state: "resolved",
+  });
+});
+
+test("a missing local $ref is unknown, visibly marked, and never a bare any", () => {
+  const schema = { properties: { lost: { $ref: "#/$defs/missing" } } };
+  const [row] = schemaRows(schema);
+  assert.ok(row);
+  assert.equal(row.type, "unknown");
+  assert.notEqual(row.type, "any");
+  assert.deepEqual(row.ref, { value: "#/$defs/missing", state: "unresolved" });
+  assert.equal(copyValueOf(row), "lost: unknown");
+
+  const tree = render({ data: "s" }, { s: schema });
+  const domRow = nodes(tree).find((node) => node.props["data-field"] === "lost");
+  assert.equal(domRow?.props["data-ref"], "#/$defs/missing");
+  assert.equal(domRow?.props["data-ref-state"], "unresolved");
+  const marker = nodes(domRow as Tree).find((node) => node.props.class === REF_CLASS);
+  assert.ok(marker);
+  assert.equal(textOf(marker), "$ref #/$defs/missing unresolved");
+  const state = nodes(marker).find((node) => node.props.class === REF_STATE_CLASS);
+  assert.equal(textOf(state), "unresolved");
+
+  const field = findField(payloadOf(tree).fields, "lost");
+  assert.equal(field.type, "unknown");
+  assert.deepEqual(field.ref, { value: "#/$defs/missing", state: "unresolved" });
+});
+
+test("sibling keywords beside an unresolved $ref still apply, with the state kept", () => {
+  const schema = {
+    properties: { lost: { $ref: "#/$defs/missing", type: "string", description: "Still described." } },
+  };
+  const [row] = schemaRows(schema);
+  assert.ok(row);
+  assert.equal(row.type, "string");
+  assert.equal(row.description, "Still described.");
+  assert.deepEqual(row.ref, { value: "#/$defs/missing", state: "unresolved" });
+});
+
+test("an external $ref is reported as external and never fetched", () => {
+  const original = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = (() => {
+    calls += 1;
+    throw new Error("schema-table must not fetch references");
+  }) as typeof fetch;
+  try {
+    const schema = {
+      properties: {
+        remote: { $ref: "https://example.com/schema.json#/x" },
+        file: { $ref: "other.schema.json#/$defs/x" },
+      },
+    };
+    const rows = schemaRows(schema);
+    assert.deepEqual(rowNamed(rows, "remote").ref, {
+      value: "https://example.com/schema.json#/x",
+      state: "external",
+    });
+    assert.deepEqual(rowNamed(rows, "file").ref, {
+      value: "other.schema.json#/$defs/x",
+      state: "external",
+    });
+    assert.equal(rowNamed(rows, "remote").type, "unknown");
+    assert.equal(calls, 0);
+    const tree = render({ data: "s" }, { s: schema });
+    assert.equal(nodes(tree).filter((node) => node.type === "script").length, 1);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("a malformed $ref is reported as malformed with its authored value", () => {
+  const schema = {
+    $defs: { "a~2b": { type: "string" } },
+    properties: {
+      number: { $ref: 5 },
+      object: { $ref: { path: "x" } },
+      escape: { $ref: "#/$defs/a~2b" },
+      // A plain-name fragment is a valid local reference we cannot follow as a pointer.
+      anchor: { $ref: "#notes" },
+    },
+  };
+  const rows = schemaRows(schema);
+  assert.deepEqual(rowNamed(rows, "number").ref, { value: "5", state: "malformed" });
+  assert.deepEqual(rowNamed(rows, "object").ref, { value: '{"path":"x"}', state: "malformed" });
+  assert.deepEqual(rowNamed(rows, "escape").ref, { value: "#/$defs/a~2b", state: "malformed" });
+  assert.deepEqual(rowNamed(rows, "anchor").ref, { value: "#notes", state: "unresolved" });
+  for (const row of rows) assert.notEqual(row.type, "any");
+});
+
+test("JSON pointers decode ~1 and ~0 and keep empty tokens", () => {
+  const schema = {
+    $defs: {
+      "a/b": { type: "string" },
+      "til~de": { type: "integer" },
+      "": { type: "boolean" },
+    },
+    properties: {
+      slash: { $ref: "#/$defs/a~1b" },
+      tilde: { $ref: "#/$defs/til~0de" },
+      empty: { $ref: "#/$defs/" },
+    },
+  };
+  const rows = schemaRows(schema);
+  assert.equal(rowNamed(rows, "slash").type, "string");
+  assert.equal(rowNamed(rows, "tilde").type, "integer");
+  assert.equal(rowNamed(rows, "empty").type, "boolean");
+  assert.ok(rows.every((row) => row.ref?.state === "resolved"));
+});
+
+test("a cyclic $ref chain ends as cycle, not any", () => {
+  const schema = {
+    $defs: { a: { $ref: "#/$defs/b" }, b: { $ref: "#/$defs/a" } },
+    properties: { loop: { $ref: "#/$defs/a" } },
+  };
+  const [row] = schemaRows(schema);
+  assert.ok(row);
+  assert.equal(row.type, "unknown");
+  assert.deepEqual(row.ref, { value: "#/$defs/a", state: "cycle" });
+  assert.deepEqual(row.children, []);
+  const tree = render({ data: "s" }, { s: schema });
+  assert.deepEqual(findField(payloadOf(tree).fields, "loop").ref, {
+    value: "#/$defs/a",
+    state: "cycle",
+  });
+});
+
+test("a $ref chain that exceeds the hop limit ends as depth, not any", () => {
+  const defs: Record<string, unknown> = {};
+  for (let i = 0; i < 20; i++) {
+    defs[`d${i}`] = i === 19 ? { type: "string" } : { $ref: `#/$defs/d${i + 1}` };
+  }
+  const [row] = schemaRows({ $defs: defs, properties: { deep: { $ref: "#/$defs/d0" } } });
+  assert.ok(row);
+  assert.equal(row.type, "unknown");
+  assert.deepEqual(row.ref, { value: "#/$defs/d0", state: "depth" });
+});
+
+test("a $ref at the row depth limit is marked depth and not expanded", () => {
+  const leaf = {
+    $defs: { obj: { type: "object", properties: { inner: { type: "string" } } } },
+    type: "object",
+    properties: { leaf: { $ref: "#/$defs/obj" } },
+  };
+  let wrapped: Record<string, unknown> = leaf;
+  for (let i = 0; i < 8; i++) {
+    wrapped = { $defs: leaf.$defs, type: "object", properties: { level: wrapped } };
+  }
+  const tree = render({ data: "s" }, { s: wrapped });
+  const path = [...Array<string>(8).fill("level"), "leaf"].join(".");
+  const field = findField(payloadOf(tree).fields, path);
+  assert.equal(field.ref?.state, "depth");
+  assert.equal(field.truncated, "depth");
+  assert.deepEqual(field.children, []);
+});
+
+test("authored references are escaped in visible output and in the JSON block", () => {
+  const evil = "</script><img src=x onerror=alert(1)>";
+  const schema = { properties: { x: { $ref: evil } } };
+  const input = {
+    props: { data: "s" },
+    page: { lang: "en" },
+    site: { data: { s: schema } },
+    html: "",
+  } as unknown as ComponentProps<SchemaTableProps>;
+  const tree = (schemaTable as unknown as (input: ComponentProps<SchemaTableProps>) => Tree)(input);
+  const raw = rawJson(tree);
+  assert.ok(!raw.toLowerCase().includes("</script"), "the payload closes no script tag");
+  assert.ok(raw.includes("\\u003c"), "the payload escapes angle brackets");
+
+  const out = renderToString(schemaTable(input) as never);
+  assert.ok(!out.includes("<img"), "the marker contains no parsed markup");
+  assert.match(out, /&lt;\/script>/);
+  assert.equal(findField(payloadOf(tree).fields, "x").ref?.value, evil);
+});
+
+test("reference markers keep the authored value while the table stays localized", () => {
+  const schema = { properties: { remote: { $ref: "https://example.com/x.json#/a" } } };
+  const fa = render({ data: "s" }, { s: schema }, "fa");
+  assert.equal(fa.props["aria-label"], "ویژگی‌ها");
+  const [marker] = nodes(fa).filter((node) => node.props.class === REF_CLASS);
+  assert.ok(marker);
+  assert.ok(textOf(marker).includes("https://example.com/x.json#/a"));
+  // State tokens are schema vocabulary, stable like `any`, not translated prose.
+  assert.match(textOf(marker), /external/);
+
+  const ar = render({ data: "s" }, { s: schema }, "ar");
+  assert.equal(ar.props["aria-label"], "الخصائص");
 });
 
 test("a recursive $ref shows the row once and does not expand it forever", () => {
@@ -205,6 +413,8 @@ test("a recursive $ref shows the row once and does not expand it forever", () =>
   const looped = again?.children[0];
   assert.equal(looped?.name, "next");
   assert.deepEqual(looped?.children, []);
+  assert.equal(looped?.ref?.state, "cycle");
+  assert.equal(looped?.truncated, "cycle");
 });
 
 test("a deep schema stops expanding at the depth limit", () => {
@@ -390,7 +600,7 @@ test("the rendered table carries an inert JSON script with the schema's path", (
   assert.equal(script.props.type, "application/json");
   const payload = payloadOf(tree);
   assert.equal(payload.component, "schema-table");
-  assert.equal(payload.version, 1);
+  assert.equal(payload.version, 2);
   assert.equal(payload.data, "widget");
 });
 
@@ -405,6 +615,27 @@ test("every visible row is published with its path, anchor, and copy value intac
     assert.equal(field.copyValue, row.props["data-copy-value"]);
     assert.equal(field.type, String(row.props["data-copy-value"]).slice(String(row.props["data-field"]).length + 2));
   }
+});
+
+test("the versioned payload carries each field's reference state or null", () => {
+  const tree = render(
+    { data: "s" },
+    {
+      s: {
+        $defs: { name: { type: "string" } },
+        properties: {
+          plain: { type: "string" },
+          made: { $ref: "#/$defs/name" },
+          lost: { $ref: "#/$defs/missing" },
+        },
+      },
+    },
+  );
+  const payload = payloadOf(tree);
+  assert.equal(payload.version, 2);
+  assert.equal(findField(payload.fields, "plain").ref, null);
+  assert.deepEqual(findField(payload.fields, "made").ref, { value: "#/$defs/name", state: "resolved" });
+  assert.deepEqual(findField(payload.fields, "lost").ref, { value: "#/$defs/missing", state: "unresolved" });
 });
 
 test("the JSON keeps nesting and order: arrays, objects, and their item fields", () => {
@@ -575,6 +806,12 @@ test("style.css styles the wrapper, the table, and the depth classes", () => {
   assert.match(css, /\.schema-table-scroll\s*\{/);
   assert.match(css, /\.schema-table\s+th,\s*\.schema-table\s+td/);
   assert.match(css, /\.schema-depth-1\s*>\s*th\s*\{/);
+});
+
+test("style.css styles the reference marker with logical spacing", () => {
+  assert.match(css, /\.schema-ref\s*\{/);
+  assert.match(css, /\.schema-ref-state\s*\{/);
+  assert.match(css, /margin-block-start:\s*var\(--space-1\)/);
 });
 
 test("style.css uses only token names from tokens/names.json", () => {
