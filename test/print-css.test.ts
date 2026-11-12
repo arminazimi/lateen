@@ -1,8 +1,9 @@
 // The print stylesheet is the contract for printed pages: only the article, the light palette,
-// link addresses, and blocks that do not split or clip. This test reads `styles/print.css` and
-// fails when a rule that makes that contract work disappears, when a token is unknown, or when a
-// physical (left/right) property or a raw color slips in. It is a test for the new stylesheet, so
-// it lives beside the other unit tests and adds no shared index file.
+// link addresses, every tab panel and disclosure body, and blocks that do not split or clip. This
+// test reads `styles/print.css` and fails when a rule that makes that contract work disappears, when
+// a token is unknown, when a physical (left/right) property or a raw color slips in, or when a rule
+// escapes `@media print` and reaches the screen. It is a test for the new stylesheet, so it lives
+// beside the other unit tests and adds no shared index file.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
@@ -75,6 +76,39 @@ const physicalLines = (text: string): string[] =>
     .split("\n")
     .flatMap((line, index) => (PHYSICAL.some((rule) => rule.test(line)) ? [`${index + 1}: ${line.trim()}`] : []));
 
+/**
+ * The `@media print` block, brace for brace. Everything in the stylesheet but `@page` must sit
+ * inside it: a screen page must inherit nothing from these rules, so a rule written after the block
+ * closes, or a second top-level rule before it, fails here.
+ */
+function printBody(text: string): string {
+  const source = stripComments(text);
+  const start = source.search(/@media\s+print\s*\{/);
+  assert.ok(start >= 0, "print.css has no @media print rule");
+
+  let depth = 0;
+  let end = start;
+  for (; end < source.length; end += 1) {
+    const character = source[end];
+    if (character === "{") depth += 1;
+    else if (character === "}") {
+      depth -= 1;
+      if (depth === 0) break;
+    }
+  }
+
+  assert.match(source.slice(0, start).trim(), /^@page\s*\{[^}]*\}$/, "print.css has a rule outside @media print");
+  assert.equal(source.slice(end + 1).trim(), "", "print.css has a rule after @media print");
+  return source.slice(start, end + 1);
+}
+
+/** The three tab variants a printed page can hold, by the selectors that isolate them. */
+const TAB_VARIANTS: ReadonlyArray<{ readonly name: string; readonly panel: string; readonly title: string; readonly list: string }> = [
+  { name: "generic content tabs", panel: '.tabs > [role="tabpanel"]', title: ".tabs-title", list: '.tabs > [role="tablist"]' },
+  { name: "OS tabs", panel: ".os-tabs-panel", title: ".os-tabs-title", list: ".os-tabs-list" },
+  { name: "code tabs", panel: ".code-tabs-panel", title: ".code-tabs-title", list: ".code-tabs-list" },
+];
+
 /** The selectors of every rule that hides something with `display: none !important`. */
 function hiddenSelectors(text: string): Set<string> {
   const found = new Set<string>();
@@ -105,7 +139,7 @@ test("print.css forces the light color scheme so tokens do not print dark", () =
 });
 
 test("print.css hides every piece of chrome and every screen-only control", () => {
-  const hidden = hiddenSelectors(css);
+  const hidden = hiddenSelectors(printBody(css));
   for (const selector of [
     ".skip-link",
     "body > header",
@@ -146,13 +180,61 @@ test("a closed details prints its body, and its summary stays with it", () => {
   assert.match(summary.body, /break-after:\s*avoid/);
 });
 
-test("code tabs print every panel and hide the tab list", () => {
-  const panels = blocks(css).filter((block) => block.selector.includes(".code-tabs-panel"));
-  assert.ok(panels.some((block) => /display:\s*block\s*!important/.test(block.body)), "code tab panels are not shown");
-  const title = rule(css, ".code-tabs-title");
-  assert.ok(title, "no code-tabs title rule");
-  assert.match(title.body, /display:\s*block\s*!important/);
-  assert.ok(hiddenSelectors(css).has(".code-tabs-list"), "the tab list is not hidden");
+test("every tab variant prints all its panels, each under its own title, and drops its tab list", () => {
+  const body = printBody(css);
+  for (const variant of TAB_VARIANTS) {
+    const panels = blocks(body).filter((block) => block.selector.includes(variant.panel));
+    assert.ok(panels.length > 0, `print.css says nothing about ${variant.name} panels`);
+    assert.ok(
+      panels.some((block) => /display:\s*block\s*!important/.test(block.body)),
+      `${variant.name}: unselected panels are not shown`,
+    );
+    assert.ok(
+      panels.some((block) => block.selector.includes(`${variant.panel}[hidden]`) && /display:\s*block\s*!important/.test(block.body)),
+      `${variant.name}: a panel hidden with the [hidden] attribute is not shown`,
+    );
+    const title = rule(body, variant.title);
+    assert.ok(title, `${variant.name}: no rule for the panel title ${variant.title}`);
+    assert.match(title.body, /display:\s*block\s*!important/, `${variant.name}: the panel title stays hidden`);
+    assert.ok(hiddenSelectors(body).has(variant.list), `${variant.name}: the screen tab list ${variant.list} still prints`);
+  }
+});
+
+test("no screen-only copy control prints", () => {
+  const hidden = hiddenSelectors(printBody(css));
+  for (const selector of [
+    ".terminal-copy",
+    ".code-copy",
+    ".code-copy-bar",
+    ".code-copy-status",
+    ".diff-block-copy",
+    ".output-block-copy",
+    ".copy-markdown",
+    "[data-copy-markdown]",
+    ".page-footer-copy",
+    ".page-agent-menu-copy",
+  ]) {
+    assert.ok(hidden.has(selector), `print.css does not hide the copy control ${selector}`);
+  }
+});
+
+test("a disclosure whose panel floats on screen prints inside the text flow", () => {
+  for (const selector of [".symbol-popover-panel", ".trust-panel-body"]) {
+    const panel = rule(printBody(css), selector);
+    assert.ok(panel, `no print rule for ${selector}`);
+    assert.match(panel.body, /position:\s*static/);
+    assert.match(panel.body, /max-inline-size:\s*none/);
+  }
+});
+
+test("print.css has nothing outside @media print", () => {
+  const body = printBody(css);
+  assert.match(body, /^@media\s+print\s*\{/);
+  assert.ok(body.trimEnd().endsWith("}"));
+  assert.throws(
+    () => printBody("@page { size: A4 portrait; } @media print { a { color: blue } } b { display: none }"),
+    "a rule after @media print must fail the check",
+  );
 });
 
 test("printed links show their address, but anchors, scripts, and mail links do not", () => {

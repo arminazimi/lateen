@@ -1,4 +1,6 @@
 /* Print: only the article, in the light palette, with link addresses and code that does not clip.
+   A printed page cannot be clicked, so every tab panel and every disclosure body prints — not only
+   the one the reader had open on screen.
    This file is discovered with the other shared stylesheets and applies only to printed pages.
    Every color and type size comes from a token; the page geometry in `@page` is physical, so it
    uses mm and is deliberately not tokenized. Logical properties only, so right-to-left prints too. */
@@ -50,10 +52,16 @@
   .theme-toggle,
   [data-theme-toggle],
   .terminal-copy,
+  .code-copy,
+  .code-copy-bar,
+  .code-copy-status,
+  .diff-block-copy,
+  .output-block-copy,
+  .copy-markdown,
+  [data-copy-markdown],
   .page-footer-copy,
   .page-agent-menu-copy,
-  .heading-anchor,
-  .code-tabs-list {
+  .heading-anchor {
     display: none !important;
   }
 
@@ -108,15 +116,39 @@
     display: none;
   }
 
-  /* Code tabs stack without JavaScript, but the island hides every panel except the selected one.
-     Print shows them all, each under its title, and drops the tab list. */
+  /* Every tab variant — generic content tabs, OS tabs, code tabs — keeps one panel at a time on
+     screen: the island hides the rest with the `hidden` attribute, and the components' own styles
+     hide a panel's title once the tab list carries it. Paper cannot click, so print every panel
+     under its own title and drop the tab list. The `[hidden]` form is listed beside the plain one
+     so this rule beats the `display: none` the components put on a hidden panel. */
+  .tabs > [role="tabpanel"],
+  .tabs > [role="tabpanel"][hidden],
+  .os-tabs-panel,
+  .os-tabs-panel[hidden],
   .code-tabs-panel,
   .code-tabs-panel[hidden] {
     display: block !important;
   }
 
+  .tabs-title,
+  .os-tabs-title,
   .code-tabs-title {
     display: block !important;
+  }
+
+  .tabs > [role="tablist"],
+  .os-tabs-list,
+  .code-tabs-list {
+    display: none !important;
+  }
+
+  /* A disclosure whose panel floats over the page on screen prints inside the text flow, under its
+     chip, so the panel neither overlaps nor escapes the printed column. */
+  .symbol-popover-panel,
+  .trust-panel-body {
+    position: static;
+    inline-size: auto;
+    max-inline-size: none;
   }
 
   /* Screen code scrolls sideways. Paper cannot, so wrap long lines instead of clipping them. */
