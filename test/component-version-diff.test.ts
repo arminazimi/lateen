@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import type { ComponentProps } from "@velella/mizzen/contracts";
 import { renderToString } from "preact-render-to-string";
-import { languages, stringsOf } from "../i18n/index.ts";
+import { languages, stringsOf, t } from "../i18n/index.ts";
 import versionDiff, {
   DEFAULT_ID,
   ICONS,
@@ -356,7 +356,11 @@ test("mixed listed evidence renders incomplete with accurate usable and dropped 
     /<p class="version-diff-note" id="version-diff-note"[^>]*data-changes-usable="2"[^>]*data-changes-dropped="3"/,
   );
   assert.ok(out.includes(`<span class="version-diff-note-label">${stringsOf("en").partial!}</span>`));
-  assert.ok(out.includes(stringsOf("en").trust_why_partial!));
+  assert.ok(
+    out.includes(t("en", "version_diff_incomplete", { usable: 2, dropped: 3 })),
+    "the note explains the comparison and both counts",
+  );
+  assert.equal(out.includes(stringsOf("en").trust_why_partial!), false, "the Trust Panel message is for page trust, not a diff");
 
   // Usable changes keep their stable anchors, excerpts, and before/after semantics.
   assert.equal([...out.matchAll(/<li class="version-diff-item/g)].length, 2);
@@ -444,7 +448,11 @@ test("the incomplete note follows the page language in every language", () => {
       out.includes(`<span class="version-diff-note-label">${stringsOf(lang).partial!}</span>`),
       `${lang} partial label`,
     );
-    assert.ok(out.includes(stringsOf(lang).trust_why_partial!), `${lang} note text`);
+    assert.ok(
+      out.includes(t(lang, "version_diff_incomplete", { usable: 1, dropped: 1 })),
+      `${lang} note text and counts`,
+    );
+    assert.equal(out.includes(stringsOf(lang).trust_why_partial!), false, `${lang} Trust Panel message is absent`);
     assert.ok(out.includes(`>${stringsOf(lang).version_diff_added!}<`), `${lang} kept change label`);
   }
 });

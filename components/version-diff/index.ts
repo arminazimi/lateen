@@ -503,7 +503,7 @@ const versionDiff: Component<VersionDiffProps> = ({ props, page }) => {
           },
           h("span", { class: "version-diff-note-label" }, t(page.lang, "partial")),
           " ",
-          t(page.lang, "trust_why_partial"),
+          t(page.lang, "version_diff_incomplete", { usable: total, dropped: diff.dropped }),
         )
       : null,
     readable
