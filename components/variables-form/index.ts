@@ -190,9 +190,12 @@ export function fieldsFor(
  * A personalization form for the variables a page's code examples use. Each variable gets a labelled input,
  * and the declared default is both its value and its placeholder, so the form reads correctly and shows the
  * defaults before any script runs. The island (`client.ts`) copies what the reader types into that variable's
- * placeholders, keeps the commands a copy button takes in step, and marks recorded output as stale; nothing is
- * stored, nothing leaves the browser, and no command runs. The reset button starts `hidden`, because only the
- * island can put the examples back too. With no variable at all it renders nothing.
+ * placeholders, keeps the commands a copy button takes in step, and recomputes whether recorded output is
+ * stale: changing a value marks the outputs that depend on it stale, and restoring every dependency to the
+ * value the form was wired with clears that state, through typing or reset. Nothing is rewritten in the
+ * output itself, nothing is stored, nothing leaves the browser, and no command runs. The reset button starts
+ * `hidden`, because only the island can put the examples and the output freshness back too. With no variable
+ * at all it renders nothing.
  */
 export default function variablesForm({ props, page, site }: ComponentProps<VariablesFormProps>) {
   const fields = fieldsFor(props, page, site);

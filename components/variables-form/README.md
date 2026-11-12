@@ -14,8 +14,10 @@ form and the page are readable before any script runs.
   declaration shape from the directive, the page's front matter, and `site.data`.
 - `style.css`: tokens only and logical properties only, so dark mode and right-to-left pages follow.
 - `client.ts`: the island. Typing in an input copies its value into that variable's placeholders on the
-  page; each default is applied once on load; a change marks the recorded output that depends on it
-  stale; and the reset button puts every declared default back. Code blocks and terminals are rendered
+  page; each default is applied once on load; a change recomputes whether the recorded output that depends
+  on it is stale — an output goes stale when a dependency moves off its recorded value and becomes fresh
+  again when every dependency is back on it — and the reset button puts every declared default back and
+  recomputes freshness in the same step. Code blocks and terminals are rendered
   from the text the author wrote, so an unrelated literal that happens to equal a value is never
   rewritten, a token split across highlighted spans still changes as a whole, and escaped placeholders
   stay literal. Values stay in the browser: no cookie, no storage, no request, and no command runs.
@@ -74,7 +76,14 @@ site data are used. An empty list renders nothing, as does a page with no declar
 - A recorded output block that names the variable in `data-output-deps` is marked stale instead of being
   rewritten: the text is what a command printed once, and only running the command again can change it.
   Its note says so and its edge turns to the warning color.
-- The reset button restores every declared default, in the inputs and in the examples. It starts `hidden`
+- Freshness is recomputed against the values the form was wired with, over all of the output's declared and
+  inferred dependencies: changing any one of them marks the output stale, and restoring every one of them
+  to its recorded value clears the marker and the note. An output that depends on a variable no wired form
+  holds keeps its state; the island never infers freshness from a baseline it cannot check. The stale marker
+  is the only thing rewritten — the recorded text is untouched.
+- The reset button restores every declared default, in the inputs and in the examples, and recomputes output
+  freshness once after all values are back, so examples and freshness change together. A value the declared
+  type rejects is not put into an example or counted as fresh by the reset. It starts `hidden`
   and the island reveals it, because only the island can put the examples back too.
 - Without JavaScript the inputs still show every default, so a reader can copy the values by hand; the
   code examples keep the literal `{{name}}` the author wrote.

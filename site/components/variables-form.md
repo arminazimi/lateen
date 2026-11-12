@@ -47,5 +47,6 @@ Each example keeps the text the page author wrote, and every change is rendered 
 
 - The form is a `<fieldset>` with a legend, one visible label per variable, and a hint that values stay in the browser.
 - Each input's default is both its value and its placeholder, so the form is complete without JavaScript.
+- Changing a variable marks a recorded `:::output-block` that depends on it stale; the recorded text is never rewritten. Freshness follows the values: when every variable the output depends on is back at the value the form started with, whether by typing or by Reset, the stale marker and its note are cleared. A dependency no form on the page holds gives no trustworthy baseline, so the output keeps the state it has; the island never infers freshness it cannot check.
 - Focus is visible, and every style uses design tokens and logical properties, so right-to-left pages and dark mode follow.
 - The legend and hint are localized through the theme's interface strings.
