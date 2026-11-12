@@ -1,5 +1,6 @@
 import { h } from "preact";
 import type { ComponentChildren } from "preact";
+import { hrefOf } from "../link-card/index.ts";
 
 /** Responsive grid that holds the cards. */
 export const GRID_CLASS = "cards";
@@ -8,18 +9,12 @@ export const GRID_CLASS = "cards";
 export const CARD_CLASS = "card";
 
 /**
- * A destination a card may link to: root-relative (`/guide/`, but not protocol-relative `//host`)
- * or `http`/`https`. Matches the theme's link-card policy; anything else (`javascript:`, `data:`,
- * `mailto:`, a relative path, a blank value) is refused.
+ * The destination policy lives in the theme's link-card rules; cards reuses them verbatim so both
+ * components accept exactly the same links. A safe destination is root-relative (`/guide/`, but
+ * not protocol-relative `//host`) or `http`/`https`; anything else (`javascript:`, `data:`,
+ * `mailto:`, a relative path, a blank value) is refused. Re-exported so callers can test it.
  */
-const SAFE_HREF = /^(?:\/(?![/\\])|https?:\/\/)[^\s"'<>\\]*$/i;
-
-/** The href to use, trimmed, or undefined when it is missing, blank, or unsafe. */
-export function hrefOf(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const href = value.trim();
-  return SAFE_HREF.test(href) ? href : undefined;
-}
+export { hrefOf };
 
 /** Text trimmed, or undefined when it is missing, blank, or not a string. */
 function textOf(value: unknown): string | undefined {
