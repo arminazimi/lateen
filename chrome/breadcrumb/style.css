@@ -1,13 +1,26 @@
-/* Breadcrumb: the trail from the navigation tree above the title. Ancestor links, then the current page last. */
+/* Breadcrumb: the trail from the navigation tree above the title. Ancestor links, then the current page last, as one ordered list. */
 
 .breadcrumb {
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-sm);
+  color: var(--color-muted);
+}
+
+/* The ordered list is the row; the nav keeps only the typography so the landmark holds no layout of its own. */
+.breadcrumb-list {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
-  font-family: var(--type-font-ui);
-  font-size: var(--type-size-sm);
-  color: var(--color-muted);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.breadcrumb-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .breadcrumb a {
@@ -22,6 +35,11 @@
 .breadcrumb a:focus-visible {
   outline: 2px solid var(--state-focus-ring);
   outline-offset: 2px;
+}
+
+/* Each authored title is a `<bdi>`; this keeps the isolation explicit where the element itself is dropped. */
+.breadcrumb-title {
+  unicode-bidi: isolate;
 }
 
 .breadcrumb-sep {
