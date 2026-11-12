@@ -4,15 +4,24 @@ import type { Chrome } from "@velella/mizzen/contracts";
 import { patternOf, t } from "../../i18n/index.ts";
 import commandPalette from "../command-palette/index.ts";
 
-/** Id the search field's label points to; the page carries one dialog. */
+/** Id the search field's label points to, and the one the listbox is named by; the page has one dialog. */
 export const SEARCH_INPUT_ID = "search-input";
 
+/** Id of the result list, which the field controls through `aria-controls`. */
+export const SEARCH_RESULTS_ID = "search-results-list";
+
 /**
- * The search dialog, extended into a command palette: a field, a status region, and a listbox that
- * `client.ts` fills with page results and actions. The actions are published by
+ * The search dialog, extended into a command palette: a combobox field, a status region, and the
+ * listbox it controls, which `client.ts` fills with options — the page results and the page's actions,
+ * as rows of one model (`chrome/search/options.ts`). The actions are published by
  * `chrome/command-palette/` as inert JSON inside the same dialog, so there is still one dialog.
  * The dialog starts `hidden` and the header's search button stays `hidden`, so a visitor without
- * JavaScript never sees a control that would do nothing. `client.ts` removes both when it runs.
+ * JavaScript never sees a control that would do nothing. `client.ts` removes both when it runs, and
+ * keeps `aria-expanded` on the field in step with the dialog.
+ *
+ * The static markup carries only what is true before a script has drawn a row: the field's relationship
+ * to the list, not an active option. `client.ts` adds and removes `aria-activedescendant` itself, so a
+ * row the reader has not been given cannot be named, and a row that is gone stops being named.
  *
  * The `data-base` attribute tells `client.ts` where the Pagefind index sits on a site published under
  * a subfolder (`base: /example`), because the island cannot tell from its own URL.
@@ -60,6 +69,12 @@ const search: Chrome = (props) =>
           name: "q",
           placeholder: t(props.page.lang, "search_placeholder"),
           autocomplete: "off",
+          // The field is the combobox the list belongs to, closed until `client.ts` opens the dialog.
+          role: "combobox",
+          "aria-haspopup": "listbox",
+          "aria-expanded": "false",
+          "aria-controls": SEARCH_RESULTS_ID,
+          "aria-autocomplete": "list",
           "data-search-input": "",
         }),
         h(
@@ -78,6 +93,7 @@ const search: Chrome = (props) =>
         "div",
         {
           class: "search-results",
+          id: SEARCH_RESULTS_ID,
           role: "listbox",
           "aria-label": t(props.page.lang, "search"),
           "data-search-results": "",

@@ -130,6 +130,19 @@
   list-style: none;
 }
 
+/*
+ * The active option: the row's own link or button, which is the element the combobox names in
+ * `aria-activedescendant`. Keyboard focus stays in the field, so the list carries the visible answer
+ * itself — the same element assistive tech has just announced, and the same one a pointer is on.
+ */
+.search-result-link[aria-selected="true"],
+.search-action-button[aria-selected="true"] {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: -2px;
+  border-inline-start-color: var(--color-accent);
+  background: var(--state-hover-bg);
+}
+
 .search-result-link {
   display: flex;
   flex-direction: column;

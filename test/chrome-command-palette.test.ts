@@ -13,18 +13,18 @@ import {
   type PaletteAction,
   type PalettePayload,
 } from "../chrome/command-palette/actions.ts";
-import searchDialog from "../chrome/search/index.ts";
+import searchDialog, { SEARCH_RESULTS_ID } from "../chrome/search/index.ts";
+import { optionList } from "../chrome/search/options.ts";
 import {
   ACTIONS_LABEL,
   activate,
-  actionNodes,
   filterActions as clientFilterActions,
   isPaletteRun,
   liveHandlers,
   matchesAction as clientMatchesAction,
   MESSAGES,
   parsePalette,
-  renderPalette,
+  renderOptions,
   resolveTheme,
   THEME_KEY,
   type PagefindApi,
@@ -36,7 +36,6 @@ import {
   type SearchEvent,
   type SearchFocusable,
   type SearchInput,
-  type SearchLink,
   type SearchNode,
   type SearchPaletteSource,
   type SearchParts,
@@ -282,42 +281,59 @@ test("the search dialog keeps one dialog and unique ids, and carries the palette
   assert.deepEqual(ids, [...new Set(ids)]);
   assert.equal(out.match(/id="search-input"/g)?.length, 1);
   assert.equal(new Set(actionIds(payload.actions)).size, payload.actions.length);
-  assert.match(out, /<div class="search-results" role="listbox" aria-label="Search" data-search-results="">/);
+  assert.match(
+    out,
+    new RegExp(
+      `<div class="search-results" id="${SEARCH_RESULTS_ID}" role="listbox" aria-label="Search" data-search-results="">`,
+    ),
+  );
+  assert.match(out, /role="combobox"/);
+  assert.equal(new RegExp(`aria-controls="([^"]+)"`).exec(out)?.[1], SEARCH_RESULTS_ID, "the field controls the list");
 });
+
+/** Draws a list into a fresh container and returns the container. */
+function draw(records: readonly SearchRecord[], actions: readonly PaletteAction[]): { nodes: SearchNode[] } {
+  const results = fakeResults();
+  renderOptions(results as unknown as SearchResults, optionList(records, actions, { actionsLabel: "Actions" }), {
+    doc: fakeDocument(),
+    run: () => {},
+  });
+  return results;
+}
 
 test("the palette groups page results before the matched actions", () => {
   const actions = paletteActions({ page: pageWith(), base: "" });
   const records: readonly SearchRecord[] = [
     { url: "/guide/cache/", excerpt: "About <mark>cache</mark>.", meta: { title: "Cache" }, filters: { section: ["guide"] } },
   ];
-  const results = fakeResults();
-
-  renderPalette(results, {
-    actions: filterActions(actions, "cache"),
-    label: "Actions",
-    records,
-    doc: fakeDocument(),
-    run() {},
-  });
+  const results = draw(records, filterActions(actions, "cache"));
 
   assert.deepEqual(groupTitles(results.nodes), ["guide", "Actions"]);
   const all = walkAll(results.nodes);
+  const options = all.filter((node) => node.attrs.role === "option");
+  assert.deepEqual(
+    options.map((node) => node.attrs.id),
+    ["search-option-1", "search-option-2"],
+  );
+  assert.deepEqual(
+    options.map((node) => node.attrs["data-search-option"]),
+    ["result:/guide/cache/#0", "action:section-cache#0"],
+  );
   assert.equal(findClass(all, "search-result-excerpt") !== undefined, true);
-  const button = all.find((node) => node.attrs["data-palette-action"] === "section-cache");
+
+  const button = findClass(all, "search-action-button");
   assert.ok(button);
-  assert.equal(button.attrs.role, "option");
-  assert.equal(button.attrs.class, "search-action-button");
-  assert.equal(textOf(button), "CacheGo to section");
+  assert.equal(button.attrs["data-palette-action"], "section-cache");
+  assert.equal(button.attrs.role, "option", "the action's own button is the choice a reader reaches");
+  assert.equal(button.attrs.tabindex, "-1", "and it leaves the tab order to the field");
+  assert.equal(findClass(all, "search-group-title")?.attrs.role, "presentation", "a heading names its group, nothing more");
+  assert.equal(textOf(options[1]!), "CacheGo to section");
 });
 
 test("action labels and hints are text nodes, never markup", () => {
-  const nodes = actionNodes(
-    [{ id: "copy", label: "<img src=x>", hint: "<b>Copy</b>", run: { kind: "copy", url: "/x.md" } }],
-    "Actions",
-    fakeDocument(),
-    () => {},
+  const all = walkAll(
+    draw([], [{ id: "copy", label: "<img src=x>", hint: "<b>Copy</b>", run: { kind: "copy", url: "/x.md" } }]).nodes,
   );
-  const all = walkAll(nodes);
 
   assert.equal(all.some((node) => node.tag === "img" || node.tag === "b"), false);
   assert.equal(textOf(findClass(all, "search-action-label")!), "<img src=x>");
@@ -325,7 +341,7 @@ test("action labels and hints are text nodes, never markup", () => {
 });
 
 test("an empty action list draws no Actions group", () => {
-  assert.deepEqual(actionNodes([], "Actions", fakeDocument(), () => {}), []);
+  assert.deepEqual(draw([], []).nodes, []);
 });
 
 test("parsePalette keeps valid actions and drops malformed or unknown ones", () => {
@@ -499,7 +515,7 @@ test("Enter in the field runs the first item, even when it is an action", async 
   assert.deepEqual(calls, ["light"]);
 });
 
-test("arrow keys move from page results to actions as one list", async () => {
+test("the arrow keys walk results and actions as one option list", async () => {
   const records: readonly SearchRecord[] = [
     { url: "/guide/cache/", excerpt: "About <mark>cache</mark>.", meta: { title: "Cache" }, filters: { section: ["guide"] } },
   ];
@@ -510,63 +526,107 @@ test("arrow keys move from page results to actions as one list", async () => {
   input.type("cache");
   await tick();
 
-  const items = walkAll(results.nodes).filter(
-    (node) => node.attrs["data-palette-action"] !== undefined || node.tag === "a",
+  const rows = rowsOf(results);
+  assert.equal(rows.length, 2, "one page result and one action, both options");
+  assert.deepEqual(
+    rows.map((row) => row.attrs.id),
+    ["search-option-1", "search-option-2"],
   );
-  assert.equal(items.length, 2, "one page result and one action");
 
   const down = key("ArrowDown", input);
   dialog.fire("keydown", down);
   assert.equal(down.prevented, true);
-  assert.equal(items[0]?.focused, 1);
+  assert.equal(input.active, "search-option-1");
+  assert.equal(rows[0]?.attrs["aria-selected"], "true");
 
-  dialog.fire("keydown", key("ArrowDown", items[0]));
-  assert.equal(items[1]?.focused, 1, "past the last result, focus moves into the actions");
+  dialog.fire("keydown", key("ArrowDown", input));
+  assert.equal(input.active, "search-option-2", "past the last result, the active option moves into the actions");
+  assert.equal(rows[0]?.attrs["aria-selected"], "false");
 
-  dialog.fire("keydown", key("ArrowDown", items[1]));
-  assert.equal(items[0]?.focused, 2, "past the last action, focus wraps to the first result");
+  dialog.fire("keydown", key("ArrowDown", input));
+  assert.equal(input.active, "search-option-1", "past the last action, the list wraps to the first result");
+
+  assert.equal(input.focused, 4, "focus stayed in the field for the whole walk: " + input.focused);
+  assert.equal(rows.every((row) => row.focused === 0), true, "and never visited a row");
 });
 
-test("a redraw keeps keyboard focus on the same action", async () => {
-  const { button, input, results, parts } = partsOf(payloadOf(pageWith()));
-  const env = envWith(apiOf([]));
-  activate(parts, env);
+test("a redraw keeps the active option on the same action, by key rather than by position", async () => {
+  const records: readonly SearchRecord[] = [
+    { url: "/guide/cache/", excerpt: "About <mark>cache</mark>.", meta: { title: "Cache" }, filters: { section: ["guide"] } },
+  ];
+  const api: PagefindApi = {
+    search(term) {
+      const found = term === "cache" ? records : [];
+      return Promise.resolve({ results: found.map((record) => ({ data: () => Promise.resolve(record) })) });
+    },
+  };
+  const { button, dialog, input, results, parts } = partsOf(payloadOf(pageWith()));
+  activate(parts, envWith(api));
   button.click();
   await tick();
 
-  const before = walkAll(results.nodes).find((node) => node.attrs["data-palette-action"] === "section-cache");
-  assert.ok(before, "the section action is rendered for the empty query");
-  (env.document as unknown as { activeElement?: unknown }).activeElement = before;
-  assert.equal(results.contains(before as unknown as SearchNode), true);
+  const last = rowsOf(results).length;
+  assert.equal(last, 6, "an empty query lists every action");
+  for (let step = 0; step < last; step += 1) dialog.fire("keydown", key("ArrowDown", input));
+  assert.equal(input.active, `search-option-${last}`, "the walk ends on the section jump");
+  assert.equal(rowsOf(results)[last - 1]?.attrs["data-search-option"], "action:section-cache#0");
 
   input.type("cache");
   await tick();
 
-  const after = walkAll(results.nodes).find((node) => node.attrs["data-palette-action"] === "section-cache");
-  assert.ok(after);
-  assert.equal(after.focused, 1, "the matching action keeps focus after the redraw");
-});
-
-test("a query that empties the list moves focus from the removed row back to the field", async () => {
-  const { button, input, results, parts } = partsOf(payloadOf(pageWith()));
-  const env = envWith(apiOf([]));
-  activate(parts, env);
-  button.click();
-  await tick();
-  assert.equal(input.focused, 1, "opening focuses the field");
-
-  const row = walkAll(results.nodes).find((node) => node.attrs["data-palette-action"] === "theme-dark");
-  assert.ok(row);
-  (env.document as unknown as { activeElement?: unknown }).activeElement = row;
+  const rows = rowsOf(results);
+  assert.deepEqual(
+    rows.map((row) => row.attrs["data-search-option"]),
+    ["result:/guide/cache/#0", "action:section-cache#0"],
+    "the same action, now second in a shorter list",
+  );
+  assert.equal(input.active, "search-option-2", "and still the active option, by key rather than position");
+  assert.equal(rows[1]?.attrs["aria-selected"], "true");
+  assert.equal(rows[0]?.attrs["aria-selected"], "false");
 
   input.type("zzz");
   await tick();
 
-  assert.equal(results.nodes.length, 0, "no result and no action matches");
-  assert.equal(input.focused, 2, "the field takes focus again, so the next Tab starts from it");
+  assert.deepEqual(rowsOf(results), [], "a query that drops every row");
+  assert.equal(input.active, undefined, "names no row, rather than the one that is gone");
 });
 
-test("the dialog's listbox is built with action buttons and result links only", async () => {
+test("a query that empties the list leaves no active option behind", async () => {
+  const { button, dialog, input, results, parts } = partsOf(payloadOf(pageWith()));
+  activate(parts, envWith(apiOf([])));
+  button.click();
+  await tick();
+  assert.equal(input.focused, 1, "opening focuses the field");
+
+  dialog.fire("keydown", key("ArrowDown", input));
+  assert.equal(input.active, "search-option-1");
+
+  input.type("zzz");
+  await tick();
+
+  assert.deepEqual(rowsOf(results), [], "no result and no action matches");
+  assert.equal(input.active, undefined, "the field names nothing, so nothing dangles");
+  assert.equal(input.attrs["aria-expanded"], "true", "and the combobox itself stays open and usable");
+});
+
+test("closing a palette list clears the selection and restores focus to the search button", async () => {
+  const { button, dialog, input, results, parts } = partsOf(payloadOf(pageWith()));
+  activate(parts, envWith(apiOf([])));
+  button.click();
+  await tick();
+  dialog.fire("keydown", key("ArrowDown", input));
+  const row = rowsOf(results)[0]!;
+  assert.equal(row.attrs["aria-selected"], "true");
+
+  dialog.fire("keydown", key("Escape", input));
+
+  assert.equal(row.attrs["aria-selected"], "false");
+  assert.equal(input.active, undefined);
+  assert.equal(input.attrs["aria-expanded"], "false");
+  assert.equal(button.focused, 1);
+});
+
+test("the dialog's listbox holds six options, each one its row's own control", async () => {
   const { button, results, parts } = partsOf(payloadOf(pageWith()));
   activate(parts, envWith(apiOf([])));
   button.click();
@@ -576,6 +636,52 @@ test("the dialog's listbox is built with action buttons and result links only", 
   assert.equal(all.some((node) => node.tag === "script"), false);
   assert.equal(all.some((node) => node.tag === "img"), false);
   assert.equal(all.filter((node) => node.attrs["data-palette-action"] !== undefined).length, 6);
+
+  const rows = all.filter((node) => node.tag === "li");
+  assert.equal(rows.length, 6, "one row per action");
+  assert.equal(rowsOf(results).length, 6, "and one option per row");
+  for (const [index, row] of rows.entries()) {
+    assert.equal(row.attrs.role, "presentation", "the row is the list's shape, not a second choice");
+    const option = row.children[0];
+    assert.ok(option, "every action row holds its button");
+    assert.equal(option.tag, "button");
+    assert.equal(option.attrs.role, "option");
+    assert.equal(option.attrs.id, `search-option-${index + 1}`);
+    assert.equal(option.attrs["aria-selected"], "false");
+    assert.equal(option.attrs.tabindex, "-1", "so Tab never walks the list");
+  }
+});
+
+test("a malformed payload that repeats an id still gets one distinct option per row", async () => {
+  const payload = {
+    label: "Actions",
+    actions: [
+      { id: "theme-dark", label: "Dark", run: { kind: "theme", choice: "dark" } },
+      { id: "theme-dark", label: "Dark", run: { kind: "theme", choice: "dark" } },
+      { id: "", label: "No id", run: { kind: "theme", choice: "dark" } },
+      { id: "unknown", label: "Unknown", run: { kind: "eval", code: "alert(1)" } },
+    ],
+  };
+  const { button, dialog, input, results, parts } = partsOf(payload as unknown as PalettePayload);
+  activate(parts, envWith(apiOf([])));
+  button.click();
+  await tick();
+
+  const rows = rowsOf(results);
+  assert.deepEqual(
+    rows.map((row) => row.attrs.id),
+    ["search-option-1", "search-option-2"],
+  );
+  assert.deepEqual(
+    rows.map((row) => row.attrs["data-search-option"]),
+    ["action:theme-dark#0", "action:theme-dark#1"],
+    "a repeated id is two rows, never one shared reference",
+  );
+
+  dialog.fire("keydown", key("ArrowDown", input));
+  dialog.fire("keydown", key("ArrowDown", input));
+  assert.equal(input.active, "search-option-2");
+  assert.equal(rows[1]?.attrs["aria-selected"], "true", "so the second row is the one that highlights");
 });
 
 test("liveHandlers writes the theme key, applies data-theme, and resolves system", () => {
@@ -704,8 +810,15 @@ function fakeInput() {
   const fake = {
     value: "",
     focused: 0,
+    attrs: {} as Record<string, string>,
     focus() {
       fake.focused += 1;
+    },
+    setAttribute(key: string, value: string) {
+      fake.attrs[key] = value;
+    },
+    removeAttribute(key: string) {
+      delete fake.attrs[key];
     },
     addEventListener(type: string, listener: () => void) {
       assert.equal(type, "input");
@@ -714,6 +827,10 @@ function fakeInput() {
     type(value: string) {
       fake.value = value;
       for (const listener of listeners) listener();
+    },
+    /** The option the combobox field names, or undefined when it names nothing. */
+    get active(): string | undefined {
+      return fake.attrs["aria-activedescendant"];
     },
   };
   return fake;
@@ -724,17 +841,22 @@ interface FakeNode {
   text?: string;
   attrs: Record<string, string>;
   children: FakeNode[];
-  listeners: Array<() => void>;
+  listeners: Record<string, Array<() => void>>;
   focused: number;
+  clicks: number;
+  scrolls: number;
   setAttribute(name: string, value: string): void;
   getAttribute(name: string): string | null;
   append(...nodes: SearchNode[]): void;
-  addEventListener?(type: string, listener: () => void): void;
-  click?(): void;
-  focus?(): void;
+  addEventListener(type: string, listener: () => void): void;
+  click(): void;
+  focus(): void;
+  scrollIntoView(options: { readonly block: "nearest" }): void;
+  /** Runs every listener of `type`, as a browser dispatching that event would. */
+  fire(type: string): void;
 }
 
-/** A tiny document for the palette renderer: elements hold attributes, text nodes hold text. */
+/** A tiny document for the option renderer: elements hold attributes, text nodes hold text. */
 function fakeDocument(): SearchDocument {
   const make = (tag: string, text?: string): FakeNode => {
     const node: FakeNode = {
@@ -742,8 +864,10 @@ function fakeDocument(): SearchDocument {
       ...(text === undefined ? {} : { text }),
       attrs: {},
       children: [],
-      listeners: [],
+      listeners: {},
       focused: 0,
+      clicks: 0,
+      scrolls: 0,
       setAttribute(name: string, value: string) {
         node.attrs[name] = value;
       },
@@ -753,18 +877,23 @@ function fakeDocument(): SearchDocument {
       append(...nodes: SearchNode[]) {
         for (const child of nodes) node.children.push(child as unknown as FakeNode);
       },
+      addEventListener(type: string, listener: () => void) {
+        (node.listeners[type] ??= []).push(listener);
+      },
       click() {
-        for (const listener of node.listeners) listener();
+        node.clicks += 1;
+        for (const listener of node.listeners["click"] ?? []) listener();
       },
       focus() {
         node.focused += 1;
       },
+      scrollIntoView() {
+        node.scrolls += 1;
+      },
+      fire(type: string) {
+        for (const listener of node.listeners[type] ?? []) listener();
+      },
     };
-    if (tag === "button" || tag === "a") {
-      node.addEventListener = (type, listener) => {
-        if (type === "click") node.listeners.push(listener);
-      };
-    }
     return node;
   };
   return {
@@ -794,6 +923,11 @@ function groupTitles(nodes: readonly SearchNode[]): string[] {
     .map(textOf);
 }
 
+/** The options of a drawn list, in the order the arrow keys walk them. */
+function rowsOf(results: { nodes: readonly SearchNode[] }): FakeNode[] {
+  return walkAll(results.nodes).filter((node) => node.attrs.role === "option");
+}
+
 function clickAction(nodes: readonly SearchNode[], id: string): void {
   const button = walkAll(nodes).find((node) => node.attrs["data-palette-action"] === id);
   assert.ok(button, `an action button for ${id}`);
@@ -805,15 +939,6 @@ function fakeResults() {
     nodes: [] as SearchNode[],
     replaceChildren(...nodes: SearchNode[]) {
       fake.nodes = nodes;
-    },
-    querySelectorAll(selector: string): Iterable<SearchLink> {
-      assert.match(selector, /a\[href\]/);
-      return walkAll(fake.nodes).filter(
-        (node) => node.attrs["data-palette-action"] !== undefined || (node.tag === "a" && node.attrs.href !== undefined),
-      ) as unknown as SearchLink[];
-    },
-    contains(node: SearchNode) {
-      return walkAll(fake.nodes).includes(node as unknown as FakeNode);
     },
   };
   return fake;
