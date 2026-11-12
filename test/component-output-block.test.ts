@@ -19,6 +19,19 @@ import outputBlock, {
   type OutputBlockProps,
 } from "../components/output-block/index.ts";
 import {
+  durationOf,
+  evidenceElement,
+  evidenceOf,
+  exitOf,
+  hasEvidence,
+  MAX_DURATION_MS,
+  MAX_EXIT,
+  OMITTED,
+  streamOf,
+  STREAMS,
+  type Evidence,
+} from "../components/output-block/evidence.ts";
+import {
   activate,
   activateAll,
   copy,
@@ -231,6 +244,227 @@ test("without JavaScript the output is fully visible and the button stays hidden
 function labelsOf(html: string): string | undefined {
   return /role="group" aria-label="([^"]*)"/.exec(html)?.[1];
 }
+
+/** The evidence record in the rendered block's inert JSON script, or `undefined` when there is none. */
+function evidenceOfHtml(html: string): unknown {
+  const match = /<script type="application\/json" data-output-evidence>([\s\S]*?)<\/script>/.exec(html);
+  return match === null ? undefined : JSON.parse(match[1]!);
+}
+
+test("the evidence contract exports the documented stream names and boundaries", () => {
+  assert.deepEqual([...STREAMS], ["stdout", "stderr", "combined"]);
+  assert.equal(MAX_EXIT, 255);
+  assert.equal(MAX_DURATION_MS, 3_600_000);
+});
+
+test("streamOf accepts the three streams and nothing else", () => {
+  assert.deepEqual(streamOf("stdout"), { state: "valid", value: "stdout" });
+  assert.deepEqual(streamOf(" stderr "), { state: "valid", value: "stderr" });
+  assert.deepEqual(streamOf("combined"), { state: "valid", value: "combined" });
+  assert.deepEqual(streamOf("stdin"), { state: "invalid", declared: "stdin" });
+  assert.deepEqual(streamOf("Stdout"), { state: "invalid", declared: "Stdout" });
+  assert.deepEqual(streamOf("stderr stdout"), { state: "invalid", declared: "stderr stdout" });
+});
+
+test("streamOf leaves an undeclared stream as omitted, never as a value", () => {
+  assert.deepEqual(streamOf(undefined), OMITTED);
+  assert.deepEqual(streamOf(""), OMITTED);
+  assert.deepEqual(streamOf("   "), OMITTED);
+});
+
+test("exitOf records zero and non-zero as declared and rejects every other form", () => {
+  assert.deepEqual(exitOf("0"), { state: "valid", value: 0 });
+  assert.deepEqual(exitOf("7"), { state: "valid", value: 7 });
+  assert.deepEqual(exitOf(" 127 "), { state: "valid", value: 127 });
+  assert.deepEqual(exitOf(String(MAX_EXIT)), { state: "valid", value: MAX_EXIT });
+  assert.deepEqual(exitOf("256"), { state: "invalid", declared: "256" });
+  assert.deepEqual(exitOf("-1"), { state: "invalid", declared: "-1" });
+  assert.deepEqual(exitOf("+7"), { state: "invalid", declared: "+7" });
+  assert.deepEqual(exitOf("007"), { state: "invalid", declared: "007" });
+  assert.deepEqual(exitOf("0x1f"), { state: "invalid", declared: "0x1f" });
+  assert.deepEqual(exitOf("0b111"), { state: "invalid", declared: "0b111" });
+  assert.deepEqual(exitOf("1_0"), { state: "invalid", declared: "1_0" });
+  assert.deepEqual(exitOf("1.5"), { state: "invalid", declared: "1.5" });
+  assert.deepEqual(exitOf("1e3"), { state: "invalid", declared: "1e3" });
+  assert.deepEqual(exitOf("seven"), { state: "invalid", declared: "seven" });
+  assert.deepEqual(exitOf("success"), { state: "invalid", declared: "success" });
+});
+
+test("exitOf never infers an exit code from a block that declares none", () => {
+  assert.deepEqual(exitOf(undefined), OMITTED);
+  assert.deepEqual(exitOf("  "), OMITTED);
+});
+
+test("durationOf reads whole milliseconds from every accepted unit form", () => {
+  assert.deepEqual(durationOf("0"), { state: "valid", value: 0 });
+  assert.deepEqual(durationOf("340"), { state: "valid", value: 340 });
+  assert.deepEqual(durationOf("340ms"), { state: "valid", value: 340 });
+  assert.deepEqual(durationOf(" 2s "), { state: "valid", value: 2000 });
+  assert.deepEqual(durationOf("1.5s"), { state: "valid", value: 1500 });
+  assert.deepEqual(durationOf("0.125s"), { state: "valid", value: 125 });
+  assert.deepEqual(durationOf("28.9s"), { state: "valid", value: 28900 }, "no float rounding in seconds");
+  assert.deepEqual(durationOf("0.001s"), { state: "valid", value: 1 });
+});
+
+test("durationOf holds its boundaries and rejects everything outside them", () => {
+  assert.deepEqual(durationOf("3600000"), { state: "valid", value: MAX_DURATION_MS });
+  assert.deepEqual(durationOf("3600s"), { state: "valid", value: MAX_DURATION_MS });
+  assert.deepEqual(durationOf("3600001ms"), { state: "invalid", declared: "3600001ms" });
+  assert.deepEqual(durationOf("3601s"), { state: "invalid", declared: "3601s" });
+  assert.deepEqual(durationOf("1.2.3ms"), { state: "invalid", declared: "1.2.3ms" });
+  assert.deepEqual(durationOf("0.1234s"), { state: "invalid", declared: "0.1234s" }, "sub-millisecond precision");
+  assert.deepEqual(durationOf("1.5ms"), { state: "invalid", declared: "1.5ms" });
+  assert.deepEqual(durationOf("-5ms"), { state: "invalid", declared: "-5ms" });
+  assert.deepEqual(durationOf("05ms"), { state: "invalid", declared: "05ms" });
+  assert.deepEqual(durationOf("340minutes"), { state: "invalid", declared: "340minutes" });
+  assert.deepEqual(durationOf("ms"), { state: "invalid", declared: "ms" });
+  assert.deepEqual(durationOf("1e3ms"), { state: "invalid", declared: "1e3ms" });
+});
+
+test("durationOf leaves an undeclared duration as omitted", () => {
+  assert.deepEqual(durationOf(undefined), OMITTED);
+  assert.deepEqual(durationOf(""), OMITTED);
+  assert.deepEqual(durationOf("   "), OMITTED);
+});
+
+test("evidenceOf spells out the state of each kind, and omitted is not invalid", () => {
+  assert.deepEqual(evidenceOf({}), { stream: OMITTED, exit: OMITTED, duration: OMITTED });
+  assert.deepEqual(evidenceOf({ exit: "0x1f" }), {
+    stream: OMITTED,
+    exit: { state: "invalid", declared: "0x1f" },
+    duration: OMITTED,
+  });
+  assert.deepEqual(evidenceOf({ stream: "stdout", exit: "0", duration: "340ms" }), {
+    stream: { state: "valid", value: "stdout" },
+    exit: { state: "valid", value: 0 },
+    duration: { state: "valid", value: 340 },
+  });
+});
+
+test("hasEvidence is false only when nothing is declared", () => {
+  assert.equal(hasEvidence({}), false);
+  assert.equal(hasEvidence({ stream: "  ", exit: "" }), false);
+  assert.equal(hasEvidence({ exit: "7" }), true);
+  assert.equal(hasEvidence({ exit: "seven" }), true, "a malformed declaration is still a declaration");
+});
+
+test("evidenceElement renders nothing while every kind is omitted", () => {
+  assert.equal(evidenceElement({}), null);
+  assert.equal(evidenceElement({ stream: " ", duration: "" }), null);
+});
+
+test("declared evidence publishes an inert JSON record beside unchanged output", () => {
+  const out = render(OUTPUT, "en", { stream: "stderr", exit: "1", duration: "340ms" });
+
+  assert.deepEqual(evidenceOfHtml(out), {
+    stream: { state: "valid", value: "stderr" },
+    exit: { state: "valid", value: 1 },
+    duration: { state: "valid", value: 340 },
+  });
+  assert.match(out, /<code>Written 12 pages\nin 340 ms<\/code>/, "the recorded output is byte-for-byte unchanged");
+  assert.doesNotMatch(/<code>[\s\S]*?<\/code>/.exec(out)![0], /stderr|exit|duration/, "no evidence leaks into the text");
+});
+
+test("a block without evidence carries no record at all", () => {
+  const out = render(OUTPUT);
+
+  assert.equal(evidenceOfHtml(out), undefined);
+  assert.doesNotMatch(out, /data-output-evidence/);
+});
+
+test("malformed exit codes, durations, and streams stay distinguishable from omissions", () => {
+  const out = render(OUTPUT, "en", { exit: "0x1f", duration: "1.2.3" });
+
+  assert.deepEqual(evidenceOfHtml(out), {
+    stream: { state: "omitted" },
+    exit: { state: "invalid", declared: "0x1f" },
+    duration: { state: "invalid", declared: "1.2.3" },
+  });
+
+  const unsupported = render(OUTPUT, "en", { stream: "stdin" });
+  assert.deepEqual((evidenceOfHtml(unsupported) as { stream: Evidence }).stream, {
+    state: "invalid",
+    declared: "stdin",
+  });
+});
+
+test("an invalid or missing exit code never becomes a success claim", () => {
+  for (const props of [{ exit: "seven" }, { exit: "-1" }, {}, { stream: "stdout" }] as OutputBlockProps[]) {
+    const record = evidenceOf(props);
+    const exit = record.exit;
+    assert.ok(exit.state !== "valid" || exit.value === Number(exit.value));
+    if (exit.state !== "valid") assert.equal(exit.value, undefined, "no value to read as zero");
+    assert.equal(JSON.stringify(record).includes('"value":0'), false, "nothing claims a zero exit");
+  }
+});
+
+test("evidence does not touch dependencies, the stale state, or the label", () => {
+  const out = render("<p>Created {{project}}</p>", "en", { deps: '["pages"]', stream: "stdout", exit: "0" });
+
+  assert.deepEqual(dependenciesOf(out), ["project", "pages"]);
+  assert.match(out, new RegExp(`<span class="${STALE_CLASS}" role="status" data-output-stale-note="true">`));
+  assert.equal(labelsOf(out), "Output");
+  assert.match(out, /<code>Created \{\{project\}\}<\/code>/);
+});
+
+test("evidence with a Unicode body keeps the text byte-for-byte", () => {
+  const body = "<p>✓ 完成 — éè & 12 pages</p>";
+  const out = render(body, "en", { stream: "stdout", exit: "0", duration: "1.5s" });
+
+  assert.match(out, /<code>✓ 完成 — éè &amp; 12 pages<\/code>/);
+  assert.equal(outputText(body), "✓ 完成 — éè & 12 pages");
+  assert.deepEqual(evidenceOfHtml(out), {
+    stream: { state: "valid", value: "stdout" },
+    exit: { state: "valid", value: 0 },
+    duration: { state: "valid", value: 1500 },
+  });
+});
+
+test("declared markup and angle brackets in evidence cannot escape the script", () => {
+  const out = render(OUTPUT, "en", { stream: "</script><b>x", exit: "<img src=x>", duration: "1<2s" });
+
+  assert.doesNotMatch(out, /<\/script><b>/, "a declared close tag cannot end the script early");
+  assert.doesNotMatch(out, /<img src=x>/);
+  const record = evidenceOfHtml(out) as { stream: Evidence; exit: Evidence; duration: Evidence };
+  assert.equal(record.stream.state, "invalid");
+  assert.equal(record.stream.declared, "</script><b>x");
+  assert.equal(record.exit.declared, "<img src=x>");
+  assert.equal(record.duration.declared, "1<2s");
+});
+
+test("with evidence declared the copy still carries only the recorded text", () => {
+  const out = render(OUTPUT, "en", { stream: "stderr", exit: "7", duration: "340ms", deps: '["project"]' });
+  const recorded = outputText(OUTPUT);
+
+  const dataOutput = /data-output="([^"]*)"/.exec(out)?.[1] ?? "";
+  assert.equal(dataOutput, recorded, "the copy payload holds no evidence");
+
+  const button = fakeButton(recorded);
+  const env = fakeEnv({
+    writeText(text) {
+      env.written.push(text);
+      return Promise.resolve();
+    },
+  });
+  activate(button, fakeStatus(), env);
+  button.click();
+  button.click();
+  return new Promise((resolve) => setImmediate(resolve)).then(() => {
+    assert.deepEqual(env.written, [recorded, recorded], "a copy race repeats the same text, never metadata");
+  });
+});
+
+test("without JavaScript the evidence script and the visible output are both in the page", () => {
+  const out = render(OUTPUT, "fa", { stream: "stdout", exit: "0", duration: "2s" });
+
+  assert.match(out, /<code>Written 12 pages\nin 340 ms<\/code>/);
+  assert.match(out, /class="output-block-copy" hidden/);
+  assert.deepEqual(evidenceOfHtml(out), {
+    stream: { state: "valid", value: "stdout" },
+    exit: { state: "valid", value: 0 },
+    duration: { state: "valid", value: 2000 },
+  });
+});
 
 /** The names in `data-output-deps`, as the rendered HTML carries them, in order. */
 function dependenciesOf(html: string): string[] {

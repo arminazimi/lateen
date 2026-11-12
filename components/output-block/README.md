@@ -26,3 +26,20 @@ rewritten, because only running the command again can change what it printed. Th
 A malformed `deps` value gives no declared names, and an item that is not a variable name is dropped, so
 the valid names beside it still count. An escaped placeholder in the body (`\{{name}}`) stays literal and
 is not a dependency.
+
+## Execution evidence
+
+The `stream`, `exit`, and `duration` props declare what is known about the run that produced the output.
+`evidence.ts` validates each one to a state — `valid` (with the parsed value), `invalid` (with the declared
+text), or `omitted` — and `index.ts` publishes the three states as an inert JSON script
+(`data-output-evidence`) beside the body, so an agent reads them without scraping visual labels and without
+touching the recorded text. Nothing is inferred from an omission, least of all success.
+
+- Stream: exactly `stdout`, `stderr`, or `combined`, case as written.
+- Exit: plain decimal integer 0–255 (`MAX_EXIT`); signs, base prefixes, leading zeros, separators, and
+  words are invalid.
+- Duration: whole milliseconds up to `MAX_DURATION_MS` (one hour), as `340`, `340ms`, `2s`, or `1.5s`;
+  seconds allow at most three decimals and the value is built from the digits, never by float scaling.
+
+The evidence script renders only when at least one prop is declared, valid or not. Copying still returns
+the recorded output exactly; the evidence never enters the clipboard payload.

@@ -2,6 +2,7 @@ import { h } from "preact";
 import type { ComponentProps } from "@velella/mizzen/contracts";
 import { t } from "../../i18n/index.ts";
 import { bodyText, variableNamesOf } from "../terminal/index.ts";
+import { evidenceElement } from "./evidence.ts";
 
 /** The Markdown directive this component handles: `:::output-block`. */
 export const directive = "output-block";
@@ -35,6 +36,12 @@ export type OutputBlockProps = {
   label?: string;
   /** JSON array of variable names this output was produced with, in addition to the ones its text mentions: `["project"]`. */
   deps?: string;
+  /** Declared stream the output came out of: `stdout`, `stderr`, or `combined`; anything else is recorded as invalid. */
+  stream?: string;
+  /** Declared exit code of the command that printed the output: a plain decimal 0–255; anything else is recorded as invalid. */
+  exit?: string;
+  /** Declared duration of that command: `340ms`, `1.5s`, or bare milliseconds up to one hour; anything else is recorded as invalid. */
+  duration?: string;
 };
 
 /** The variable-name contract a declaration must follow: letters, digits, `.`, `_`, and `-`. */
@@ -80,6 +87,13 @@ export function outputText(html: string): string {
  * block stale when the reader changes one: nobody can run the command again from here, so the recorded text
  * is never rewritten into output it did not print. An output that never repeats its inputs, such as an exit
  * status or a timing result, declares them in `deps`; the declared names join the ones the text mentions.
+ *
+ * The `stream`, `exit`, and `duration` props declare execution evidence about the recorded output — which
+ * stream it came out of, what the command exited with, and how long it took. They are never read out of the
+ * text or the styling: an inert JSON script in `data-output-evidence` publishes all three states — valid,
+ * invalid, or omitted — exactly as `evidence.ts` defines them, so an agent can tell a malformed declaration
+ * from a missing one, and a block that declares no exit code is never taken for a successful command. The
+ * visible recorded output is untouched by any of this.
  */
 export default function outputBlock({ props, html, page }: ComponentProps<OutputBlockProps>) {
   const text = outputText(html);
@@ -124,5 +138,6 @@ export default function outputBlock({ props, html, page }: ComponentProps<Output
       h("span", { class: STATUS_CLASS, role: "status", "data-output-status": true }),
     ),
     h("pre", { class: BODY_CLASS, tabindex: 0 }, h("code", null, text)),
+    evidenceElement(props),
   );
 }
