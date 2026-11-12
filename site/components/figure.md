@@ -30,8 +30,8 @@ Or a leaf directive with `caption`:
 | Name | Type | Default | What it does |
 | --- | --- | --- | --- |
 | `src` | string | required | The image. Without it the figure renders nothing. |
-| `src_dark` | string | none | The image shown in dark mode. When it equals `src`, one image is used in both modes. |
-| `alt` | string | empty | The text alternative. An empty value marks the image as decorative. |
+| `src_dark` | string | none | The image shown in dark mode. It is a second visual source only: one wrapper carries the accessible name. When it equals `src`, one image is used in both modes. |
+| `alt` | string | empty | The text alternative. It is exposed once for the figure, whatever theme is shown. An empty value marks the image as decorative. |
 | `caption` | string | the body | The caption text. The body is used when `caption` is absent. |
 | `credit` | string | none | Who made the image, shown under the caption. |
 | `credit_url` | `http` or `https` URL | none | Makes the credit a link. |
@@ -46,8 +46,17 @@ Or a leaf directive with `caption`:
 :::figure{src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22640%22 height=%22360%22%3E%3Crect width=%22640%22 height=%22360%22 fill=%22%23e7dfd2%22/%3E%3Ctext x=%22320%22 y=%22180%22 text-anchor=%22middle%22 font-family=%22Georgia%22 font-size=%2232%22 fill=%22%23554%22%3EA figure example%3C/text%3E%3C/svg%3E" alt="A blank diagram with the words A figure example." caption="A figure with a caption and a credit." credit="Lateen" credit_url="https://velella.sh/lateen/"}
 :::
 
+## Paired figures
+
+With `src_dark`, the figure writes both images and lets the theme choose which one to show. It still
+carries one accessible identity: the `alt` text names a wrapper with `role="img"`, and both images are
+presentational (`alt=""` and `aria-hidden`), so assistive technology meets the figure exactly once —
+in the light, dark, and system themes, in forced colors, under custom CSS, and before the stylesheet
+loads. The caption and the credit are the figure's own children, outside the wrapper, so they stay
+readable and a credit link stays operable while its image is hidden.
+
 ## Notes
 
 - Write alt text that says what the image shows, not that it is an image.
-- A decorative image, such as a divider, takes `alt=""` and no caption.
+- A decorative image, such as a divider, takes `alt=""` and no caption; a decorative pair keeps both images decorative and still hides the dark one from assistive technology.
 - The two images in `src` and `src_dark` should be the same size, so the layout does not jump when the theme changes.

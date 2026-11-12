@@ -4,7 +4,15 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import type { ComponentProps } from "@velella/mizzen/contracts";
-import figure, { creditHref, dimension, type FigureProps } from "../components/figure/index.ts";
+import figure, {
+  DARK_IMAGE_CLASS,
+  FIGURE_CLASS,
+  PAIR_CLASS,
+  PAIRED_CLASS,
+  creditHref,
+  dimension,
+  type FigureProps,
+} from "../components/figure/index.ts";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const stylePath = join(root, "components/figure/style.css");
@@ -51,6 +59,12 @@ function textOf(node: Node): string {
 }
 
 const css = readFileSync(stylePath, "utf8");
+
+/** Index of `child` among the figure's own children. */
+function childIndex(tree: Tree, child: Node): number {
+  const children = Array.isArray(tree.props.children) ? tree.props.children : [tree.props.children];
+  return children.indexOf(child);
+}
 
 test("default export is the figure component", () => {
   assert.equal(typeof figure, "function");
@@ -112,17 +126,70 @@ test("srcset and sizes are passed to the image", () => {
   assert.equal(img?.props.sizes, "50vw");
 });
 
-test("with src_dark the figure carries both images, and the dark one is marked", () => {
+test("with src_dark the figure carries both images inside one named wrapper", () => {
   const tree = render({ src: "/light.png", src_dark: "/dark.png", alt: "Diagram" }) as Tree;
   assert.equal(tree.props.class, "figure figure-paired");
-  const images = imagesOf(tree);
+  const pair = find(tree, PAIR_CLASS) as Tree;
+  assert.equal(pair.type, "div");
+  assert.equal(pair.props.role, "img");
+  assert.equal(pair.props["aria-label"], "Diagram");
+  const images = imagesOf(pair);
   assert.equal(images.length, 2);
   assert.equal(images[0]?.props.class, "figure-img figure-img-light");
   assert.equal(images[0]?.props.src, "/light.png");
   assert.equal(images[1]?.props.class, "figure-img figure-img-dark");
   assert.equal(images[1]?.props.src, "/dark.png");
-  assert.equal(images[1]?.props.alt, "Diagram");
   assert.equal(images[1]?.props.loading, "lazy");
+});
+
+test("a pair exposes its alternative once, on the wrapper, while both images are presentational", () => {
+  const tree = render({ src: "/light.png", src_dark: "/dark.png", alt: "Diagram of the build" });
+  const pair = find(tree, PAIR_CLASS) as Tree;
+  const images = imagesOf(pair);
+  assert.equal(images.length, 2);
+  for (const image of images) {
+    assert.equal(image.props.alt, "");
+    assert.equal(image.props["aria-hidden"], "true");
+  }
+  const named = elements(tree).filter((element) => element.props["aria-label"] === "Diagram of the build");
+  assert.equal(named.length, 1);
+  assert.equal(named[0], pair);
+});
+
+test("the pair keeps its one name in the light, dark, and system themes", () => {
+  // The identity is markup, so theme CSS can swap the visible image without ever renaming or hiding the pair.
+  const tree = render({ src: "/light.png", src_dark: "/dark.png", alt: "Diagram" });
+  const pair = find(tree, PAIR_CLASS) as Tree;
+  assert.equal(pair.props.role, "img");
+  assert.equal(pair.props["aria-label"], "Diagram");
+  assert.doesNotMatch(css, /\.figure-pair\s*\{[^}]*display:\s*none/);
+  assert.match(css, /:root\[data-theme="dark"\] \.figure-paired \.figure-img-light\s*\{\s*display:\s*none/);
+  assert.match(css, /@media \(prefers-color-scheme: dark\) \{[\s\S]*?:root:not\(\[data-theme="light"\]\) \.figure-paired \.figure-img-dark\s*\{\s*display:\s*block/);
+});
+
+test("a single figure keeps its image named and not hidden", () => {
+  const tree = render({ src: "/a.png", alt: "A chart" });
+  const [img] = imagesOf(tree);
+  assert.equal(img?.props.alt, "A chart");
+  assert.equal(img?.props["aria-hidden"], undefined);
+  assert.equal(elements(tree).some((element) => element.props.class === DARK_IMAGE_CLASS), false);
+});
+
+test("a decorative pair keeps both images decorative, with no unnamed image wrapper", () => {
+  const tree = render({ src: "/light.png", src_dark: "/dark.png" });
+  const pair = find(tree, PAIR_CLASS) as Tree;
+  assert.equal(pair.props.role, undefined);
+  assert.equal(pair.props["aria-label"], undefined);
+  const images = imagesOf(pair);
+  assert.equal(images.length, 2);
+  for (const image of images) {
+    assert.equal(image.props.alt, "");
+    assert.equal(image.props["aria-hidden"], "true");
+    assert.ok(
+      image.props.class === "figure-img figure-img-light" || image.props.class === DARK_IMAGE_CLASS,
+      "both images keep their class",
+    );
+  }
 });
 
 test("the dark image gets the same size as the light one", () => {
@@ -184,6 +251,38 @@ test("creditHref accepts only http and https", () => {
   assert.equal(creditHref(undefined), undefined);
 });
 
+/** The figure's own children, flattened and without the empty slots. */
+function ownChildren(tree: Tree): Node[] {
+  const children = Array.isArray(tree.props.children) ? tree.props.children : [tree.props.children];
+  return (children as Node[]).filter((child) => child !== null && child !== undefined && child !== false);
+}
+
+test("the caption and credit are the figure's own children, outside the image wrapper", () => {
+  const tree = render(
+    { src: "/light.png", src_dark: "/dark.png", alt: "Diagram", credit: "Ada", credit_url: "https://example.com/ada" },
+    "<p>A rich <em>caption</em> with <a href='/notes'>a link</a>.</p>",
+  ) as Tree;
+  assert.equal(tree.type, "figure");
+
+  const children = ownChildren(tree);
+  assert.deepEqual(
+    children.map((child) => (child as Tree).type),
+    ["div", "figcaption"],
+  );
+  assert.equal((children[0] as Tree).props.class, PAIR_CLASS);
+
+  // The figure relationship and the accessible content survive the pairing.
+  const figcaption = children[1] as Tree;
+  const rich = find(figcaption, "figure-text") as Tree;
+  const body = (rich.props.dangerouslySetInnerHTML as { __html: string }).__html;
+  assert.match(body, /A rich <em>caption<\/em>/);
+  assert.ok(textOf(figcaption).includes("Ada"));
+  const creditLink = elements(figcaption).find((element) => element.type === "a") as Tree;
+  assert.equal(creditLink.props.href, "https://example.com/ada");
+  assert.equal(creditLink.props.rel, "noopener");
+  assert.equal(textOf(creditLink), "Ada");
+});
+
 test("style.css uses only token names from tokens/names.json", () => {
   const names = JSON.parse(readFileSync(namesPath, "utf8")) as Record<string, Record<string, unknown>>;
   const tokenNames = new Set(
@@ -211,4 +310,12 @@ test("style.css swaps the paired images by data-theme and by the system setting"
   assert.match(css, /:root\[data-theme="dark"\] \.figure-paired \.figure-img-dark\s*\{\s*display:\s*block/);
   assert.match(css, /@media \(prefers-color-scheme: dark\)/);
   assert.match(css, /:root:not\(\[data-theme="light"\]\) \.figure-paired \.figure-img-dark\s*\{\s*display:\s*block/);
+});
+
+test("style.css keeps the unshown image of a pair out of view in the light and system themes", () => {
+  assert.match(css, /\.figure-paired \.figure-img-dark\s*\{\s*display:\s*none/);
+  assert.match(
+    css,
+    /@media \(prefers-color-scheme: dark\) \{[^}]*:root:not\(\[data-theme="light"\]\) \.figure-paired \.figure-img-light\s*\{\s*display:\s*none/,
+  );
 });
