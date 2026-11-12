@@ -4,7 +4,11 @@
  * variables in `data-placeholders`, both from the engine's placeholders plugin. The terminal island records
  * its session there the same way, and its copy button reads the command text from the page when it is
  * clicked. A recorded output block names its variables in `data-output-deps`; the island never rewrites it,
- * because nobody can run the command again here, and marks it stale instead. The form is complete without
+ * because nobody can run the command again here, and marks it stale instead. Freshness is recomputed from
+ * the values the outputs were documented with: the island remembers each variable's value when the form is
+ * first wired, and an output stops being stale only once every variable it depends on is back at that
+ * recorded value, through typing or reset. An output that depends on a variable no wired form holds keeps
+ * whatever stale state it has; the island never guesses that it is fresh. The form is complete without
  * this script; the island only makes the examples live. Values stay in the browser: no cookie, no storage,
  * no request, and no command is ever executed.
  */
@@ -59,6 +63,8 @@ export interface PlaceholderNode {
   readonly childNodes?: Iterable<PlaceholderNode> | undefined;
   getAttribute(name: string): string | null;
   setAttribute?(name: string, value: string): void;
+  /** Removes the stale marker when the recorded output is fresh again; an absent one is treated as read-only. */
+  removeAttribute?(name: string): void;
   querySelector?(selector: string): PlaceholderNode | null;
 }
 
@@ -233,6 +239,23 @@ export function applyValue(root: PlaceholderRoot, name: string, value: string): 
   }
 }
 
+/** The attribute that marks a recorded output as older than its inputs. */
+export const STALE_ATTRIBUTE = "data-output-stale";
+
+/** Marks one recorded output stale and shows its note. The output text itself is never rewritten. */
+function markBlock(block: PlaceholderNode): void {
+  block.setAttribute?.(STALE_ATTRIBUTE, "true");
+  const note = block.querySelector?.(STALE_NOTE_SELECTOR) ?? null;
+  if (note !== null) note.textContent = block.getAttribute("data-stale-text") ?? "";
+}
+
+/** Clears one recorded output's stale marker and its note, because every value it was produced with is back. */
+function clearBlock(block: PlaceholderNode): void {
+  block.removeAttribute?.(STALE_ATTRIBUTE);
+  const note = block.querySelector?.(STALE_NOTE_SELECTOR) ?? null;
+  if (note !== null) note.textContent = "";
+}
+
 /**
  * Marks every recorded output that names `name` as out of date, and shows its note. The output text is never
  * rewritten: it is what a command printed once, and only re-running the command can change it. Returns how
@@ -242,12 +265,62 @@ export function markStale(root: PlaceholderRoot, name: string): number {
   let marked = 0;
   for (const block of root.querySelectorAll(OUTPUT_DEPENDENCY_SELECTOR)) {
     if (!namesOf(block.getAttribute("data-output-deps")).includes(name)) continue;
-    block.setAttribute?.("data-output-stale", "true");
-    const note = block.querySelector?.(STALE_NOTE_SELECTOR) ?? null;
-    if (note !== null) note.textContent = block.getAttribute("data-stale-text") ?? "";
+    markBlock(block);
     marked += 1;
   }
   return marked;
+}
+
+/** What each root remembers about its variables' recorded values and what the forms hold now. */
+interface FreshnessState {
+  /** Each variable's value when a form was first wired, i.e. the value the documented output was produced with. */
+  readonly baselines: Map<string, string>;
+  /** Each variable's last value a form applied to the examples, after the type the declaration set accepted it. */
+  readonly currents: Map<string, string>;
+}
+
+const freshness = new WeakMap<PlaceholderRoot, FreshnessState>();
+
+/** The root's freshness state, created empty on first sight. */
+function freshnessStateOf(root: PlaceholderRoot): FreshnessState {
+  const existing = freshness.get(root);
+  if (existing !== undefined) return existing;
+  const created: FreshnessState = { baselines: new Map(), currents: new Map() };
+  freshness.set(root, created);
+  return created;
+}
+
+/**
+ * Re-derives every recorded output's stale state from the current values against the recorded ones. An
+ * output is fresh, and its marker cleared, only when every one of its declared and inferred dependencies
+ * has both a recorded value and a current one and they are equal; any dependency that differs marks the
+ * output stale, however many others were restored. A dependency no wired form has ever held gives no
+ * trustworthy baseline, so such an output keeps the state it already has: the island never infers freshness
+ * it cannot check. Outputs without dependencies are not touched.
+ */
+export function recomputeStaleness(root: PlaceholderRoot): void {
+  const state = freshness.get(root);
+  if (state === undefined) return;
+  for (const block of root.querySelectorAll(OUTPUT_DEPENDENCY_SELECTOR)) {
+    const names = namesOf(block.getAttribute("data-output-deps"));
+    if (names.length === 0) continue;
+    let differs = false;
+    let untrustworthy = false;
+    for (const name of names) {
+      const baseline = state.baselines.get(name);
+      const current = state.currents.get(name);
+      if (baseline === undefined || current === undefined) {
+        untrustworthy = true;
+        continue;
+      }
+      if (baseline !== current) {
+        differs = true;
+        break;
+      }
+    }
+    if (differs) markBlock(block);
+    else if (!untrustworthy) clearBlock(block);
+  }
 }
 
 /** Reads a form's current values, keyed by variable name. */
@@ -267,20 +340,28 @@ function valid(input: VariableInput): boolean {
 
 /**
  * Wires one form: every input updates its variable's placeholders on `input`, each default is applied once so
- * the examples show the documented values before the reader types, changing a value marks the recorded output
- * that depends on it stale, and the reset button puts every declared default back. Returns the names wired.
+ * the examples show the documented values before the reader types, and every change recomputes the recorded
+ * output's stale state against the values the form was wired with: changing a value marks the outputs that
+ * depend on it stale, and returning every dependency to its recorded value makes them fresh again. An input
+ * the declared type rejects never reaches an example or changes any output's state. The reset button puts
+ * every declared default back and recomputes freshness once, so examples and output state change together.
+ * Returns the names wired.
  */
 export function activate(root: PlaceholderRoot, form: VariableForm): string[] {
   const names: string[] = [];
+  const state = freshnessStateOf(root);
   for (const input of form.querySelectorAll(INPUT_SELECTOR)) {
     const name = input.getAttribute("data-var");
     if (name === null || name === "") continue;
     names.push(name);
+    if (!state.baselines.has(name)) state.baselines.set(name, input.value);
+    state.currents.set(name, input.value);
     applyValue(root, name, input.value);
     input.addEventListener("input", () => {
       if (!valid(input)) return;
       applyValue(root, name, input.value);
-      markStale(root, name);
+      state.currents.set(name, input.value);
+      recomputeStaleness(root);
     });
   }
   const reset = form.querySelector?.(RESET_SELECTOR) ?? null;
@@ -291,8 +372,11 @@ export function activate(root: PlaceholderRoot, form: VariableForm): string[] {
         const name = input.getAttribute("data-var");
         if (name === null || name === "") continue;
         input.value = input.getAttribute("data-default") ?? "";
+        if (!valid(input)) continue;
         applyValue(root, name, input.value);
+        state.currents.set(name, input.value);
       }
+      recomputeStaleness(root);
     });
   }
   return names;

@@ -34,11 +34,13 @@ import {
   INPUT_SELECTOR,
   OUTPUT_DEPENDENCY_SELECTOR,
   RESET_SELECTOR,
+  STALE_ATTRIBUTE,
   STALE_NOTE_SELECTOR,
   activate,
   applyValue,
   markStale,
   namesOf,
+  recomputeStaleness,
   replaceIn,
   tokenOf,
   valuesOf,
@@ -383,6 +385,7 @@ test("the island targets the engine's placeholder markup and records no values",
   assert.equal(BLOCK_SELECTOR, "[data-placeholders]");
   assert.equal(OUTPUT_DEPENDENCY_SELECTOR, "[data-output-deps]");
   assert.equal(STALE_NOTE_SELECTOR, "[data-output-stale-note]");
+  assert.equal(STALE_ATTRIBUTE, "data-output-stale");
   assert.equal(tokenOf("api_key"), "{{api_key}}");
 
   assert.doesNotMatch(client, /\blocalStorage\b|\bsessionStorage\b|document\.cookie|\bfetch\s*\(|XMLHttpRequest|sendBeacon/);
@@ -442,6 +445,10 @@ class FakeElement implements PlaceholderNode {
 
   setAttribute(name: string, value: string): void {
     this.attrs[name] = value;
+  }
+
+  removeAttribute(name: string): void {
+    delete this.attrs[name];
   }
 
   /** Supports the one selector the island uses inside a node: `[attribute]`. */
@@ -820,4 +827,203 @@ test("the reset button starts hidden, and puts every declared default back", () 
   reset.click();
   assert.equal(api.value, "YOUR_KEY");
   assert.equal(span.textContent, "YOUR_KEY");
+});
+
+/** A recorded output listing these dependency names, with its stale note inside. */
+function outputWith(deps: readonly string[]): { readonly output: FakeElement; readonly note: FakeElement } {
+  const note = new FakeElement({ "data-output-stale-note": "" }, [new FakeText("")]);
+  const output = new FakeElement(
+    {
+      "data-output-deps": JSON.stringify(deps.map((name) => ({ name }))),
+      "data-stale-text": "Run the command again.",
+    },
+    [new FakeText("200 OK"), note],
+  );
+  return { output, note };
+}
+
+test("editing away and back to the recorded value makes the output fresh again", () => {
+  const span = new FakeElement({ "data-var": "host" }, [new FakeText("{{host}}")]);
+  const { output, note } = outputWith(["host"]);
+  const root = new FakeRoot([span], [], [output]);
+  const host = new FakeInput("host", "https://api.example.com");
+
+  activate(root, new FakeForm([host]));
+  host.type("https://sandbox.example.com");
+  assert.equal(output.getAttribute("data-output-stale"), "true");
+  assert.equal(note.textContent, "Run the command again.");
+
+  host.type("https://api.example.com");
+  assert.equal(output.getAttribute("data-output-stale"), null, "the recorded value restores freshness");
+  assert.equal(note.textContent, "");
+  assert.equal(span.textContent, "https://api.example.com");
+  assert.equal(output.childNodes[0]!.textContent, "200 OK", "the recorded output text is never rewritten");
+});
+
+test("an output with several dependencies clears only when every one is restored", () => {
+  const { output } = outputWith(["host", "api_key"]);
+  const root = new FakeRoot([], [], [output]);
+  const host = new FakeInput("host", "https://api.example.com");
+  const api = new FakeInput("api_key", "YOUR_KEY");
+
+  activate(root, new FakeForm([host, api]));
+  host.type("https://sandbox.example.com");
+  api.type("LIVE_KEY");
+  assert.equal(output.getAttribute("data-output-stale"), "true");
+
+  api.type("YOUR_KEY");
+  assert.equal(output.getAttribute("data-output-stale"), "true", "a remaining changed dependency keeps it stale");
+
+  host.type("https://api.example.com");
+  assert.equal(output.getAttribute("data-output-stale"), null);
+});
+
+test("dependencies spread across two forms share one freshness check", () => {
+  const { output } = outputWith(["host", "api_key"]);
+  const root = new FakeRoot([], [], [output]);
+  const host = new FakeInput("host", "https://api.example.com");
+  const api = new FakeInput("api_key", "YOUR_KEY");
+
+  activate(root, new FakeForm([host]));
+  activate(root, new FakeForm([api]));
+  host.type("https://sandbox.example.com");
+  assert.equal(output.getAttribute("data-output-stale"), "true");
+  api.type("LIVE_KEY");
+  assert.equal(output.getAttribute("data-output-stale"), "true");
+
+  api.type("YOUR_KEY");
+  assert.equal(output.getAttribute("data-output-stale"), "true", "the other form still holds a changed value");
+  host.type("https://api.example.com");
+  assert.equal(output.getAttribute("data-output-stale"), null);
+});
+
+test("reset restores the examples and the output freshness together", () => {
+  const span = new FakeElement({ "data-var": "host" }, [new FakeText("{{host}}")]);
+  const { output, note } = outputWith(["host", "api_key"]);
+  const root = new FakeRoot([span], [], [output]);
+  const host = new FakeInput("host", "https://api.example.com");
+  const api = new FakeInput("api_key", "YOUR_KEY");
+  const reset = new FakeReset();
+
+  activate(root, new FakeForm([host, api], reset));
+  host.type("https://sandbox.example.com");
+  api.type("LIVE_KEY");
+  assert.equal(output.getAttribute("data-output-stale"), "true");
+
+  reset.click();
+  assert.equal(host.value, "https://api.example.com");
+  assert.equal(api.value, "YOUR_KEY");
+  assert.equal(span.textContent, "https://api.example.com");
+  assert.equal(output.getAttribute("data-output-stale"), null, "reset clears freshness in the same step");
+  assert.equal(note.textContent, "");
+});
+
+test("an invalid value never fabricates a fresh output", () => {
+  const span = new FakeElement({ "data-var": "host" }, [new FakeText("{{host}}")]);
+  const { output } = outputWith(["host"]);
+  const root = new FakeRoot([span], [], [output]);
+  const host = new FakeInput("host", "https://api.example.com");
+
+  activate(root, new FakeForm([host]));
+  host.type("https://sandbox.example.com");
+  assert.equal(output.getAttribute("data-output-stale"), "true");
+
+  host.accepted = false;
+  host.type("https://api.example.com");
+  assert.equal(output.getAttribute("data-output-stale"), "true", "a rejected value does not claim freshness");
+  assert.equal(span.textContent, "https://sandbox.example.com", "a rejected value never reaches the example");
+
+  host.accepted = true;
+  host.type("https://api.example.com");
+  assert.equal(output.getAttribute("data-output-stale"), null);
+  assert.equal(span.textContent, "https://api.example.com");
+});
+
+test("a reset the type rejects restores the input but never marks the output fresh", () => {
+  const span = new FakeElement({ "data-var": "host" }, [new FakeText("{{host}}")]);
+  const { output } = outputWith(["host"]);
+  const root = new FakeRoot([span], [], [output]);
+  const host = new FakeInput("host", "https://api.example.com");
+  const reset = new FakeReset();
+
+  activate(root, new FakeForm([host], reset));
+  host.type("https://sandbox.example.com");
+  assert.equal(output.getAttribute("data-output-stale"), "true");
+
+  host.accepted = false;
+  reset.click();
+  assert.equal(host.value, "https://api.example.com", "the input itself returns to the declared default");
+  assert.equal(span.textContent, "https://sandbox.example.com", "the rejected default never reaches the example");
+  assert.equal(output.getAttribute("data-output-stale"), "true");
+});
+
+test("an output whose dependency no form holds never becomes fresh again", () => {
+  const { output } = outputWith(["host", "region"]);
+  const root = new FakeRoot([], [], [output]);
+  const host = new FakeInput("host", "https://api.example.com");
+
+  activate(root, new FakeForm([host]));
+  assert.equal(output.getAttribute("data-output-stale"), null, "nothing is stale before a change");
+  host.type("https://sandbox.example.com");
+  assert.equal(output.getAttribute("data-output-stale"), "true");
+
+  host.type("https://api.example.com");
+  assert.equal(
+    output.getAttribute("data-output-stale"),
+    "true",
+    "without a baseline for region the island never infers freshness",
+  );
+});
+
+test("duplicate names follow one recorded baseline, and an undepended output stays untouched", () => {
+  const { output } = outputWith(["api_key"]);
+  const plain = new FakeElement({}, [new FakeText("static output")]);
+  const root = new FakeRoot([], [], [output, plain]);
+  const first = new FakeInput("api_key", "YOUR_KEY");
+  const second = new FakeInput("api_key", "YOUR_KEY");
+
+  assert.deepEqual(activate(root, new FakeForm([first, second])), ["api_key", "api_key"]);
+  first.type("LIVE_KEY");
+  assert.equal(output.getAttribute("data-output-stale"), "true");
+
+  first.type("YOUR_KEY");
+  assert.equal(output.getAttribute("data-output-stale"), null);
+  assert.equal(plain.getAttribute("data-output-stale"), null, "an output with no dependencies is never marked");
+});
+
+test("an edit-and-restore cycle keeps escaped placeholders literal", () => {
+  const code = new FakeElement({ "data-placeholders": '[{"name":"api_key"}]' }, [
+    new FakeText("echo \\{{api_key}} {{api_key}}"),
+  ]);
+  const { output } = outputWith(["api_key"]);
+  const root = new FakeRoot([], [code], [output]);
+  const api = new FakeInput("api_key", "YOUR_KEY");
+
+  activate(root, new FakeForm([api]));
+  api.type("LIVE_KEY");
+  assert.equal(code.textContent, "echo \\{{api_key}} LIVE_KEY");
+  assert.equal(output.getAttribute("data-output-stale"), "true");
+
+  api.type("YOUR_KEY");
+  assert.equal(code.textContent, "echo \\{{api_key}} YOUR_KEY", "the authored text is the template every time");
+  assert.equal(output.getAttribute("data-output-stale"), null);
+});
+
+test("recomputeStaleness changes nothing before a form is wired, and recheck is idempotent", () => {
+  const { output } = outputWith(["host"]);
+  const root = new FakeRoot([], [], [output]);
+
+  recomputeStaleness(root);
+  assert.equal(output.getAttribute("data-output-stale"), null, "without a wired form nothing is claimed");
+
+  const host = new FakeInput("host", "https://api.example.com");
+  activate(root, new FakeForm([host]));
+  host.type("https://sandbox.example.com");
+  recomputeStaleness(root);
+  assert.equal(output.getAttribute("data-output-stale"), "true", "recomputing twice marks the same");
+  host.type("https://api.example.com");
+  recomputeStaleness(root);
+  assert.equal(output.getAttribute("data-output-stale"), null);
+  recomputeStaleness(root);
+  assert.equal(output.getAttribute("data-output-stale"), null, "a fresh output stays fresh");
 });
