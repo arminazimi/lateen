@@ -2,6 +2,19 @@ import { h } from "preact";
 import type { Component, Page, Site, SiteConfig } from "@velella/mizzen/contracts";
 import { t } from "../../i18n/index.ts";
 import { calendarDate } from "../../src/dates.ts";
+import { examplesAttrs, examplesClassName, examplesFor, examplesText } from "./examples.ts";
+
+export {
+  EXAMPLES_CLASS,
+  EXAMPLE_STATES,
+  evidenceOf,
+  examplesAttrs,
+  examplesClassName,
+  examplesFor,
+  examplesText,
+  type ExamplesEvidence,
+  type ExampleState,
+} from "./examples.ts";
 
 /**
  * The trust states the panel understands, strongest first. `verified` means all evidence is recorded
@@ -90,14 +103,6 @@ export interface Provenance {
   readonly generatedAt?: string;
   /** The last human review date, in ISO 8601 form. */
   readonly reviewedAt?: string;
-}
-
-/** The examples record the panel shows: the shape `site.data.examples` uses. */
-export interface ExampleCounts {
-  /** Examples that passed. */
-  readonly passed: number;
-  /** Examples that failed. */
-  readonly failed: number;
 }
 
 /** The action links a site can configure under `theme.options.trust`. */
@@ -214,26 +219,6 @@ export function entryFor(site: Site | undefined, url: string | undefined): Trust
   return entryOf(pages[url]);
 }
 
-/** A whole, non-negative count, or undefined. */
-function countOf(value: unknown): number | undefined {
-  if (typeof value === "number") return Number.isInteger(value) && value >= 0 ? value : undefined;
-  if (typeof value === "string" && value.trim() !== "") {
-    const parsed = Number(value.trim());
-    return Number.isInteger(parsed) && parsed >= 0 ? parsed : undefined;
-  }
-  return undefined;
-}
-
-/** The page's example counts from `site.data.examples`, keyed by URL. */
-export function examplesFor(site: Site | undefined, url: string | undefined): ExampleCounts | undefined {
-  if (url === undefined) return undefined;
-  const examples = site?.data?.examples;
-  if (!isRecord(examples) || !Object.hasOwn(examples, url)) return undefined;
-  const value = examples[url];
-  if (!isRecord(value)) return undefined;
-  return { passed: countOf(value.passed) ?? 0, failed: countOf(value.failed) ?? 0 };
-}
-
 /** The number of drift findings the page has in `site.data.drift`, or undefined when the site records none. */
 export function driftFor(site: Site | undefined, url: string | undefined): number | undefined {
   if (url === undefined) return undefined;
@@ -329,15 +314,6 @@ export function provenanceOf(site: Site | undefined, url: string | undefined, en
   };
 }
 
-/** The examples row's text in the page's language. */
-export function examplesText(lang: string, counts: ExampleCounts | undefined): string {
-  if (counts === undefined) return t(lang, "trust_not_recorded");
-  const total = counts.passed + counts.failed;
-  if (total === 0) return t(lang, "trust_examples_none");
-  if (counts.failed > 0) return t(lang, "trust_examples_failed", { failed: counts.failed, total });
-  return t(lang, "trust_examples_passed", { passed: counts.passed, total });
-}
-
 /** The drift row's text in the page's language. */
 export function driftText(lang: string, findings: number | undefined): string {
   if (findings === undefined) return t(lang, "trust_not_recorded");
@@ -431,11 +407,11 @@ function icon(level: TrustLevel) {
   );
 }
 
-/** One row of the panel: a label and its value. */
-function row(label: string, value: string, className: string) {
+/** One row of the panel: a label and its value, with optional machine-readable attributes on the value. */
+function row(label: string, value: string, className: string, attrs: Record<string, string | number> = {}) {
   return [
     h("dt", { class: LABEL_CLASS }, label),
-    h("dd", { class: `${VALUE_CLASS} ${className}` }, value),
+    h("dd", { class: `${VALUE_CLASS} ${className}`, ...attrs }, value),
   ];
 }
 
@@ -465,7 +441,10 @@ function dateRow(label: string, iso: string | undefined, lang: string, className
  * panel. It renders nothing when neither names a state it knows, so missing evidence never becomes a
  * `verified` claim. Every state explains itself in the panel: the entry's reasons, or the state's
  * definition when it records none. Examples and drift come from
- * `site.data.examples` and `site.data.drift`; the action links come from `theme.options.trust` and are
+ * `site.data.examples` and `site.data.drift`; the examples row keeps partial, unrun, failed,
+ * unreadable, and absent evidence visibly and structurally distinct, in the tested-chip contract's
+ * states (see `examples.ts`), and example evidence never changes the declared level. The action
+ * links come from `theme.options.trust` and are
  * left out when the site configures none. Valid build and review provenance comes from the entry, then
  * `site.data.build` and `site.data.reviewers`; it is exposed on the root and as labelled `<time>` rows,
  * and it never changes the level. The doc layout places the panel under the title, so a site
@@ -479,6 +458,7 @@ const trustPanel: Component<TrustPanelProps> = ({ props, page, site }) => {
   const lang = page.lang;
   const reasons = explanationOf(lang, entry.level, entry.reasons);
   const provenance = provenanceOf(site, page.url, entry);
+  const evidence = examplesFor(site, page.url);
   const options = trustOptions(site.config);
   const contextPack = actionHrefOf(site.config, page, options?.contextPackUrl, provenance);
   const suggestEdit = actionHrefOf(site.config, page, options?.suggestEditUrl, provenance);
@@ -514,7 +494,12 @@ const trustPanel: Component<TrustPanelProps> = ({ props, page, site }) => {
       h(
         "dl",
         { class: ROWS_CLASS },
-        ...row(t(lang, "trust_examples"), examplesText(lang, examplesFor(site, page.url)), "trust-panel-examples"),
+        ...row(
+          t(lang, "trust_examples"),
+          examplesText(lang, evidence),
+          examplesClassName(evidence.state),
+          examplesAttrs(evidence),
+        ),
         ...row(t(lang, "trust_drift"), driftText(lang, driftFor(site, page.url)), "trust-panel-drift"),
         ...dateRow(t(lang, "updated"), provenance.generatedAt, lang, "trust-panel-generated"),
         ...dateRow(t(lang, "reviewed"), provenance.reviewedAt, lang, "trust-panel-reviewed"),

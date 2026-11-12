@@ -60,8 +60,24 @@ into a verified one.
 | `generatedAt` | ISO date | none | When that build was generated. |
 | `reviewedAt` | ISO date | none | When a person last reviewed the page. |
 
-The examples row reads `site.data.examples` by page URL (`passed`, `failed`); the drift row reads
-`site.data.drift` by page URL. A missing value says it is not recorded.
+The examples row reads `site.data.examples` by page URL (`passed`, `failed`, `total`, `unrun`) and
+reports the evidence conservatively, in the tested chip's states: `passed`, `partial`, `unrun`, and
+`failed`. A report that counted more examples than it ran reads as `partial` and says how many did
+not run, so it never reads as fully passed; a suite that counted examples but completed none reads as
+`unrun`. A report with failures keeps the `failed` state even beside unrun examples. The row says so
+in words even when the evidence is not a run result: `Not recorded` when the page has no report,
+`No examples recorded` when a report counted zero examples, and `Unknown` when the report was written
+but cannot be read (a malformed count, a total smaller than the results it counts, or an `unrun`
+that contradicts the total). Invalid and absent evidence expose no counts at all, so unreadable
+evidence can never look like a recorded zero.
+
+The state is available to machine readers on the examples row: `data-trust-examples` names the state
+(`passed`, `partial`, `unrun`, `failed`, `none`, `invalid`, `absent`), and readable evidence adds
+`data-trust-examples-passed`, `-failed`, `-total`, and, when some did not run, `-unrun`. The row's
+class carries the same state (`trust-panel-examples-partial`). Example evidence never changes the
+declared trust level, in any state.
+
+The drift row reads `site.data.drift` by page URL. A missing value says it is not recorded.
 
 The action links are optional, from `theme.options.trust`; `{url}`, `{title}`, `{source}`, `{build}`,
 `{generated}`, and `{reviewed}` are filled from the page and its valid provenance, and a root-relative
@@ -90,6 +106,8 @@ path or an `https` URL, or that asks for provenance the page does not have, is l
 
 - The chip is a native `<details>` summary, so it opens with Enter, Space, or a click and closes with
   Escape without JavaScript. The island only adds the focus return to the chip.
+- The examples evidence, its state, and its counts are in the server-rendered row: with no JavaScript
+  the reader and any scanner still see `partial`, `unrun`, `invalid`, and `absent` honestly.
 - The text comes from `i18n/*.json` in the page's language, and the panel uses logical properties, so
   it works under RTL.
 - Writing `trust.json` per page is a separate issue (N14). Until it lands, the layout's panel stays
