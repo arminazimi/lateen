@@ -111,7 +111,7 @@ test("resolvedLanguages falls back to the site language alone and keeps config o
 test("lists every language as a link, in config order, named in its own language", () => {
   const out = render(configWith());
 
-  assert.match(out, /^<nav class="language-switcher" aria-label="Language" data-language-switcher="true">/);
+  assert.match(out, /^<nav class="language-switcher" aria-label="زبان" data-language-switcher="true">/);
   assert.match(out, /<ul class="language-switcher-list">/);
   assert.deepEqual(
     [...out.matchAll(/<span class="language-switcher-name" dir="auto">([^<]*)<\/span>/g)].map((match) => match[1]),
@@ -148,17 +148,18 @@ test("preserves a nested base, and works at a domain root", () => {
   ]);
 });
 
-test("marks the current language with aria-current and a visible word, not colour alone", () => {
+test("marks the current language in the page's language, not the site default's", () => {
+  // The English-default site renders a Persian page: guidance is Persian.
   const out = render(configWith());
 
   assert.match(
     out,
-    /<li class="language-switcher-item language-switcher-item--current" data-language-state="current"><a class="language-switcher-link" href="\/docs\/fa\/guide\/install\/" hreflang="fa" lang="fa" aria-current="true"><span class="language-switcher-name" dir="auto">فارسی<\/span><span class="language-switcher-current" lang="en" dir="ltr"> \(Current\)<\/span><\/a><\/li>/,
+    /<li class="language-switcher-item language-switcher-item--current" data-language-state="current"><a class="language-switcher-link" href="\/docs\/fa\/guide\/install\/" hreflang="fa" lang="fa" aria-current="true"><span class="language-switcher-name" dir="auto">فارسی<\/span><span class="language-switcher-current" lang="fa" dir="rtl"> \(کنونی\)<\/span><\/a><\/li>/,
   );
   assert.equal([...out.matchAll(/aria-current="true"/g)].length, 1);
 });
 
-test("marks a translated target as such, and keeps the state word in the site's direction", () => {
+test("marks a translated target as such, and keeps the state word in the page's direction", () => {
   const out = render(configWith({ lang: "fa", dir: "rtl" }));
 
   assert.equal([...out.matchAll(/data-language-state="translated"/g)].length, 2);
@@ -174,14 +175,33 @@ test("gives every link hreflang and lang with its language code", () => {
   );
 });
 
-test("localises the nav label and the current word in Persian and Arabic", () => {
-  const fa = render(configWith({ lang: "fa" }));
-  assert.match(fa, /aria-label="زبان"/);
-  assert.match(fa, /\(کنونی\)/);
+test("localises the nav label and the current word for the page's language, whatever the site default", () => {
+  const ar: LanguageConfig = { code: "ar", name: "العربية", prefix: "/ar" };
 
-  const ar = render(configWith({ lang: "ar" }));
-  assert.match(ar, /aria-label="اللغة"/);
-  assert.match(ar, /\(الحالية\)/);
+  const fa = render(configWith({ lang: "ar", dir: "rtl" }), pageWith());
+  assert.match(fa, /aria-label="زبان"/);
+  assert.match(fa, /<span class="language-switcher-current" lang="fa" dir="rtl"> \(کنونی\)<\/span>/);
+
+  const arabic = render(configWith({ languages: [EN, FA, ar] }), pageAt("/docs/ar/guide/install/", "ar"));
+  assert.match(arabic, /aria-label="اللغة"/);
+  assert.match(
+    arabic,
+    /<span class="language-switcher-current" lang="ar" dir="rtl"> \(الحالية\)<\/span>/,
+  );
+
+  const en = render(configWith({ lang: "fa", dir: "rtl" }), pageAt("/docs/guide/install/", "en"));
+  assert.match(en, /aria-label="Language"/);
+  assert.match(en, /<span class="language-switcher-current" lang="en" dir="ltr"> \(Current\)<\/span>/);
+});
+
+test("a regional page tag reads its catalog by primary subtag, and an unshipped page language falls back to stamped English", () => {
+  const regional = render(configWith(), pageWith({ url: "/docs/fa/guide/install/", lang: "fa-IR", dir: "rtl" }));
+  assert.match(regional, /aria-label="زبان"/);
+  assert.match(regional, /<span class="language-switcher-current" lang="fa-IR" dir="rtl"> \(کنونی\)<\/span>/);
+
+  const unshipped = render(configWith(), pageWith({ url: "/docs/ja/guide/install/", lang: "ja-JP", dir: "ltr" }));
+  assert.match(unshipped, /aria-label="Language"/);
+  assert.match(unshipped, /<span class="language-switcher-current" lang="en" dir="ltr"> \(Current\)<\/span>/);
 });
 
 test("escapes language names and marks current by code when the URL is mislabelled", () => {
@@ -273,7 +293,7 @@ test("keeps a version segment, so a translation never crosses to another version
   assert.doesNotMatch(out, /\/docs\/v1\//);
 });
 
-test("never links a language with no equivalent page, and says why a screen reader hears it", () => {
+test("never links a language with no equivalent page, and says why in the page's language", () => {
   const page = pageAt("/docs/fa/guide/install/", "fa");
   const out = render(configWith(), page, {}, [page]);
 
@@ -282,7 +302,7 @@ test("never links a language with no equivalent page, and says why a screen read
   assert.equal([...out.matchAll(/data-language-state="missing"/g)].length, 2);
   assert.match(
     out,
-    /<span class="language-switcher-link language-switcher-link--unavailable" lang="en" aria-disabled="true"><span class="language-switcher-name" dir="auto">English<\/span><span class="language-switcher-state" aria-hidden="true">—<\/span><span class="language-switcher-sr" lang="en" dir="ltr">This page hasn't been translated yet. Read it in:<\/span><\/span>/,
+    /<span class="language-switcher-link language-switcher-link--unavailable" lang="en" aria-disabled="true"><span class="language-switcher-name" dir="auto">English<\/span><span class="language-switcher-state" aria-hidden="true">—<\/span><span class="language-switcher-sr" lang="fa" dir="rtl">این صفحه هنوز ترجمه نشده است. آن را به این زبان بخوانید:<\/span><\/span>/,
   );
 });
 
@@ -297,6 +317,22 @@ test("follows _data/languages.yml's fallback chain and names the language it rea
   assert.match(
     out,
     /<li class="language-switcher-item" data-language-state="fallback"><a class="language-switcher-link language-switcher-link--fallback" href="\/docs\/fa\/guide\/install\/" hreflang="fa" lang="de"><span class="language-switcher-name" dir="auto">Deutsch<\/span><span class="language-switcher-sr" lang="en" dir="ltr">This page hasn't been translated yet. Read it in:<\/span><span class="language-switcher-state" lang="fa" dir="auto"> \(فارسی\)<\/span><\/a><\/li>/,
+  );
+});
+
+test("a fallback entry names the language actually opened while its guidance stays in the page's language", () => {
+  const de: LanguageConfig = { code: "de", name: "Deutsch", prefix: "/de" };
+  const config = configWith({ languages: [EN, FA, de] });
+  const en = pageAt("/docs/guide/install/", "en");
+  const fa = pageAt("/docs/fa/guide/install/", "fa");
+  const out = render(config, fa, { languages: { fallback: ["en"] } }, [en, fa]);
+
+  // Reading the Persian page: de has no page and falls back to English. The guidance is Persian (the
+  // page's language), while the name and the actually-opened language keep their own lang/dir.
+  assert.deepEqual(hrefs(out), ["/docs/guide/install/", "/docs/fa/guide/install/", "/docs/guide/install/"]);
+  assert.match(
+    out,
+    /<a class="language-switcher-link language-switcher-link--fallback" href="\/docs\/guide\/install\/" hreflang="en" lang="de"><span class="language-switcher-name" dir="auto">Deutsch<\/span><span class="language-switcher-sr" lang="fa" dir="rtl">این صفحه هنوز ترجمه نشده است. آن را به این زبان بخوانید:<\/span><span class="language-switcher-state" lang="en" dir="auto"> \(English\)<\/span><\/a>/,
   );
 });
 
@@ -319,13 +355,13 @@ test("is keyboard operable plain HTML: a nav list of anchors, no hidden control,
   assert.match(out, /^<nav .*><ul .*><li .*><a /);
   assert.doesNotMatch(out, /tabindex=|hidden/);
   assert.ok(!existsSync(new URL("../chrome/language-switcher/client.ts", import.meta.url)), "the switcher must need no client.ts");
-  assert.match(out, /aria-label="Language"/);
+  assert.match(out, /aria-label="زبان"/);
 });
 
 test("the header places the switcher above a repository link, and omits it for one language", () => {
   const withRepo = configWith({ repository: { url: "https://github.com/example/site" } });
   const out = renderToString(header(props(withRepo)) as never);
-  assert.match(out, /<nav class="language-switcher" aria-label="Language" data-language-switcher="true">/);
+  assert.match(out, /<nav class="language-switcher" aria-label="زبان" data-language-switcher="true">/);
   assert.ok(out.indexOf("language-switcher") < out.indexOf("header-repo"));
 
   const oneLanguage = renderToString(header(props(configWith({ languages: [] }))) as never);

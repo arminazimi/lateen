@@ -1,6 +1,6 @@
 import { h } from "preact";
 import type { Chrome, Direction, LanguageConfig, LinkTag, Page, Site, SiteConfig } from "@velella/mizzen/contracts";
-import { t } from "../../i18n/index.ts";
+import { languages as shippedCatalogs, t } from "../../i18n/index.ts";
 
 /** A language as the switcher reads it: a normalised root-relative prefix (`""` or `/fa`). */
 export interface SwitcherLanguage {
@@ -277,9 +277,26 @@ function languageEntry(
   return { language, state: "missing" };
 }
 
-/** The text a screen reader hears for a language whose page is not in that language. */
-function unavailableLabel(site: Site): string {
-  return t(site.config.lang, "translation_missing");
+/**
+ * The language and direction the interface guidance is read in: the page's own, since guidance
+ * describes the page being read. A regional tag keeps its full tag (`fa-IR` reads the `fa` catalog
+ * through the i18n fallback); a tag no shipped catalog covers, even by primary subtag, reads English
+ * left-to-right, so the stamp always matches the text actually shown.
+ */
+function guidanceOf(page: Pick<Page, "lang" | "dir">): { readonly lang: string; readonly dir: Direction } {
+  const primary = tagKey(page.lang).split("-")[0] ?? "";
+  return (shippedCatalogs as readonly string[]).includes(primary)
+    ? { lang: page.lang, dir: page.dir }
+    : { lang: "en", dir: "ltr" };
+}
+
+/**
+ * The text a screen reader hears for a language whose page is not in that language, in the language
+ * of the page being read: guidance about this page speaks its own reader's language, not the site's
+ * default.
+ */
+function unavailableLabel(lang: string): string {
+  return t(lang, "translation_missing");
 }
 
 /**
@@ -343,7 +360,10 @@ export function alternateLinks(site: Site, page: Page): LinkTag[] {
 
 /**
  * The language switcher: one entry per configured language, each to the page the site really builds
- * in that language. The current language opens the page itself and is marked with `aria-current` plus
+ * in that language. The interface guidance - the landmark, the current word, and the missing-translation
+ * text - is read in `page.lang`, the language of the page being read, so a page rendered in another
+ * configured language never shows the site default's guidance; regional tags use their catalog by
+ * primary subtag. The current language opens the page itself and is marked with `aria-current` plus
  * a visible word, never colour alone. A translation that does not exist is not guessed from the URL:
  * a language served by a fallback opens that page and names the language it really shows, and a
  * language with no page at all is plain text with the reason a screen reader announces. Page URLs
@@ -357,13 +377,14 @@ const languageSwitcher: Chrome = ({ site, page }) => {
   if (languages.length < 2) return null;
 
   const { current, rest } = pagePaths(site.config, page);
-  const label = t(site.config.lang, "language");
-  const currentLabel = t(site.config.lang, "language_current");
+  const guidance = guidanceOf(page);
+  const label = t(guidance.lang, "language");
+  const currentLabel = t(guidance.lang, "language_current");
   const alternates = alternatesOf(site.data);
   const identity = identityOf(page, rest);
   const translations = translationsOf(site, identity);
   const chain = fallbackChain(site.config, site.data);
-  const unavailable = unavailableLabel(site);
+  const unavailable = unavailableLabel(guidance.lang);
 
   return h(
     "nav",
@@ -389,7 +410,7 @@ const languageSwitcher: Chrome = ({ site, page }) => {
               },
               h("span", { class: "language-switcher-name", dir: "auto" }, language.name),
               h("span", { class: "language-switcher-state", "aria-hidden": "true" }, "—"),
-              h("span", { class: "language-switcher-sr", lang: site.config.lang, dir: site.config.dir }, unavailable),
+              h("span", { class: "language-switcher-sr", lang: guidance.lang, dir: guidance.dir }, unavailable),
             ),
           );
         }
@@ -409,9 +430,9 @@ const languageSwitcher: Chrome = ({ site, page }) => {
             h("span", { class: "language-switcher-name", dir: "auto" }, language.name),
             entry.actual === undefined
               ? null
-              : h("span", { class: "language-switcher-sr", lang: site.config.lang, dir: site.config.dir }, unavailable),
+              : h("span", { class: "language-switcher-sr", lang: guidance.lang, dir: guidance.dir }, unavailable),
             entry.state === "current"
-              ? h("span", { class: "language-switcher-current", lang: site.config.lang, dir: site.config.dir }, ` (${currentLabel})`)
+              ? h("span", { class: "language-switcher-current", lang: guidance.lang, dir: guidance.dir }, ` (${currentLabel})`)
               : null,
             entry.actual === undefined
               ? null
