@@ -13,6 +13,9 @@ Escape without JavaScript; the island only adds the focus return to the chip.
   wrap (`overflow-wrap: anywhere`) and the panel never grows wider than the viewport, so a long
   translation stays readable at narrow widths and zoom.
 - `client.ts` is the island: Escape closes the open panel and puts focus back on the chip.
+- `examples.ts` turns one page's `site.data.examples` entry into honest evidence: the tested-chip's
+  run states plus the distinct `none`, `invalid`, and `absent` gaps, with the row's text, class, and
+  `data-trust-examples*` attributes derived from it.
 - `test/component-trust-panel.test.ts` covers the missing-data case, every state, every evidence row,
   provenance, the action links, localisation, escaping, the island, and the stylesheet's tokens.
 
@@ -85,9 +88,19 @@ The first trust score's names still work: `review-due` reads as `unreviewed` and
 optional. When an entry records no reasons, the panel shows the state's own explanation from the
 i18n table, so every state is inspectable and never just a badge.
 
-The examples row reads `site.data.examples`, keyed by page URL (`passed`, `failed`). The drift row
-reads `site.data.drift`, keyed by page URL (a list of findings); zero findings say so, a missing
-entry says the value is not recorded.
+The examples row reads `site.data.examples`, keyed by page URL, and consumes `passed`, `failed`,
+`total`, and `unrun` conservatively (`examples.ts`). The evidence states follow the tested-chip
+contract: `passed`, `partial`, `unrun`, and `failed` for run results, plus three honest gaps the chip
+does not have to show inline: `none` for a recorded suite that counted zero examples, `invalid` for
+a report that cannot be read (a malformed count, a total smaller than the results, an `unrun` that
+contradicts the total, or an entry that is not a record), and `absent` for no report at all. The row
+names the state in words, as a class (`trust-panel-examples-<state>`) and as `data-trust-examples`
+on the value; readable evidence also carries `data-trust-examples-passed`, `-failed`, `-total`, and
+`-unrun`. A report with unrun examples always says so next to the run result, so it never reads as
+fully passed, and invalid or absent evidence exposes no counts, so it can never look like a recorded
+zero. Example evidence never changes the declared level. The drift row reads `site.data.drift`, keyed
+by page URL (a list of findings); zero findings say so, a missing entry says the value is not
+recorded.
 
 ## Options
 

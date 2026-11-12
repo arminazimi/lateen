@@ -10,6 +10,8 @@ import trustPanel, {
   BODY_CLASS,
   CHIP_CLASS,
   CLASS,
+  EXAMPLES_CLASS,
+  EXAMPLE_STATES,
   ICONS,
   LEVELS,
   actionHrefOf,
@@ -17,6 +19,9 @@ import trustPanel, {
   driftText,
   entryFor,
   entryOf,
+  evidenceOf,
+  examplesAttrs,
+  examplesClassName,
   examplesFor,
   examplesText,
   levelOf,
@@ -24,6 +29,8 @@ import trustPanel, {
   provenanceOf,
   reasonsOf,
   reviewerText,
+  type ExampleState,
+  type ExamplesEvidence,
   type TrustPanelProps,
 } from "../components/trust-panel/index.ts";
 import {
@@ -34,6 +41,7 @@ import {
   type TrustPanelNode,
   type TrustSummary,
 } from "../components/trust-panel/client.ts";
+import { countsOf } from "../components/tested-chip/index.ts";
 
 /** A site with the data, theme options, and base the component reads. */
 function siteOf(data: Record<string, unknown>, options: Record<string, unknown> = {}, base = ""): Site {
@@ -165,18 +173,24 @@ test("the panel shows examples, drift, and the last reviewer", () => {
     drift: { "/guide/install/": [{}, {}] },
   });
   assert.ok(out);
-  assert.match(out, /<dt class="trust-panel-label">Examples<\/dt><dd class="trust-panel-value trust-panel-examples">1 of 4 examples failed<\/dd>/);
+  assert.match(
+    out,
+    /<dt class="trust-panel-label">Examples<\/dt><dd class="trust-panel-value trust-panel-examples trust-panel-examples-failed" data-trust-examples="failed" data-trust-examples-passed="3" data-trust-examples-failed="1" data-trust-examples-total="4">1 of 4 examples failed<\/dd>/,
+  );
   assert.match(out, /<dt class="trust-panel-label">Drift<\/dt><dd class="trust-panel-value trust-panel-drift">2 drift findings<\/dd>/);
   assert.match(out, /<dt class="trust-panel-label">Last reviewer<\/dt><dd class="trust-panel-value trust-panel-reviewer">Reviewed by Ada<\/dd>/);
   assert.match(out, /<p class="trust-panel-reasons-label">Why this level<\/p><ul class="trust-panel-reasons"><li>All examples passed.<\/li><li>No drift.<\/li><\/ul>/);
 });
 
 test("the examples and drift rows say so when the data is missing, empty, or clean", () => {
-  assert.match(render({ trust: { "/guide/install/": entry } })!, /trust-panel-examples">Not recorded<\/dd>/);
+  assert.match(
+    render({ trust: { "/guide/install/": entry } })!,
+    /trust-panel-examples trust-panel-examples-absent" data-trust-examples="absent">Not recorded<\/dd>/,
+  );
   assert.match(render({ trust: { "/guide/install/": entry } })!, /trust-panel-drift">Not recorded<\/dd>/);
   assert.match(
     render({ trust: { "/guide/install/": entry }, examples: { "/guide/install/": {} } })!,
-    /trust-panel-examples">No examples recorded<\/dd>/,
+    /trust-panel-examples trust-panel-examples-none" data-trust-examples="none" data-trust-examples-passed="0" data-trust-examples-failed="0" data-trust-examples-total="0">No examples recorded<\/dd>/,
   );
   assert.match(
     render({ trust: { "/guide/install/": entry }, drift: { "/guide/install/": [] } })!,
@@ -184,8 +198,197 @@ test("the examples and drift rows say so when the data is missing, empty, or cle
   );
   assert.match(
     render({ trust: { "/guide/install/": entry }, examples: { "/guide/install/": { passed: 3, failed: 0 } } })!,
-    /trust-panel-examples">3 of 3 examples passed<\/dd>/,
+    /trust-panel-examples trust-panel-examples-passed" data-trust-examples="passed" data-trust-examples-passed="3" data-trust-examples-failed="0" data-trust-examples-total="3">3 of 3 examples passed<\/dd>/,
   );
+});
+
+test("a report with unrun examples never reads as fully passed", () => {
+  const partial = render({
+    trust: { "/guide/install/": entry },
+    examples: { "/guide/install/": { passed: 3, failed: 0, total: 5 } },
+  });
+  assert.ok(partial);
+  assert.match(partial, /trust-panel-examples trust-panel-examples-partial" data-trust-examples="partial"/);
+  assert.match(partial, /data-trust-examples-total="5"[^>]*>3 of 5 examples passed, 2 not run<\/dd>/);
+  assert.match(partial, /data-trust-examples-unrun="2"/);
+  assert.doesNotMatch(partial, /3 of 3 examples passed/, "unrun examples are never dropped to make a clean pass");
+  assert.match(partial, /data-trust-level="verified"/, "the declared level is untouched by example evidence");
+
+  const failedUnrun = render({
+    trust: { "/guide/install/": entry },
+    examples: { "/guide/install/": { passed: 3, failed: 1, total: 5 } },
+  });
+  assert.match(failedUnrun!, /data-trust-examples="failed"/);
+  assert.match(failedUnrun!, /1 of 5 examples failed, 1 not run/);
+});
+
+test("a counted but unexecuted suite reads as unrun, not missing or empty", () => {
+  const fromTotal = render({ trust: { "/guide/install/": entry }, examples: { "/guide/install/": { total: 5 } } });
+  assert.ok(fromTotal);
+  assert.match(fromTotal, /data-trust-examples="unrun"/);
+  assert.match(fromTotal, /data-trust-examples-unrun="5">5 not run<\/dd>/);
+  assert.equal(examplesRowDd(fromTotal).text, "5 not run", "a counted unrun suite says so, not that nothing was recorded");
+
+  const fromUnrun = render({ trust: { "/guide/install/": entry }, examples: { "/guide/install/": { unrun: 2 } } });
+  assert.match(fromUnrun!, /data-trust-examples="unrun"[^>]*>2 not run<\/dd>/);
+});
+
+/** The examples row's value element from a rendered panel: its class, its machine evidence, and its text. */
+function examplesRowDd(out: string): { readonly cls: string; readonly attrs: string; readonly text: string } {
+  const match = /<dd class="(trust-panel-value trust-panel-examples[^"]*)"([^>]*)>([^<]*)<\/dd>/.exec(out);
+  assert.ok(match, "examples row dd");
+  return { cls: match[1]!, attrs: match[2]!, text: match[3]! };
+}
+
+test("an explicit unrun count is consumed, and must agree with the total", () => {
+  const consistent = render({
+    trust: { "/guide/install/": entry },
+    examples: { "/guide/install/": { passed: 2, failed: 0, total: 3, unrun: 1 } },
+  });
+  assert.match(consistent!, /data-trust-examples="partial"/);
+  assert.match(consistent!, /2 of 3 examples passed, 1 not run/);
+
+  for (const impossible of [
+    { passed: 2, failed: 0, total: 5, unrun: 1 },
+    { passed: 2, failed: 1, total: 2 },
+    { passed: 2, failed: 1, total: 1 },
+  ]) {
+    const out = render({ trust: { "/guide/install/": entry }, examples: { "/guide/install/": impossible } });
+    assert.ok(out);
+    assert.match(out, /data-trust-examples="invalid"/, JSON.stringify(impossible));
+    const dd = examplesRowDd(out);
+    assert.equal(dd.text, "Unknown", JSON.stringify(impossible));
+    assert.ok(dd.cls.endsWith("trust-panel-examples-invalid"), JSON.stringify(impossible));
+    assert.doesNotMatch(dd.attrs, /data-trust-examples-(passed|failed|total|unrun)=/, "impossible evidence exposes no counts");
+    assert.match(out, /data-trust-level="verified"/, "an impossible report never changes the level");
+  }
+});
+
+test("malformed evidence is invalid evidence, never zero-valued success", () => {
+  for (const malformed of [
+    { passed: "many", failed: 1 },
+    { passed: -1 },
+    { passed: 1.5 },
+    { failed: "" },
+    { passed: true },
+    { total: [] },
+    { passed: null },
+    { passed: Number.MAX_SAFE_INTEGER + 1 },
+    "verified",
+    [3, 1],
+    3,
+  ]) {
+    const out = render({ trust: { "/guide/install/": entry }, examples: { "/guide/install/": malformed } });
+    assert.ok(out);
+    assert.match(out, /data-trust-examples="invalid"/, JSON.stringify(malformed));
+    const dd = examplesRowDd(out);
+    assert.equal(dd.text, "Unknown", JSON.stringify(malformed));
+    assert.doesNotMatch(dd.attrs, /data-trust-examples-passed=/, "invalid evidence exposes no counts");
+  }
+});
+
+test("the count contract is shared with tested-chip: null and unsafe integers are invalid, a valid report agrees", () => {
+  for (const counts of [
+    { passed: null, failed: 0 },
+    { passed: Number.MAX_SAFE_INTEGER + 1, failed: 0 },
+    { passed: "9007199254740992", failed: 0 },
+  ]) {
+    assert.deepEqual(evidenceOf(counts), { state: "invalid" }, JSON.stringify(counts));
+    assert.equal(countsOf(counts)?.unavailable, true, `${JSON.stringify(counts)} is unavailable to the chip`);
+  }
+
+  const valid = { passed: 3, failed: 1 };
+  assert.deepEqual(evidenceOf(valid), { state: "failed", passed: 3, failed: 1, total: 4 });
+  const chip = countsOf(valid);
+  assert.deepEqual({ passed: chip?.passed, failed: chip?.failed }, { passed: 3, failed: 1 });
+  assert.equal(chip?.unavailable, undefined);
+});
+
+test("every evidence state reads and marks differently", () => {
+  const data: Record<string, unknown> = {
+    passed: { passed: 2, failed: 0 },
+    partial: { passed: 2, failed: 0, total: 4 },
+    unrun: { total: 4 },
+    failed: { passed: 1, failed: 1 },
+    none: {},
+    invalid: { passed: "oops" },
+    absent: undefined,
+  };
+  assert.deepEqual([...EXAMPLE_STATES], ["passed", "partial", "unrun", "failed", "none", "invalid", "absent"]);
+
+  const texts = new Set<string>();
+  const states = new Set<string>();
+  for (const [state, counts] of Object.entries(data)) {
+    const out = render({ trust: { "/guide/install/": entry }, examples: { "/guide/install/": counts } });
+    assert.ok(out, state);
+    const match = /class="trust-panel-value (trust-panel-examples[^"]*)"[^>]*>([^<]*)<\/dd>/.exec(out);
+    assert.ok(match, `${state} row`);
+    assert.ok(match[1]!.endsWith(`trust-panel-examples-${state}`), `${state} class: ${match[1]}`);
+    assert.equal(match[1], examplesClassName(state as ExampleState));
+    texts.add(match[2]!);
+    states.add(state);
+    assert.match(out, new RegExp(`data-trust-examples="${state}"`));
+  }
+  assert.equal(states.size, EXAMPLE_STATES.length);
+  assert.equal(texts.size, EXAMPLE_STATES.length, "no two evidence states share visible text");
+});
+
+test("example evidence never changes the declared level, in any state", () => {
+  for (const level of LEVELS) {
+    for (const counts of [{ passed: 2, failed: 0 }, { passed: 2, failed: 0, total: 4 }, { total: 4 }, { passed: "x" }, {}]) {
+      const out = render({ trust: { "/guide/install/": { level } }, examples: { "/guide/install/": counts } });
+      assert.ok(out);
+      assert.match(out, new RegExp(`data-trust-level="${level}"`), `${level} with ${JSON.stringify(counts)}`);
+      assert.match(out, new RegExp(`class="trust-panel trust-panel-${level}"`));
+    }
+  }
+});
+
+test("evidence states localize their row text", () => {
+  for (const lang of ["en", "fa", "ar"] as const) {
+    const strings = stringsOf(lang);
+    const notRun = strings.tested_not_run!.replace("{n}", "2");
+    const cases: Array<readonly [ExamplesEvidence, string]> = [
+      [evidenceOf({ passed: 2, failed: 0, total: 4 }), `${strings.trust_examples_passed!.replace("{passed}", "2").replace("{total}", "4")}, ${notRun}`],
+      [evidenceOf({ passed: 1, failed: 1, total: 4 }), `${strings.trust_examples_failed!.replace("{failed}", "1").replace("{total}", "4")}, ${notRun}`],
+      [evidenceOf({ passed: 2, failed: 0 }), strings.trust_examples_passed!.replace("{passed}", "2").replace("{total}", "2")],
+      [evidenceOf({ total: 2 }), strings.tested_not_run!.replace("{n}", "2")],
+      [evidenceOf({ passed: "x" }), strings.trust_level_unknown!],
+      [evidenceOf({}), strings.trust_examples_none!],
+      [{ state: "absent" }, strings.trust_not_recorded!],
+    ];
+    for (const [evidence, expected] of cases) {
+      assert.equal(examplesText(lang, evidence), expected, `${lang}: ${evidence.state}`);
+    }
+
+    const out = render(
+      { trust: { "/guide/install/": entry }, examples: { "/guide/install/": { passed: 2, failed: 0, total: 4 } } },
+      { lang },
+    );
+    assert.ok(out!.includes(cases[0]![1]), `${lang} panel shows the localised partial row`);
+  }
+});
+
+test("the evidence is in the static no-JS markup on the row itself", () => {
+  const out = render({ trust: { "/guide/install/": entry }, examples: { "/guide/install/": { passed: 3, failed: 0, total: 5 } } });
+  assert.ok(out);
+  assert.match(out, /^<details[^>]*data-trust-panel/, "the disclosure and its rows are server-rendered");
+  assert.doesNotMatch(out, /<script/);
+  assert.match(out, /<summary class="trust-panel-chip">/);
+  assert.match(out, /data-trust-examples="partial"[^>]*data-trust-examples-unrun="2"/);
+});
+
+test("examplesAttrs exposes counts only for readable evidence", () => {
+  assert.deepEqual(examplesAttrs({ state: "absent" }), { "data-trust-examples": "absent" });
+  assert.deepEqual(examplesAttrs({ state: "invalid" }), { "data-trust-examples": "invalid" });
+  assert.deepEqual(examplesAttrs(evidenceOf({ passed: 2, failed: 0, total: 4 })), {
+    "data-trust-examples": "partial",
+    "data-trust-examples-passed": 2,
+    "data-trust-examples-failed": 0,
+    "data-trust-examples-total": 4,
+    "data-trust-examples-unrun": 2,
+  });
+  assert.equal(examplesClassName("unrun"), "trust-panel-examples trust-panel-examples-unrun");
 });
 
 test("a page without a reviewer says so", () => {
@@ -310,8 +513,8 @@ test("the helpers pick the page's data and text", () => {
   });
   assert.deepEqual(entryFor(site, "/guide/install/"), entry);
   assert.equal(entryFor(site, "/other/"), undefined);
-  assert.deepEqual(examplesFor(site, "/guide/install/"), { passed: 2, failed: 0 });
-  assert.equal(examplesFor(site, "/other/"), undefined);
+  assert.deepEqual(examplesFor(site, "/guide/install/"), { state: "passed", passed: 2, failed: 0, total: 2 });
+  assert.deepEqual(examplesFor(site, "/other/"), { state: "absent" });
   assert.equal(driftFor(site, "/guide/install/"), 1);
   assert.equal(driftFor(site, "/other/"), undefined);
 
@@ -320,9 +523,10 @@ test("the helpers pick the page's data and text", () => {
   assert.equal(entryOf({ level: "verified" })?.level, "verified");
   assert.equal(entryOf({ level: "verified", lastReviewer: "  " })?.lastReviewer, undefined);
 
-  assert.equal(examplesText("en", undefined), "Not recorded");
-  assert.equal(examplesText("en", { passed: 0, failed: 0 }), "No examples recorded");
-  assert.equal(examplesText("en", { passed: 2, failed: 1 }), "1 of 3 examples failed");
+  assert.equal(examplesText("en", { state: "absent" }), "Not recorded");
+  assert.equal(examplesText("en", evidenceOf({})), "No examples recorded");
+  assert.equal(examplesText("en", evidenceOf({ passed: 2, failed: 1 })), "1 of 3 examples failed");
+  assert.equal(examplesText("en", { state: "invalid" }), "Unknown");
   assert.equal(driftText("en", undefined), "Not recorded");
   assert.equal(driftText("en", 0), "No drift findings");
   assert.equal(driftText("en", 1), "1 drift finding");
