@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { beforeEach, test } from "node:test";
 import type { ChromeProps, Page, Pager, Site, SiteConfig, SourcePos, Trail } from "@velella/mizzen/contracts";
-import copyMarkdown, { twinUrl } from "../chrome/copy-markdown/index.ts";
+import copyMarkdown, { markdownTwin, pageUrl, twinUrl } from "../chrome/copy-markdown/index.ts";
 import {
   activate,
   copy,
@@ -26,10 +26,10 @@ beforeEach(() => resetShortcutsPreference());
 
 const pos: SourcePos = { file: "docs/guide/install.md", line: 3, column: 1, endLine: 9, endColumn: 1 };
 
-function siteConfig(): SiteConfig {
+function siteConfig(base = "/example"): SiteConfig {
   return {
     title: "Example",
-    base: "/example",
+    base,
     lang: "en",
     dir: "ltr",
     languages: [],
@@ -63,8 +63,8 @@ function pageWith(url = "/example/guide/install/", kind: Page["kind"] = "doc", l
   };
 }
 
-function props(page: Page = pageWith()): ChromeProps {
-  const site: Site = { config: siteConfig(), pages: [page], nav: {}, data: {} };
+function props(page: Page = pageWith(), base = "/example"): ChromeProps {
+  const site: Site = { config: siteConfig(base), pages: [page], nav: {}, data: {} };
   return { site, page, trail, pager };
 }
 
@@ -123,10 +123,59 @@ test("a page with no Markdown twin, or one that is not a doc page, renders nothi
   assert.equal(copyMarkdown(props(pageWith("/example/guide/install.json"))), null);
 });
 
-test("the site's base stays in the Markdown twin address", () => {
-  const out = html(copyMarkdown(props(pageWith("/prefix/guide/install/"))));
+test("the site's base stays in the Markdown twin address, never doubled, when the page URL carries it", () => {
+  const out = html(copyMarkdown(props(pageWith("/prefix/guide/install/"), "/prefix")));
 
   assert.match(out, /href="\/prefix\/guide\/install\/index\.md"/);
+  assert.doesNotMatch(out, /\/prefix\/prefix/);
+});
+
+test("view and copy share one base-aware twin on a subpath site whose page URL lacks the base", () => {
+  const out = html(copyMarkdown(props(pageWith("/guide/install/"), "/docs")));
+
+  assert.match(out, /<a class="copy-markdown-link" href="\/docs\/guide\/install\/index\.md">/);
+  assert.match(out, /data-markdown="\/docs\/guide\/install\/index\.md"/);
+  assert.equal(out.match(/data-markdown="(\/docs\/guide\/install\/index\.md)"/)![1], "/docs/guide/install/index.md");
+});
+
+test("a root deployment keeps the twin exactly as the page URL gives it", () => {
+  const out = html(copyMarkdown(props(pageWith("/guide/install/"), "")));
+
+  assert.match(out, /href="\/guide\/install\/index\.md"/);
+  assert.match(out, /data-markdown="\/guide\/install\/index\.md"/);
+});
+
+test("trailing slashes on the base join exactly once", () => {
+  const out = html(copyMarkdown(props(pageWith("/guide/install/"), "/docs/")));
+
+  assert.match(out, /href="\/docs\/guide\/install\/index\.md"/);
+  assert.doesNotMatch(out, /\/docs\/\//);
+});
+
+test("pageUrl: the base goes in only when the URL does not already carry it", () => {
+  assert.equal(pageUrl("/guide/install/", "/docs"), "/docs/guide/install/");
+  assert.equal(pageUrl("/docs/guide/install/", "/docs"), "/docs/guide/install/");
+  assert.equal(pageUrl("/docs", "/docs"), "/docs");
+  assert.equal(pageUrl("/docsify/install/", "/docs"), "/docs/docsify/install/");
+  assert.equal(pageUrl("/docs-x/", "/docs"), "/docs/docs-x/");
+  assert.equal(pageUrl("/guide/install/", "/docs/"), "/docs/guide/install/");
+  assert.equal(pageUrl("/guide/install/", ""), "/guide/install/");
+  assert.equal(pageUrl("/guide/install/", "/"), "/guide/install/");
+});
+
+test("markdownTwin: base-aware twins for pretty, root, and .html URLs; nothing for file-like ones", () => {
+  assert.equal(markdownTwin("/guide/install/", "/docs"), "/docs/guide/install/index.md");
+  assert.equal(markdownTwin("/", "/docs"), "/docs/index.md");
+  assert.equal(markdownTwin("/docs/", "/docs"), "/docs/index.md");
+  assert.equal(markdownTwin("/404.html", "/docs"), "/docs/404.md");
+  assert.equal(markdownTwin("/404.html", ""), "/404.md");
+  assert.equal(markdownTwin("/guide/install.json", "/docs"), undefined);
+  assert.equal(markdownTwin("/docs/feed.xml", "/docs"), undefined);
+});
+
+test("a subpath site renders nothing for a non-doc page or a file-like URL, base or not", () => {
+  assert.equal(copyMarkdown(props(pageWith("/guide/dashboard/", "app", "en", "ltr"), "/docs")), null);
+  assert.equal(copyMarkdown(props(pageWith("/guide/install.json"), "/docs")), null);
 });
 
 test("twinUrl: pretty URLs get index.md, HTML files swap their extension, and other files have no twin", () => {
@@ -272,6 +321,22 @@ test("a click fetches the Markdown twin, writes it to the clipboard, and announc
 
   assert.deepEqual(world.fetched, ["/example/guide/install/index.md"]);
   assert.deepEqual(world.wrote, ["# Install\n"]);
+  assert.equal(world.status.textContent, "Copied");
+});
+
+test("the copy button fetches the same base-aware twin the plain link shows, byte for byte", async () => {
+  const out = html(copyMarkdown(props(pageWith("/guide/install/"), "/docs")));
+  const markdown = out.match(/data-markdown="([^"]+)"/)![1]!;
+  assert.equal(markdown, "/docs/guide/install/index.md");
+
+  const button = fakeButton({ markdown, copied: "Copied", copyFailed: "Press Ctrl+C" });
+  const world = env();
+  activate(button, world);
+  button.clicks[0]!();
+  await settle();
+
+  assert.deepEqual(world.fetched, [markdown], "the copy takes the published twin address");
+  assert.deepEqual(world.wrote, ["# Install\n"], "the exact fetched bytes reach the clipboard");
   assert.equal(world.status.textContent, "Copied");
 });
 
