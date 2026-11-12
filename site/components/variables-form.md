@@ -26,7 +26,7 @@ curl -H "Authorization: Bearer {{api_key}}" {{host}}/v1/status
 
 | Name | Type | Default | What it does |
 | --- | --- | --- | --- |
-| `id` | string | `variables-form` | Prefix for the form's element ids. Give each form on a page its own id. |
+| `id` | string | `variables-form` | Prefix for the form's element ids. The first form to claim a base keeps it; later forms on the same page get a `-2`, `-3`, … suffix automatically, so several forms never share ids. |
 | `variables` | JSON array | the page and site declarations | The whole list when present: `'[{"name":"api_key","default":"YOUR_KEY"}]'`. When it is absent or unreadable, the page's front matter and `site.data.variables` are used. |
 
 A declaration is `{name, default?, type?}`, the shape the engine's variables output documents. The page's declaration wins over the site's for the same name, and a page declaration without a default keeps the site's default. The form renders nothing when there is no variable.

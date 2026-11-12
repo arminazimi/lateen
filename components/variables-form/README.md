@@ -62,7 +62,10 @@ site data are used. An empty list renders nothing, as does a page with no declar
 ## Behaviour
 
 - One `<fieldset>` with a legend, a hint, and one label-and-input pair per variable. The input's `id`
-  pairs with its label's `for`, the hint is its `aria-describedby`, and focus is visible.
+  pairs with its label's `for`, the hint is its `aria-describedby`, and focus is visible. The first form
+  on a page keeps the ids it publishes; a second default form, or one whose `id` sanitizes to the same base
+  as an earlier form, gets a deterministic `-2`, `-3`, … suffix, so labels and descriptions on a page with
+  several forms always point into their own form. A form with no variable takes no instance id.
 - An input's `type` follows the declaration's `type` when that is an HTML input type (`url`, `email`,
   `number`, …), so the browser validates it and reports a bad value itself. Any other type, or none, is a
   text field, and a value the browser rejects never reaches an example.
