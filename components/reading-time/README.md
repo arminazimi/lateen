@@ -15,8 +15,10 @@ count. The doc layout places it automatically on every doc page that has an entr
   `formatCount` writes the visible numbers with `Intl.NumberFormat` in the page language's
   numbering system — Persian `arabext`, Arabic `arab`, English `latn`, the same styles
   `src/dates.ts` uses for dates — honoring a supported `-u-nu-` preference on the tag and falling
-  back softly on malformed tags and unsupported preferences. Plurals and the `data-minutes` and
-  `data-words` attributes keep the numeric value itself, so the machine-readable digits stay ASCII.
+  back softly on malformed tags and unsupported preferences. The page tag's own base locale supplies
+  grouping, so `en-IN` keeps `12,34,567` while only the default digits come from the language.
+  Plurals and the `data-minutes` and `data-words` attributes keep the numeric value itself, so the
+  machine-readable digits stay ASCII.
 - `style.css` draws the chip with tokens and logical properties.
 - `test/component-reading-time.test.ts` covers the fact lookup in every shape, the props override,
   singular and plural text in English, Persian, and Arabic, locale digits with regional tags,
