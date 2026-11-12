@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { renderToString } from "preact-render-to-string";
+import { bundledLanguages } from "shiki/langs";
 import type { ComponentProps } from "@velella/mizzen/contracts";
 import code, { blockId, DEFAULT_LANGUAGES, buildTheme, highlightFences, loadGrammars, loadedLanguages, sourceText } from "../components/code/index.ts";
 
@@ -39,6 +40,90 @@ test("loads the default grammars with the module, and others only when asked", a
   await loadGrammars(["python", "nope"]);
   assert.ok(loadedLanguages().includes("python"));
   assert.ok(!loadedLanguages().includes("rust"));
+});
+
+/** A promise a test settles by hand, to hold an import open while it checks what else has started. */
+function gate(): { promise: Promise<void>; open: () => void } {
+  let open!: () => void;
+  const promise = new Promise<void>((resolve) => (open = resolve));
+  return { promise, open };
+}
+
+test("overlapping callers import each grammar once, and distinct grammars import concurrently", async () => {
+  const rustGate = gate();
+  const goGate = gate();
+  const calls: string[] = [];
+  const loaders = {
+    rust: async () => {
+      calls.push("rust");
+      await rustGate.promise;
+      return bundledLanguages.rust();
+    },
+    go: async () => {
+      calls.push("go");
+      await goGate.promise;
+      return bundledLanguages.go();
+    },
+  };
+  const first = loadGrammars(["rust", "go"], loaders);
+  const second = loadGrammars(["go", "rust", "rust"], loaders);
+  // Both imports started before either was allowed to finish: no serial chain, no second import.
+  assert.deepEqual(calls, ["rust", "go"]);
+  goGate.open(); // Settles out of request order; registration still follows the request.
+  rustGate.open();
+  await Promise.all([first, second]);
+  assert.deepEqual(calls, ["rust", "go"]);
+  const loaded = loadedLanguages();
+  assert.ok(loaded.includes("rust"));
+  assert.ok(loaded.includes("go"));
+  assert.ok(loaded.indexOf("rust") < loaded.indexOf("go"));
+});
+
+test("a failed grammar rejects, leaves the others loaded, and is retried on the next call", async () => {
+  let rubyLoads = 0;
+  let luaLoads = 0;
+  let offline = true;
+  const loaders = {
+    ruby: async () => {
+      rubyLoads += 1;
+      if (offline) throw new Error("ruby grammar unavailable");
+      return bundledLanguages.ruby();
+    },
+    lua: async () => {
+      luaLoads += 1;
+      return bundledLanguages.lua();
+    },
+  };
+  await assert.rejects(loadGrammars(["ruby", "lua"], loaders), /ruby grammar unavailable/);
+  assert.equal(rubyLoads, 1);
+  assert.ok(!loadedLanguages().includes("ruby"));
+  assert.ok(loadedLanguages().includes("lua"));
+  offline = false;
+  await loadGrammars(["ruby", "lua"], loaders);
+  assert.equal(rubyLoads, 2);
+  assert.equal(luaLoads, 1);
+  assert.ok(loadedLanguages().includes("ruby"));
+});
+
+test("an alias and its canonical name share one import and highlight identically", async () => {
+  let loads = 0;
+  const loader = async () => {
+    loads += 1;
+    return bundledLanguages.kotlin();
+  };
+  // `kt` is a bundled alias of `kotlin`, so both names use the same loader.
+  await loadGrammars(["kt", "kotlin"], { kt: loader, kotlin: loader });
+  assert.equal(loads, 1);
+  assert.ok(loadedLanguages().includes("kt"));
+  assert.ok(loadedLanguages().includes("kotlin"));
+  const inner = (lang: string) => /<code[^>]*>([\s\S]*)<\/code>/.exec(render({ lang }, "val answer = 42"))?.[1];
+  assert.match(inner("kt") ?? "", /--shiki-light:#/);
+  assert.equal(inner("kt"), inner("kotlin"));
+});
+
+test("the browser island never imports the highlighter", () => {
+  const client = readFileSync(new URL("../components/code/client.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(client, /\bfrom\s+"shiki|import\(\s*"shiki/);
 });
 
 test("sourceText decodes numeric entities as well as named ones", () => {

@@ -5,7 +5,7 @@ import mermaid from "../mermaid/index.ts";
 import { createHighlighterCoreSync } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import { bundledLanguages } from "shiki/langs";
-import type { HighlighterCore, ThemeRegistration } from "shiki/core";
+import type { HighlighterCore, LanguageRegistration, ThemeRegistration } from "shiki/core";
 
 /** The Markdown directive this component handles: `:::code{lang="ts"}`. */
 export const directive = "code";
@@ -74,17 +74,63 @@ export function loadedLanguages(): string[] {
   return get().getLoadedLanguages();
 }
 
+/** One bundled grammar module and the loader that imports it. Aliases share the same loader. */
+type GrammarModule = { default: LanguageRegistration[] };
+type GrammarLoader = () => Promise<GrammarModule>;
+type GrammarLoaders = Record<string, GrammarLoader | undefined>;
+
+/** Imports in flight or done, keyed by loader: one grammar module is imported once for every caller. */
+const imports = new Map<GrammarLoader, Promise<GrammarModule>>();
+
+/** The module for a bundled loader, shared with every caller; a rejection is not cached, so a later call retries it. */
+function importGrammar(load: GrammarLoader): Promise<GrammarModule> {
+  let module = imports.get(load);
+  if (!module) {
+    module = load();
+    imports.set(load, module);
+    module.catch(() => {
+      if (imports.get(load) === module) imports.delete(load);
+    });
+  }
+  return module;
+}
+
 /**
  * Load the grammars a site uses, and only those. Call it once before rendering, with the languages found in the
  * site's code fences. Unknown names are ignored.
+ *
+ * Distinct grammars import concurrently, overlapping callers share one import, and registration happens in the
+ * requested order, so the loaded set and the highlighted output do not depend on which import settles first.
+ * A grammar that fails to import or register rejects this call and stays unloaded; the other grammars in the
+ * same call still load, and a later call retries the failed one.
  */
-export async function loadGrammars(langs: Iterable<string>): Promise<void> {
+export async function loadGrammars(langs: Iterable<string>, loaders: GrammarLoaders = bundledLanguages): Promise<void> {
   const hl = get();
-  for (const lang of new Set(langs)) {
-    const load = (bundledLanguages as Record<string, (() => Promise<{ default: never }>) | undefined>)[lang];
-    if (!load || hl.getLoadedLanguages().includes(lang)) continue;
-    hl.loadLanguageSync((await load()).default);
+  const loaded = new Set(hl.getLoadedLanguages());
+  const requested = new Map<string, GrammarLoader>();
+  for (const lang of langs) {
+    const load = loaders[lang];
+    if (load && !loaded.has(lang)) requested.set(lang, load);
   }
+  const names = [...requested.keys()];
+  const results = await Promise.allSettled(names.map((name) => importGrammar(requested.get(name)!)));
+  const failed: string[] = [];
+  const errors: unknown[] = [];
+  results.forEach((result, index) => {
+    if (result.status === "rejected") {
+      failed.push(names[index]!);
+      errors.push(result.reason);
+      return;
+    }
+    try {
+      hl.loadLanguageSync(result.value.default);
+    } catch (error) {
+      failed.push(names[index]!);
+      errors.push(error);
+    }
+  });
+  if (errors.length === 1) throw errors[0];
+  if (errors.length > 1) throw new AggregateError(errors, `Could not load grammars: ${failed.join(", ")}`);
 }
 
 /**

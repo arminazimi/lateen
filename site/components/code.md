@@ -54,3 +54,4 @@ export function render(component: Component): string {
 - A `diff` fence keeps its `+` and `−` lines. Use it to show a change to a file.
 - Fence meta such as `title="…"`, line marks, and `ins`/`del` is parsed by the engine, but the current component does not render it. Put a file name in the sentence above the block.
 - The block keeps its source span, so the page footer can edit the exact block with an agent.
+- A language outside the default set is imported when a fence asks for it. Each grammar is imported once per build and shared by overlapping callers; an import that fails is retried on the next call instead of being remembered as loaded.
