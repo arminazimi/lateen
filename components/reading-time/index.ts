@@ -76,13 +76,14 @@ interface CountStyle {
 const LATIN: CountStyle = { locale: "en-US", numberingSystem: "latn" };
 
 /**
- * The default number style per language, the same locales and numbering systems `src/dates.ts` uses
- * for calendar dates, so a page's dates and its counts never disagree on digit shapes.
+ * The default numbering system per language, matching `src/dates.ts`, so a page's dates and counts
+ * never disagree on digit shapes. The locale itself always comes from the page tag, so regional
+ * grouping (for example `en-IN`'s `12,34,567`) survives while the digits stay deterministic.
  */
-const COUNT_STYLES: Record<string, CountStyle> = {
-  ar: { locale: "ar-SA", numberingSystem: "arab" },
-  en: LATIN,
-  fa: { locale: "fa-IR", numberingSystem: "arabext" },
+const COUNT_STYLES: Record<string, string> = {
+  ar: "arab",
+  en: "latn",
+  fa: "arabext",
 };
 
 /** Numbering systems this runtime can format; anything else is an unsupported preference. */
@@ -90,9 +91,11 @@ const NUMBERING_SYSTEMS: ReadonlySet<string> = new Set(Intl.supportedValuesOf("n
 
 /**
  * The count style for `lang`, honoring a `-u-nu-` preference the runtime supports, the way
- * `src/dates.ts` honors calendar and numbering preferences for dates. Malformed tags use the Latin
- * style, an unsupported preference falls back to the language's safe default digits, and an
- * unknown-but-valid language keeps its own grouping on Latin digits, so a bad tag never throws.
+ * `src/dates.ts` honors calendar and numbering preferences for dates. The page's own base locale
+ * always supplies grouping; only the default numbering system comes from the language. Malformed
+ * tags use the Latin style, an unsupported preference falls back to the language's safe default
+ * digits, and an unknown-but-valid language keeps its own grouping on Latin digits, so a bad tag
+ * never throws.
  */
 function countStyle(lang: string): CountStyle {
   let locale: Intl.Locale;
@@ -101,12 +104,12 @@ function countStyle(lang: string): CountStyle {
   } catch {
     return LATIN;
   }
-  const base = COUNT_STYLES[locale.language] ?? { locale: locale.baseName, numberingSystem: "latn" };
+  const defaultNumbering = COUNT_STYLES[locale.language] ?? "latn";
   const numberingSystem = locale.numberingSystem;
   return {
-    locale: base.locale,
+    locale: locale.baseName,
     numberingSystem:
-      numberingSystem !== undefined && NUMBERING_SYSTEMS.has(numberingSystem) ? numberingSystem : base.numberingSystem,
+      numberingSystem !== undefined && NUMBERING_SYSTEMS.has(numberingSystem) ? numberingSystem : defaultNumbering,
   };
 }
 

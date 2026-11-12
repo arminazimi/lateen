@@ -190,6 +190,17 @@ test("regional tags and supported numbering-system extensions change digits, not
   assert.equal(pluralCategory("en-u-nu-arab", 3), "other");
 });
 
+test("regional bases keep their own grouping, with numbering from the language or an extension", () => {
+  assert.equal(formatCount("en-IN", 1234567), "12,34,567");
+  assert.equal(formatCount("en-IN", 123456), "1,23,456");
+  assert.equal(formatCount("fa-IR", 1234567), "\u06f1\u066c\u06f2\u06f3\u06f4\u066c\u06f5\u06f6\u06f7");
+  assert.equal(formatCount("en-IN-u-nu-arab", 1234567), "\u0661\u0662\u066c\u0663\u0664\u066c\u0665\u0666\u0667");
+  assert.equal(formatCount("fa-IR-u-nu-latn", 1234567), "1,234,567");
+
+  const out = render({ minutes: 5, words: 1234567, showWords: "" }, { lang: "en-IN" })!;
+  assert.ok(out.includes(">12,34,567 words<"), "the rendered word count uses Indian grouping");
+});
+
 test("malformed tags and unsupported numbering preferences fail soft", () => {
   for (const lang of ["", "not a tag", "en_US", "en-u-nu-", "de"]) {
     const out = render({ minutes: 3 }, { lang })!;
