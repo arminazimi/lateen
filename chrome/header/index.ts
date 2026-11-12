@@ -1,6 +1,7 @@
 import { Fragment, h } from "preact";
 import type { ComponentChildren } from "preact";
 import type { Chrome, SiteConfig } from "@velella/mizzen/contracts";
+import { t } from "../../i18n/index.ts";
 import languageSwitcher from "../language-switcher/index.ts";
 import search from "../search/index.ts";
 import sectionTabs from "../section-tabs/index.ts";
@@ -69,7 +70,7 @@ function repositoryLink(config: SiteConfig) {
 
 /** Header: logo and title, the section tabs, the version switcher, search and menu buttons (enhanced by JavaScript), and the repository link. */
 const header: Chrome = (props) => {
-  const { site } = props;
+  const { site, page } = props;
   const { config } = site;
   const bar = h(
     "header",
@@ -85,7 +86,7 @@ const header: Chrome = (props) => {
         versionSwitcher(props) as ComponentChildren,
         h(
           "button",
-          { type: "button", class: "header-search", "aria-label": "Search", hidden: true, "data-search-open": true },
+          { type: "button", class: "header-search", "aria-label": t(page.lang, "search"), hidden: true, "data-search-open": true },
           h(
             "svg",
             { viewBox: "0 0 24 24", "aria-hidden": "true", focusable: "false" },
@@ -98,7 +99,7 @@ const header: Chrome = (props) => {
         repositoryLink(config),
         h(
           "button",
-          { type: "button", class: "header-menu", "aria-label": "Menu", "aria-expanded": "false", hidden: true, "data-drawer-open": true },
+          { type: "button", class: "header-menu", "aria-label": t(page.lang, "main_nav"), "aria-expanded": "false", hidden: true, "data-drawer-open": true },
           h("span", { "aria-hidden": "true" }, "☰"),
         ),
       ),
