@@ -1,5 +1,6 @@
 import { h } from "preact";
 import type { Chrome, NavGroup, NavItem, NavLink } from "@velella/mizzen/contracts";
+import { t } from "../../i18n/index.ts";
 
 /** True when a navigation item carries the `tab: true` mark from the navigation data. */
 function isTab(item: NavItem): boolean {
@@ -41,9 +42,11 @@ function tabs(items: readonly NavItem[]): NavLink[] {
 /**
  * Tabs for the header's section-tabs slot: the top-level items of the `main` navigation list
  * marked `tab: true`. The breadcrumb trail starts at the active section of the navigation tree,
- * so a tab is current when the trail's root carries its title.
+ * so a tab is current when the trail's root carries its title. The landmark is named in the
+ * page's language, and each authored title is isolated in `<bdi>` so a title facing the other
+ * way cannot reorder it against its neighbours.
  */
-const sectionTabs: Chrome = ({ site, trail }) => {
+const sectionTabs: Chrome = ({ site, page, trail }) => {
   const items = site.nav.main;
   if (items === undefined) return null;
   const links = tabs(items);
@@ -51,7 +54,7 @@ const sectionTabs: Chrome = ({ site, trail }) => {
   const section = trail[0];
   return h(
     "nav",
-    { class: "section-tabs", "aria-label": "Sections" },
+    { class: "section-tabs", "aria-label": t(page.lang, "not_found_sections") },
     links.map((tab) =>
       h(
         "a",
@@ -60,7 +63,7 @@ const sectionTabs: Chrome = ({ site, trail }) => {
           href: tab.url,
           ...(section !== undefined && tab.title === section.title ? { "aria-current": "page" } : {}),
         },
-        tab.title,
+        h("bdi", {}, tab.title),
       ),
     ),
   );
