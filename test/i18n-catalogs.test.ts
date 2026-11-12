@@ -84,6 +84,26 @@ test("no language file repeats a key", () => {
   }
 });
 
+test("the 404 recovery group is complete in every language", () => {
+  const recoveryKeys = [
+    "not_found_title",
+    "not_found_text",
+    "not_found_sections",
+    "search_placeholder",
+    "search",
+    "home",
+    "go_home",
+  ] as const;
+  for (const lang of languages) {
+    const table = stringsOf(lang);
+    for (const key of recoveryKeys) {
+      const text = table[key];
+      assert.ok(typeof text === "string" && text.trim() !== "", `${lang}.${key} must carry the 404 recovery message`);
+      assert.equal(text.replace(/\{\w+\}/g, "").match(/[<>]/), null, `${lang}.${key} must stay plain text`);
+    }
+  }
+});
+
 test("the single-key shortcut preference names the same keys in every language", () => {
   for (const lang of languages) {
     const table = stringsOf(lang);
