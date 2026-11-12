@@ -130,6 +130,19 @@
   list-style: none;
 }
 
+/*
+ * The active option: the row's own link or button, which is the element the combobox names in
+ * `aria-activedescendant`. Keyboard focus stays in the field, so the list carries the visible answer
+ * itself — the same element assistive tech has just announced, and the same one a pointer is on.
+ */
+.search-result-link[aria-selected="true"],
+.search-action-button[aria-selected="true"] {
+  outline: 2px solid var(--state-focus-ring);
+  outline-offset: -2px;
+  border-inline-start-color: var(--color-accent);
+  background: var(--state-hover-bg);
+}
+
 .search-result-link {
   display: flex;
   flex-direction: column;
@@ -208,4 +221,19 @@
   margin-inline-start: auto;
   color: var(--color-muted);
   font-size: var(--type-size-sm);
+}
+
+/*
+ * The dialog sits on `--color-surface-raised`, which in the dark theme is light enough that
+ * `--color-muted` falls below the 4.5:1 a small run of secondary text needs. The raised surface is the
+ * one place in the theme where muted is asked to carry body-sized text, so it is where muted gives way
+ * to `--color-text`; the light theme's muted already clears the threshold and keeps its hierarchy.
+ * Every rule the palette draws small muted text on that surface is listed, including the status line
+ * and the excerpt, which only appear once a query has run.
+ */
+:root[data-theme="dark"] .search-status,
+:root[data-theme="dark"] .search-group-title,
+:root[data-theme="dark"] .search-result-excerpt,
+:root[data-theme="dark"] .search-action-hint {
+  color: var(--color-text);
 }

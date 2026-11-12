@@ -4,21 +4,27 @@ import { test } from "node:test";
 import { Fragment, h } from "preact";
 import type { ChromeProps, Page, Site, SiteConfig, SourcePos } from "@velella/mizzen/contracts";
 import { stringsOf } from "../i18n/index.ts";
-import search from "../chrome/search/index.ts";
+import search, { SEARCH_INPUT_ID, SEARCH_RESULTS_ID } from "../chrome/search/index.ts";
+import {
+  groupBySection,
+  optionList,
+  OTHER_SECTION,
+  safeHref,
+  sectionOf,
+  type OptionList,
+  type SearchRecord,
+} from "../chrome/search/options.ts";
 import {
   activate,
   countMessage,
   emptyMessage,
-  groupBySection,
   indexUrl,
   langFrom,
   MESSAGES,
   messagesFrom,
-  OTHER_SECTION,
   PLURAL_CATEGORIES,
   pluralCategory,
-  resultNodes,
-  sectionOf,
+  renderOptions,
   trap,
   type MessageSource,
   type PagefindApi,
@@ -27,14 +33,13 @@ import {
   type SearchDialog,
   type SearchDocument,
   type SearchElement,
+  type SearchEnv,
   type SearchEvent,
   type SearchFocusable,
   type SearchInput,
-  type SearchLink,
   type SearchMessages,
   type SearchNode,
   type SearchParts,
-  type SearchRecord,
   type SearchResults,
   type SearchStatus,
 } from "../chrome/search/client.ts";
@@ -74,8 +79,7 @@ function pageWith(overrides: Partial<Page> = {}): Page {
   };
 }
 
-function props(overrides: Partial<SiteConfig> = {}): ChromeProps {
-  const page = pageWith();
+function props(overrides: Partial<SiteConfig> = {}, page: Page = pageWith()): ChromeProps {
   const site: Site = { config: { ...config, ...overrides }, pages: [page], nav: { main: [] }, data: {} };
   return { site, page, trail: [], pager: {} };
 }
@@ -105,6 +109,11 @@ function html(node: unknown): string {
   return `<${tag}${attrs}>${html(children)}</${tag}>`;
 }
 
+/** One attribute of the rendered markup, from its first match. */
+function attribute(out: string, name: string): string | undefined {
+  return new RegExp(`${name}="([^"]*)"`).exec(out)?.[1];
+}
+
 test("renders a closed, hidden dialog that carries the site base", () => {
   const out = html(search(props({ base: "/example" })));
 
@@ -119,32 +128,61 @@ test("holds the query field, a close button, the status region, and the result c
   const out = html(search(props()));
 
   assert.match(out, /<label class="search-label" for="search-input">Search<\/label>/);
+  assert.match(out, /class="search-input" id="search-input"/);
   assert.match(
     out,
-    /<input class="search-input" id="search-input" type="search" name="q" placeholder="Search the docs" autocomplete="off" data-search-input="">/,
+    /<button type="button" class="search-close" aria-label="Close search" data-search-close=""><span aria-hidden="true">×<\/span><\/button>/,
   );
-  assert.match(out, /<button type="button" class="search-close" aria-label="Close search" data-search-close=""><span aria-hidden="true">×<\/span><\/button>/);
   assert.match(out, /<p class="search-status" role="status" data-search-status=""><\/p>/);
-  assert.match(out, /<div class="search-results" role="listbox" aria-label="Search" data-search-results=""><\/div>/);
+});
+
+test("the field is a combobox that names and controls the result list", () => {
+  const out = html(search(props()));
+
+  assert.match(
+    out,
+    /<input class="search-input" id="search-input" type="search" name="q" placeholder="Search the docs" autocomplete="off" role="combobox" aria-haspopup="listbox" aria-expanded="false" aria-controls="search-results-list" aria-autocomplete="list" data-search-input="">/,
+  );
+  assert.match(
+    out,
+    /<div class="search-results" id="search-results-list" role="listbox" aria-label="Search" data-search-results=""><\/div>/,
+  );
+  assert.equal(attribute(out, "aria-controls"), SEARCH_RESULTS_ID);
+  assert.equal(out.match(new RegExp(`id="${SEARCH_RESULTS_ID}"`, "g"))?.length, 1, "one list for the field to control");
+});
+
+test("the static markup promises no active option, because no row has been drawn yet", () => {
+  const out = html(search(props()));
+
+  assert.equal(attribute(out, "aria-activedescendant"), undefined, "a reference to a row that is not there dangles");
+  assert.doesNotMatch(out, /role="option"/);
+  assert.doesNotMatch(out, /aria-selected/);
+});
+
+test("every id the dialog carries statically is unique and every reference resolves", () => {
+  const out = html(search(props()));
+  const ids = [...out.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]!);
+
+  assert.deepEqual(ids, [...new Set(ids)], "one page, one dialog, one set of ids");
+  assert.ok(ids.includes(SEARCH_INPUT_ID) && ids.includes(SEARCH_RESULTS_ID));
+  assert.equal(/<label class="search-label" for="([^"]+)"/.exec(out)?.[1], SEARCH_INPUT_ID, "the label names the field");
 });
 
 test("the dialog carries every message the island shows, in the page language", () => {
   const out = html(search(props()));
-  const attribute = (name: string): string | undefined =>
-    new RegExp(`${name}="([^"]*)"`).exec(out)?.[1];
 
-  assert.equal(attribute("data-search-lang"), "en");
-  assert.equal(attribute("data-search-loading"), "Loading search…");
-  assert.equal(attribute("data-search-searching"), "Searching…");
-  assert.equal(attribute("data-search-failed"), "Search is unavailable right now.");
-  assert.equal(attribute("data-search-empty"), "No results for “{query}”.");
-  assert.equal(attribute("data-search-count-zero"), "{n} results.");
-  assert.equal(attribute("data-search-count-one"), "{n} result.");
-  assert.equal(attribute("data-search-count-other"), "{n} results.");
-  assert.equal(attribute("data-search-other-section"), "Other");
-  assert.equal(attribute("data-search-copied"), "Copied");
-  assert.equal(attribute("data-search-copy-failed"), "Copy failed.");
-  assert.equal(attribute("data-search-actions"), "Actions");
+  assert.equal(attribute(out, "data-search-lang"), "en");
+  assert.equal(attribute(out, "data-search-loading"), "Loading search…");
+  assert.equal(attribute(out, "data-search-searching"), "Searching…");
+  assert.equal(attribute(out, "data-search-failed"), "Search is unavailable right now.");
+  assert.equal(attribute(out, "data-search-empty"), "No results for “{query}”.");
+  assert.equal(attribute(out, "data-search-count-zero"), "{n} results.");
+  assert.equal(attribute(out, "data-search-count-one"), "{n} result.");
+  assert.equal(attribute(out, "data-search-count-other"), "{n} results.");
+  assert.equal(attribute(out, "data-search-other-section"), "Other");
+  assert.equal(attribute(out, "data-search-copied"), "Copied");
+  assert.equal(attribute(out, "data-search-copy-failed"), "Copy failed.");
+  assert.equal(attribute(out, "data-search-actions"), "Actions");
 });
 
 test("the dialog reads right to left and speaks Persian without JavaScript", () => {
@@ -164,6 +202,9 @@ test("the dialog reads right to left and speaks Persian without JavaScript", () 
   assert.match(out, /data-search-empty="نتیجه‌ای برای «\{query\}» پیدا نشد\."/);
   assert.match(out, /data-search-count-one="\{n\} نتیجه\."/);
   assert.match(out, /\bhidden>/);
+  // A right-to-left list keeps the same relationships: the field still controls the same one list.
+  assert.match(out, /aria-controls="search-results-list"/);
+  assert.match(out, /id="search-results-list" role="listbox"/);
 });
 
 test("a visitor without JavaScript sees no dialog and no search control", () => {
@@ -189,6 +230,11 @@ const records: readonly SearchRecord[] = [
   },
 ];
 
+/** The action rows the model tests need. */
+function actionsOf(...ids: string[]): { readonly id: string; readonly label: string }[] {
+  return ids.map((id) => ({ id, label: id }));
+}
+
 test("results are grouped by section in rank order", () => {
   const groups = groupBySection(records);
 
@@ -205,56 +251,200 @@ test("a result without a section filter, or with a blank one, lands in Other", (
   assert.equal(sectionOf({ url: "/", excerpt: "" }), OTHER_SECTION);
 });
 
-test("result nodes are grouped by section and keep Pagefind's mark emphasis", () => {
-  const nodes = resultNodes(records, fakeDocument());
+test("only links the browser can follow become an href", () => {
+  assert.equal(safeHref("/rules/cache/"), "/rules/cache/");
+  assert.equal(safeHref("./cache/"), "./cache/");
+  assert.equal(safeHref("../cache/"), "../cache/");
+  assert.equal(safeHref("HTTPS://example.com/a"), "HTTPS://example.com/a");
+  assert.equal(safeHref("javascript:alert(1)"), undefined);
+  assert.equal(safeHref("data:text/html,<script>alert(1)<\/script>"), undefined);
+});
+
+test("the option model gives every row an id, a key, and a group", () => {
+  const list = optionList(records, actionsOf("theme-dark"), { actionsLabel: "Actions" });
+
+  assert.deepEqual(
+    list.rows.map((row) => row.id),
+    ["search-option-1", "search-option-2", "search-option-3"],
+  );
+  assert.deepEqual(
+    list.rows.map((row) => row.key),
+    ["result:/rules/cache/#0", "result:/guide/install/#0", "action:theme-dark#0"],
+  );
+  assert.deepEqual(
+    list.groups.map((group) => [group.heading, group.rows.length]),
+    [
+      ["rules", 1],
+      ["guide", 1],
+      ["Actions", 1],
+    ],
+  );
+  assert.deepEqual(list.groups.map((group) => group.kind), ["result", "result", "action"]);
+  assert.deepEqual(
+    list.groups.map((group) => group.id),
+    ["search-group-1", "search-group-2", "search-group-3"],
+  );
+  assert.deepEqual(list.rows, list.groups.flatMap((group) => group.rows));
+});
+
+test("a duplicate label or URL is still a distinct option", () => {
+  const twice: readonly SearchRecord[] = [
+    { url: "/same/", excerpt: "one", meta: { title: "Same" } },
+    { url: "/same/", excerpt: "two", meta: { title: "Same" } },
+  ];
+  const list = optionList(twice, actionsOf("copy-markdown", "copy-markdown"));
+
+  assert.deepEqual(
+    list.rows.map((row) => row.id),
+    ["search-option-1", "search-option-2", "search-option-3", "search-option-4"],
+  );
+  assert.equal(new Set(list.rows.map((row) => row.id)).size, 4, "no two rows ever share an id");
+  assert.deepEqual(
+    list.rows.map((row) => row.key),
+    ["result:/same/#0", "result:/same/#1", "action:copy-markdown#0", "action:copy-markdown#1"],
+  );
+  assert.equal(new Set(list.rows.map((row) => row.key)).size, 4, "and never a key");
+});
+
+test("the model keeps each section's own heading and names Other in the page language", () => {
+  const list = optionList(
+    [{ url: "/a/", excerpt: "" }, { url: "/b/", excerpt: "", filters: { section: ["guide"] } }],
+    [],
+    { otherSection: "دیگر" },
+  );
+
+  assert.deepEqual(
+    list.groups.map((group) => group.heading),
+    ["دیگر", "guide"],
+  );
+  assert.deepEqual(
+    list.rows.map((row) => row.href),
+    ["/a/", "/b/"],
+  );
+});
+
+test("an unsafe result keeps its row but loses its link, and nothing at all draws nothing", () => {
+  assert.equal(optionList([{ url: "javascript:alert(1)", excerpt: "" }], []).rows[0]?.href, undefined);
+  const empty = optionList([], []);
+  assert.deepEqual(empty.groups, []);
+  assert.deepEqual(empty.rows, []);
+});
+
+test("result text is built from text nodes: a page title cannot inject an element", () => {
+  const nodes = drawnNodes(
+    optionList(
+      [
+        {
+          url: "/rules/cache/",
+          excerpt: '<img src=x onerror="alert(1)">Clear the <mark onmouseover="alert(1)">cache</mark>.',
+          meta: { title: "<script>alert(1)</script>" },
+          filters: { section: ["rules"] },
+        },
+      ],
+      [],
+    ),
+  );
+
+  assert.equal(textOf(findClass(nodes, "search-result-title")!), "<script>alert(1)</script>");
+  assert.equal(textOf(findClass(nodes, "search-result-excerpt")!), '<img src=x onerror="alert(1)">Clear the cache.');
+  assert.ok(nodes.every((node) => node.tag !== "script" && node.tag !== "img"));
+});
+
+test("Pagefind entities are decoded for display and mark elements carry no attributes", () => {
+  const nodes = drawnNodes(
+    optionList(
+      [{ url: "/guide/", excerpt: 'Tom & Jerry &lt;script&gt; <mark class="hit">cache</mark>', meta: { title: "A & B" } }],
+      [],
+    ),
+  );
+
+  assert.equal(textOf(findClass(nodes, "search-result-title")!), "A & B");
+  assert.equal(textOf(findClass(nodes, "search-result-excerpt")!), "Tom & Jerry <script> cache");
+  assert.deepEqual(nodes.find((node) => node.tag === "mark")?.attrs, {});
+});
+
+test("result nodes keep Pagefind's mark emphasis and the group order", () => {
+  const nodes = drawnNodes(optionList(records, []));
 
   assert.deepEqual(sectionTitles(nodes), ["rules", "guide"]);
   assert.deepEqual(marks(nodes).map((mark) => textOf(mark)), ["cache", "cache"]);
 });
 
-test("the Other section heading follows the page language", () => {
-  const nodes = resultNodes([{ url: "/a/", excerpt: "" }], fakeDocument(), "دیگر");
-  assert.deepEqual(sectionTitles(nodes), ["دیگر"]);
+test("a result whose URL is not a safe link is an option with nothing to follow", () => {
+  const nodes = drawnNodes(optionList([{ url: "javascript:alert(1)", excerpt: "No link", meta: { title: "Bad" } }], []));
+  const option = optionsOf(nodes)[0]!;
+
+  assert.equal(option.tag, "span");
+  assert.equal(option.attrs.href, undefined);
+  assert.equal(option.attrs.role, "option", "it is still one choice of the list, and one a reader hears");
+  assert.equal(option.attrs.tabindex, "-1", "and never a stop for Tab");
 });
 
-test("result text is built from text nodes: a page title cannot inject an element", () => {
-  const nodes = resultNodes(
-    [
-      {
-        url: "/rules/cache/",
-        excerpt: '<img src=x onerror="alert(1)">Clear the <mark onmouseover="alert(1)">cache</mark>.',
-        meta: { title: "<script>alert(1)</script>" },
-        filters: { section: ["rules"] },
-      },
-    ],
-    fakeDocument(),
+test("the list holds one option per row, in a group named by its heading", () => {
+  const list = optionList(records, actionsOf("theme-dark", "copy-markdown"));
+  const nodes = drawnNodes(list);
+  const options = optionsOf(nodes);
+
+  assert.deepEqual(
+    options.map((option) => option.attrs.id),
+    list.rows.map((row) => row.id),
   );
-  const all = walkAll(nodes);
-
-  assert.equal(textOf(findClass(all, "search-result-title")!), "<script>alert(1)</script>");
-  assert.equal(textOf(findClass(all, "search-result-excerpt")!), '<img src=x onerror="alert(1)">Clear the cache.');
-  assert.ok(all.every((node) => node.tag !== "script" && node.tag !== "img"));
-});
-
-test("Pagefind entities are decoded for display and mark elements carry no attributes", () => {
-  const nodes = resultNodes(
-    [{ url: "/guide/", excerpt: 'Tom & Jerry &lt;script&gt; <mark class="hit">cache</mark>', meta: { title: "A & B" } }],
-    fakeDocument(),
+  assert.deepEqual(
+    options.map((option) => option.attrs["data-search-option"]),
+    list.rows.map((row) => row.key),
   );
-  const all = walkAll(nodes);
-  const mark = all.find((node) => node.tag === "mark");
+  assert.equal(options.length, list.rows.length, "one option per row, and no more");
 
-  assert.equal(textOf(findClass(all, "search-result-title")!), "A & B");
-  assert.equal(textOf(findClass(all, "search-result-excerpt")!), "Tom & Jerry <script> cache");
-  assert.deepEqual(mark?.attrs, {});
+  // The row is the list's shape rather than a choice of its own, so nothing is counted twice.
+  const rows = nodes.filter((node) => node.tag === "li");
+  assert.equal(rows.length, options.length);
+  assert.equal(rows.every((row) => row.attrs.role === "presentation"), true, "a row carries no role");
+  assert.equal(rows.every((row, index) => row.children[0] === options[index]), true, "and holds exactly its own option");
+
+  // The option is what a pointer uses as well: a real link for a result, a real button for an action.
+  assert.deepEqual(
+    options.filter((option) => option.tag === "a").map((link) => link.attrs.href),
+    records.map((record) => record.url),
+  );
+  assert.deepEqual(
+    options.filter((option) => option.tag === "button").map((button) => button.attrs["data-palette-action"]),
+    ["theme-dark", "copy-markdown"],
+  );
 });
 
-test("a result whose URL is not a safe link is shown without an href", () => {
-  const all = walkAll(resultNodes([{ url: "javascript:alert(1)", excerpt: "No link", meta: { title: "Bad" } }], fakeDocument()));
-  const link = findClass(all, "search-result-link")!;
+test("a heading is a heading: never an option, and the group is named by it", () => {
+  const nodes = drawnNodes(optionList(records, actionsOf("theme-dark")));
+  const titles = nodes.filter((node) => node.attrs.class === "search-group-title");
+  assert.equal(titles.length, 3, "two sections and the actions");
+  assert.equal(titles.every((title) => title.attrs.role === "presentation"), true);
+  assert.deepEqual(optionsOf(titles), [], "no heading is ever one of the list's choices");
 
-  assert.equal(link.tag, "span");
-  assert.equal(link.attrs.href, undefined);
+  for (const group of nodes.filter((node) => node.attrs.role === "group")) {
+    const heading = nodes.find((node) => node.attrs.id === group.attrs["aria-labelledby"]);
+    assert.equal(heading?.tag, "h2", "a group names itself by its heading");
+    assert.ok(optionsOf(walkAll(group.children)).length > 0, "and owns at least one option");
+  }
+});
+
+test("every option starts unselected and carries the key the dialog tracks it by", () => {
+  const nodes = drawnNodes(optionList(records, actionsOf("theme-dark")));
+  const options = optionsOf(nodes);
+
+  for (const option of options) {
+    assert.equal(option.attrs["aria-selected"], "false");
+    assert.match(option.attrs["data-search-option"]!, /^(result|action):/);
+  }
+  assert.equal(options[2]?.attrs.class, "search-action-button");
+  assert.equal(textOf(options[2]!), "theme-dark");
+});
+
+test("an action with no run descriptor is still an option a reader can reach", () => {
+  const nodes = drawnNodes(optionList([], [{ id: "noop", label: "Nothing to run", hint: "Try later" }]));
+  const option = optionsOf(nodes)[0]!;
+
+  assert.equal(option.attrs.role, "option");
+  assert.equal(textOf(option), "Nothing to runTry later");
+  assert.equal(findClass(nodes, "search-action-button")?.attrs["data-palette-action"], "noop");
 });
 
 test("the index URL follows the site base, with no double slash at the root", () => {
@@ -332,8 +522,143 @@ test("messagesFrom reads the dialog's attributes and keeps the English fallback 
   assert.deepEqual(messagesFrom({ getAttribute: () => null }), MESSAGES);
 });
 
+// ---------------------------------------------------------------------------
+// Fakes: a small DOM, and a dialog made of it.
+
 /** Lets every pending promise in `activate` settle before the test asserts. */
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
+/** A node built by `fakeDocument`: an element has a tag and attributes, a text node has `#text` and `text`. */
+interface FakeNode {
+  tag: string;
+  text?: string;
+  attrs: Record<string, string>;
+  children: FakeNode[];
+  listeners: Record<string, Array<() => void>>;
+  focused: number;
+  clicks: number;
+  scrolls: number;
+  setAttribute(name: string, value: string): void;
+  getAttribute(name: string): string | null;
+  append(...nodes: SearchNode[]): void;
+  addEventListener(type: string, listener: () => void): void;
+  click(): void;
+  focus(): void;
+  scrollIntoView(options: { readonly block: "nearest" }): void;
+  /** Runs every listener of `type`, as a browser dispatching that event would. */
+  fire(type: string): void;
+}
+
+/** A tiny document for the option renderer, so tests can inspect the tree without a browser. */
+function fakeDocument(): SearchDocument {
+  const make = (tag: string, text?: string): FakeNode => {
+    const node: FakeNode = {
+      tag,
+      ...(text === undefined ? {} : { text }),
+      attrs: {},
+      children: [],
+      listeners: {},
+      focused: 0,
+      clicks: 0,
+      scrolls: 0,
+      setAttribute(name: string, value: string) {
+        node.attrs[name] = value;
+      },
+      getAttribute(name: string) {
+        return node.attrs[name] ?? null;
+      },
+      append(...nodes: SearchNode[]) {
+        for (const child of nodes) node.children.push(child as unknown as FakeNode);
+      },
+      addEventListener(type: string, listener: () => void) {
+        (node.listeners[type] ??= []).push(listener);
+      },
+      click() {
+        node.clicks += 1;
+        for (const listener of node.listeners["click"] ?? []) listener();
+      },
+      focus() {
+        node.focused += 1;
+      },
+      scrollIntoView() {
+        node.scrolls += 1;
+      },
+      fire(type: string) {
+        for (const listener of node.listeners[type] ?? []) listener();
+      },
+    };
+    return node;
+  };
+  return {
+    createElement: (tag: string) => make(tag) as unknown as SearchElement,
+    createTextNode: (text: string) => make("#text", text) as unknown as SearchNode,
+  };
+}
+
+/** Every node under `nodes`, itself included, in document order. */
+function walkAll(nodes: readonly SearchNode[]): FakeNode[] {
+  return nodes.flatMap((node) => {
+    const fake = node as unknown as FakeNode;
+    return [fake, ...walkAll(fake.children)];
+  });
+}
+
+/** The first node whose class attribute is `name`. */
+function findClass(nodes: readonly FakeNode[], name: string): FakeNode | undefined {
+  return nodes.find((node) => node.attrs.class === name);
+}
+
+/** The text content of a node tree. */
+function textOf(node: FakeNode): string {
+  return node.tag === "#text" ? node.text ?? "" : node.children.map(textOf).join("");
+}
+
+/** The options of a drawn list, in the order the arrow keys walk them. */
+function optionsOf(nodes: readonly FakeNode[]): FakeNode[] {
+  return nodes.filter((node) => node.attrs.role === "option");
+}
+
+/** The rows a drawn list holds: the presentational shape around each option. */
+function wrappersOf(results: { nodes: readonly SearchNode[] }): FakeNode[] {
+  return walkAll(results.nodes).filter((node) => node.tag === "li");
+}
+
+/** The group headings, in order, of a node tree already walked. */
+function sectionTitles(nodes: readonly FakeNode[]): string[] {
+  return nodes.filter((node) => node.attrs.class === "search-group-title").map(textOf);
+}
+
+/** Every `<mark>` element of a node tree already walked. */
+function marks(nodes: readonly FakeNode[]): FakeNode[] {
+  return nodes.filter((node) => node.tag === "mark");
+}
+
+function fakeResults() {
+  const fake = {
+    nodes: [] as SearchNode[],
+    replaceChildren(...nodes: SearchNode[]) {
+      fake.nodes = nodes;
+    },
+  };
+  return fake;
+}
+
+/** The whole DOM a list draws, so the model and the elements can be compared. */
+function drawnNodes(list: OptionList): FakeNode[] {
+  const results = fakeResults();
+  renderOptions(results as unknown as SearchResults, list, { doc: fakeDocument(), run: () => {} });
+  return walkAll(results.nodes);
+}
+
+/** The options of a dialog that has drawn a query, in the model's order. */
+function rowsOf(results: { nodes: readonly SearchNode[] }): FakeNode[] {
+  return optionsOf(drawn(results));
+}
+
+/** Everything a drawn list holds, in document order. */
+function drawn(results: { nodes: readonly SearchNode[] }): FakeNode[] {
+  return walkAll(results.nodes);
+}
 
 function fakeButton(name = "button") {
   const fake = {
@@ -364,8 +689,15 @@ function fakeInput(initial = "") {
   const fake = {
     value: initial,
     focused: 0,
+    attrs: {} as Record<string, string>,
     focus() {
       fake.focused += 1;
+    },
+    setAttribute(key: string, value: string) {
+      fake.attrs[key] = value;
+    },
+    removeAttribute(key: string) {
+      delete fake.attrs[key];
     },
     addEventListener(type: string, listener: () => void) {
       assert.equal(type, "input");
@@ -375,95 +707,9 @@ function fakeInput(initial = "") {
       fake.value = value;
       for (const listener of listeners) listener();
     },
-  };
-  return fake;
-}
-
-function fakeLink(name: string) {
-  const fake = {
-    name,
-    focused: 0,
-    clicks: 0,
-    focus() {
-      fake.focused += 1;
-    },
-    click() {
-      fake.clicks += 1;
-    },
-  };
-  return fake;
-}
-
-/** A node built by `fakeDocument`: an element has a tag and attributes, a text node has `#text` and `text`. */
-interface FakeNode {
-  tag: string;
-  text?: string;
-  attrs: Record<string, string>;
-  children: FakeNode[];
-  setAttribute(name: string, value: string): void;
-  append(...nodes: SearchNode[]): void;
-}
-
-/** A tiny document for the result renderer, so tests can inspect the tree without a browser. */
-function fakeDocument(): SearchDocument {
-  const make = (tag: string, text?: string): FakeNode => ({
-    tag,
-    ...(text === undefined ? {} : { text }),
-    attrs: {},
-    children: [],
-    setAttribute(name: string, value: string) {
-      this.attrs[name] = value;
-    },
-    append(...nodes: SearchNode[]) {
-      for (const node of nodes) this.children.push(node as unknown as FakeNode);
-    },
-  });
-  return {
-    createElement: (tag: string) => make(tag) as unknown as SearchElement,
-    createTextNode: (text: string) => make("#text", text) as unknown as SearchNode,
-  };
-}
-
-/** Every node under `nodes`, itself included, in document order. */
-function walkAll(nodes: readonly SearchNode[]): FakeNode[] {
-  return nodes.flatMap((node) => {
-    const fake = node as unknown as FakeNode;
-    return [fake, ...walkAll(fake.children)];
-  });
-}
-
-/** The first node whose class attribute is `name`. */
-function findClass(nodes: readonly FakeNode[], name: string): FakeNode | undefined {
-  return nodes.find((node) => node.attrs.class === name);
-}
-
-/** The text content of a node tree. */
-function textOf(node: FakeNode): string {
-  return node.tag === "#text" ? node.text ?? "" : node.children.map(textOf).join("");
-}
-
-/** The group headings, in order. */
-function sectionTitles(nodes: readonly SearchNode[]): string[] {
-  return walkAll(nodes)
-    .filter((node) => node.attrs.class === "search-group-title")
-    .map(textOf);
-}
-
-/** Every `<mark>` element in the tree. */
-function marks(nodes: readonly SearchNode[]): FakeNode[] {
-  return walkAll(nodes).filter((node) => node.tag === "mark");
-}
-
-function fakeResults(links: SearchLink[] = []) {
-  const fake = {
-    links,
-    nodes: [] as SearchNode[],
-    replaceChildren(...nodes: SearchNode[]) {
-      fake.nodes = nodes;
-    },
-    querySelectorAll(selector: string): Iterable<SearchLink> {
-      assert.match(selector, /a\[href\]/);
-      return fake.links;
+    /** The option the field names, or undefined when it names nothing. */
+    get active(): string | undefined {
+      return fake.attrs["aria-activedescendant"];
     },
   };
   return fake;
@@ -528,12 +774,15 @@ function key(name: string, target: unknown, shiftKey = false): SearchEvent & { p
   return event;
 }
 
-function partsOf(options: { base?: string; links?: SearchLink[]; focusables?: SearchFocusable[] } = {}) {
-  const dialog = fakeDialog({ ...(options.base === undefined ? {} : { base: options.base }), ...(options.focusables === undefined ? {} : { focusables: options.focusables }) });
+function partsOf(options: { base?: string; focusables?: SearchFocusable[] } = {}) {
+  const dialog = fakeDialog({
+    ...(options.base === undefined ? {} : { base: options.base }),
+    ...(options.focusables === undefined ? {} : { focusables: options.focusables }),
+  });
   const button = fakeButton("search");
   const close = fakeButton("close");
   const input = fakeInput();
-  const results = fakeResults(options.links ?? []);
+  const results = fakeResults();
   const status = fakeStatus();
   const parts: SearchParts = {
     dialog: dialog as unknown as SearchDialog,
@@ -558,7 +807,7 @@ function apiOf(data: readonly SearchRecord[], terms: string[] = []): PagefindApi
 function envWith(
   api: PagefindApi,
   options: { lang?: string; messages?: SearchMessages } = {},
-) {
+): SearchEnv & { readonly calls: string[] } {
   const env = {
     calls: [] as string[],
     document: fakeDocument(),
@@ -569,7 +818,7 @@ function envWith(
       return Promise.resolve(api);
     },
   };
-  return env;
+  return env as unknown as SearchEnv & { readonly calls: string[] };
 }
 
 /** The dialog's messages for a shipped language, built from the real catalogs. */
@@ -605,6 +854,8 @@ test("activate reveals the search button and the dialog but loads no index until
   assert.equal(dialog.hidden, false);
   assert.equal(dialog.open, false);
   assert.equal(button.attrs["aria-expanded"], "false");
+  assert.equal(input.attrs["aria-expanded"], "false", "the combobox says its list is closed");
+  assert.equal(input.active, undefined);
   assert.equal(env.calls.length, 0, "opening the page must not fetch the index");
   assert.equal(input.focused, 0);
 });
@@ -620,6 +871,7 @@ test("the first open loads the index, shows the dialog, and focuses the field; l
   assert.equal(dialog.shows, 1);
   assert.equal(input.focused, 1);
   assert.equal(button.attrs["aria-expanded"], "true");
+  assert.equal(input.attrs["aria-expanded"], "true");
   assert.deepEqual(env.calls, ["/pagefind/pagefind.js"]);
 
   button.click();
@@ -673,9 +925,30 @@ test("typing searches the loaded index and renders grouped, highlighted results"
   await tick();
 
   assert.deepEqual(terms, ["cache"]);
-  assert.deepEqual(sectionTitles(results.nodes), ["rules", "guide"]);
-  assert.deepEqual(marks(results.nodes).map((mark) => textOf(mark)), ["cache", "cache"]);
+  assert.deepEqual(sectionTitles(drawn(results)), ["rules", "guide"]);
+  assert.deepEqual(marks(drawn(results)).map((mark) => textOf(mark)), ["cache", "cache"]);
   assert.equal(status.textContent, "2 results.");
+  assert.deepEqual(
+    rowsOf(results).map((row) => row.attrs.id),
+    ["search-option-1", "search-option-2"],
+  );
+});
+
+test("every draw renumbers the options, so no two rows ever share an id", async () => {
+  const { button, input, results, parts } = partsOf();
+  activate(parts, envWith(apiOf(records)));
+  button.click();
+  await tick();
+
+  input.type("cache");
+  await tick();
+  input.type("cache again");
+  await tick();
+
+  assert.deepEqual(
+    rowsOf(results).map((row) => row.attrs.id),
+    ["search-option-1", "search-option-2"],
+  );
 });
 
 test("activate announces results and groups in the page language", async () => {
@@ -683,8 +956,8 @@ test("activate announces results and groups in the page language", async () => {
   const messages = messagesFor("ar");
   const api: PagefindApi = {
     search(term: string) {
-      const results = term === "nothing" ? [] : [{ url: "/a/", excerpt: "", filters: { section: ["  "] } }];
-      return Promise.resolve({ results: results.map((record) => ({ data: () => Promise.resolve(record) })) });
+      const found = term === "nothing" ? [] : [{ url: "/a/", excerpt: "", filters: { section: ["  "] } }];
+      return Promise.resolve({ results: found.map((record) => ({ data: () => Promise.resolve(record) })) });
     },
   };
   activate(parts, envWith(api, { lang: "ar", messages }));
@@ -695,7 +968,7 @@ test("activate announces results and groups in the page language", async () => {
   await tick();
 
   assert.equal(status.textContent, "1 نتيجة.");
-  assert.deepEqual(sectionTitles(results.nodes), ["أخرى"]);
+  assert.deepEqual(sectionTitles(drawn(results)), ["أخرى"]);
 
   input.type("nothing");
   await tick();
@@ -704,19 +977,44 @@ test("activate announces results and groups in the page language", async () => {
   assert.equal(status.textContent, emptyMessage("nothing", messages));
 });
 
-test("an empty field clears the results and the status", async () => {
-  const { button, input, results, status, parts } = partsOf();
+test("the options of a right-to-left page are the same rows in the same order", async () => {
+  const messages = messagesFor("fa");
+  const { button, dialog, input, results, parts } = partsOf();
+  activate(parts, envWith(apiOf(records), { lang: "fa", messages }));
+  button.click();
+  await tick();
+
+  input.type("cache");
+  await tick();
+
+  assert.deepEqual(sectionTitles(drawn(results)), ["rules", "guide"]);
+  // Up and down name the order of a right-to-left list; left and right stay the browser's.
+  dialog.fire("keydown", key("ArrowDown", input));
+  const options = rowsOf(results);
+  assert.equal(input.active, options[0]?.attrs.id);
+
+  const left = key("ArrowLeft", input);
+  dialog.fire("keydown", left);
+  assert.equal(left.prevented, false, "a right-to-left list is still walked up and down");
+  assert.equal(input.active, options[0]?.attrs.id, "and the active option did not move");
+});
+
+test("an empty field clears the results, the status, and the active option", async () => {
+  const { button, dialog, input, results, status, parts } = partsOf();
   activate(parts, envWith(apiOf(records)));
   button.click();
   await tick();
   input.type("cache");
   await tick();
+  dialog.fire("keydown", key("ArrowDown", input));
+  assert.equal(input.active, "search-option-1");
 
   input.type("   ");
   await tick();
 
   assert.equal(results.nodes.length, 0);
   assert.equal(status.textContent, "");
+  assert.equal(input.active, undefined);
 });
 
 test("a query with no hits announces it in words", async () => {
@@ -731,19 +1029,320 @@ test("a query with no hits announces it in words", async () => {
   assert.equal(status.textContent, emptyMessage("nothing"));
 });
 
-test("Escape closes the dialog and returns focus to the search button", async () => {
-  const { dialog, button, input, parts } = partsOf();
+test("the arrow keys move the active option and the field names it", async () => {
+  const { button, dialog, input, results, parts } = partsOf();
+  activate(parts, envWith(apiOf(records)));
+  button.click();
+  await tick();
+  input.type("cache");
+  await tick();
+
+  const options = rowsOf(results);
+  assert.equal(options.length, 2);
+  assert.equal(input.active, undefined, "a new draw starts with nothing selected");
+
+  const down = key("ArrowDown", input);
+  dialog.fire("keydown", down);
+  assert.equal(down.prevented, true);
+  assert.equal(options[0]?.attrs["aria-selected"], "true");
+  assert.equal(input.active, options[0]?.attrs.id);
+
+  dialog.fire("keydown", key("ArrowDown", input));
+  assert.equal(options[1]?.attrs["aria-selected"], "true");
+  assert.equal(options[0]?.attrs["aria-selected"], "false", "only one row is ever selected");
+  assert.equal(input.active, options[1]?.attrs.id);
+
+  dialog.fire("keydown", key("ArrowDown", input));
+  assert.equal(input.active, options[0]?.attrs.id, "past the last row the list wraps to the first");
+
+  dialog.fire("keydown", key("ArrowUp", input));
+  assert.equal(input.active, options[1]?.attrs.id, "before the first row it wraps to the last");
+
+  assert.equal(input.focused, 5, "focus never left the field: " + input.focused);
+});
+
+test("an arrow key while another control has focus moves the active option and returns focus", async () => {
+  const close = fakeButton("close");
+  const { button, dialog, input, results, parts } = partsOf();
+  activate(parts, envWith(apiOf(records)));
+  button.click();
+  await tick();
+  input.type("cache");
+  await tick();
+
+  dialog.fire("keydown", key("ArrowDown", close));
+  const options = rowsOf(results);
+
+  assert.equal(input.active, options[0]?.attrs.id);
+  assert.equal(input.focused, 2, "the field is the only thing that may hold an active option");
+  assert.equal(close.focused, 0);
+});
+
+test("the active option is brought into view, so a scrolled list still shows it", async () => {
+  const { button, dialog, input, results, parts } = partsOf();
+  activate(parts, envWith(apiOf(records)));
+  button.click();
+  await tick();
+  input.type("cache");
+  await tick();
+
+  dialog.fire("keydown", key("ArrowDown", input));
+  dialog.fire("keydown", key("ArrowDown", input));
+
+  const options = rowsOf(results);
+  assert.equal(options[1]?.scrolls, 1);
+  assert.equal(options[0]?.scrolls, 1);
+});
+
+test("a pointer entering a row makes its option the active one", async () => {
+  const { button, input, results, parts } = partsOf();
+  activate(parts, envWith(apiOf(records)));
+  button.click();
+  await tick();
+  input.type("cache");
+  await tick();
+
+  const options = rowsOf(results);
+  const rows = wrappersOf(results);
+  assert.equal(rows[1]?.attrs.role, "presentation", "the row a pointer enters is not itself a choice");
+  rows[1]?.fire("pointerenter");
+
+  assert.equal(options[1]?.attrs["aria-selected"], "true");
+  assert.equal(input.active, options[1]?.attrs.id);
+  assert.equal(options[0]?.attrs["aria-selected"], "false");
+  assert.equal(input.focused, 1, "a pointer does not move keyboard focus");
+});
+
+test("Enter presses the active option itself, and the first one when the reader has not moved", async () => {
+  const { button, dialog, input, results, parts } = partsOf();
+  activate(parts, envWith(apiOf(records)));
+  button.click();
+  await tick();
+  input.type("cache");
+  await tick();
+
+  const first = key("Enter", input);
+  dialog.fire("keydown", first);
+  assert.equal(first.prevented, true);
+  assert.equal(rowsOf(results)[0]?.clicks, 1, "a result option is followed, not merely marked");
+
+  dialog.fire("keydown", key("ArrowDown", input));
+  dialog.fire("keydown", key("ArrowDown", input));
+  const second = key("Enter", input);
+  dialog.fire("keydown", second);
+
+  const options = rowsOf(results);
+  assert.equal(options[1]?.clicks, 1, "the active option, not always the first");
+  assert.equal(options[0]?.clicks, 1, "and only that one");
+  assert.equal(options[1]?.scrolls, 2, "the pressed option is kept in view as well");
+});
+
+test("Enter on another control is that control's own", async () => {
+  const close = fakeButton("close");
+  const { button, dialog, input, results, parts } = partsOf();
+  activate(parts, envWith(apiOf(records)));
+  button.click();
+  await tick();
+  input.type("cache");
+  await tick();
+
+  const event = key("Enter", close);
+  dialog.fire("keydown", event);
+
+  assert.equal(event.prevented, false);
+  assert.equal(rowsOf(results)[0]?.clicks, 0);
+});
+
+test("a row with no safe target presses nothing", () => {
+  const runs: unknown[] = [];
+  const results = fakeResults();
+  const list = optionList([{ url: "javascript:alert(1)", excerpt: "No link", meta: { title: "Bad" } }], [
+    { id: "theme-dark", label: "Dark", run: { kind: "theme", choice: "dark" } },
+  ]);
+  const pressed = renderOptions(results as unknown as SearchResults, list, { doc: fakeDocument(), run: (run) => runs.push(run) });
+
+  assert.equal(pressed.length, 2);
+  pressed[0]?.activate();
+  assert.deepEqual(runs, [], "the unsafe option has nothing to follow");
+
+  pressed[1]?.activate();
+  assert.deepEqual(runs, [{ kind: "theme", choice: "dark" }], "and a safe option still runs its own action");
+});
+
+test("a pointer click on an option runs it, and entering its row names it", () => {
+  const runs: unknown[] = [];
+  let hovered = -1;
+  const results = fakeResults();
+  const list = optionList([], [{ id: "copy-markdown", label: "Copy", hint: "Markdown", run: { kind: "copy", url: "/x.md" } }]);
+  renderOptions(results as unknown as SearchResults, list, {
+    doc: fakeDocument(),
+    run: (run) => runs.push(run),
+    hover: (index) => {
+      hovered = index;
+    },
+  });
+
+  const nodes = walkAll(results.nodes);
+  const row = nodes.find((node) => node.tag === "li")!;
+  const option = optionsOf(nodes)[0]!;
+  row.fire("pointerenter");
+  option.click();
+
+  assert.equal(hovered, 0, "the pointer reports the row it entered, wherever in it it was");
+  assert.deepEqual(runs, [{ kind: "copy", url: "/x.md" }], "and the option still runs on click");
+});
+
+test("keys an option list has nothing to do with are left to the browser", async () => {
+  const { button, dialog, input, parts } = partsOf();
   activate(parts, envWith(apiOf([])));
   button.click();
   await tick();
 
-  const event = key("Escape", input);
-  dialog.fire("keydown", event);
+  const down = key("ArrowDown", input);
+  dialog.fire("keydown", down);
+  assert.equal(down.prevented, false, "an empty list has no active option to move");
 
-  assert.equal(event.prevented, true);
+  const enter = key("Enter", input);
+  dialog.fire("keydown", enter);
+  assert.equal(enter.prevented, false, "and Enter opens nothing that is not there");
+});
+
+test("a redraw keeps the active option on the same row, and drops it with a row that is gone", async () => {
+  const api: PagefindApi = {
+    search(term: string) {
+      const found = term === "cache" ? records : term === "install" ? [records[1]!] : [];
+      return Promise.resolve({ results: found.map((record) => ({ data: () => Promise.resolve(record) })) });
+    },
+  };
+  const { button, dialog, input, results, parts } = partsOf();
+  activate(parts, envWith(api));
+  button.click();
+  await tick();
+  input.type("cache");
+  await tick();
+
+  dialog.fire("keydown", key("ArrowDown", input));
+  dialog.fire("keydown", key("ArrowDown", input));
+  assert.equal(input.active, "search-option-2", "the second row of the first query");
+
+  input.type("install");
+  await tick();
+
+  assert.equal(input.active, "search-option-1", "the same page is still the active row");
+  assert.equal(rowsOf(results)[0]?.attrs["data-search-option"], "result:/guide/install/#0");
+
+  input.type("nothing");
+  await tick();
+
+  assert.equal(input.active, undefined, "with no rows the field names no row");
+  assert.deepEqual(rowsOf(results), []);
+});
+
+test("two results with the same URL and title stay two distinguishable options", async () => {
+  const twice: readonly SearchRecord[] = [
+    { url: "/same/", excerpt: "First", meta: { title: "Same" } },
+    { url: "/same/", excerpt: "Second", meta: { title: "Same" } },
+  ];
+  const { button, dialog, input, results, parts } = partsOf();
+  activate(parts, envWith(apiOf(twice)));
+  button.click();
+  await tick();
+  input.type("same");
+  await tick();
+
+  const rows = rowsOf(results);
+  assert.deepEqual(
+    rows.map((row) => row.attrs.id),
+    ["search-option-1", "search-option-2"],
+  );
+  assert.deepEqual(
+    rows.map((row) => row.attrs["data-search-option"]),
+    ["result:/same/#0", "result:/same/#1"],
+    "the same identity, twice, is two rows with two keys",
+  );
+
+  dialog.fire("keydown", key("ArrowDown", input));
+  dialog.fire("keydown", key("ArrowDown", input));
+  assert.equal(input.active, "search-option-2");
+  assert.equal(rows[1]?.attrs["aria-selected"], "true");
+  assert.equal(textOf(rows[1]!), "SameSecond", "and the second row is the one that highlights");
+});
+
+test("a late answer cannot redraw the list or move the active option", async () => {
+  let release: (data: readonly SearchRecord[]) => void = () => {};
+  const hit = (record: SearchRecord) => ({ data: () => Promise.resolve(record) });
+  const api: PagefindApi = {
+    search(term: string) {
+      if (term === "slow") {
+        return new Promise<readonly SearchRecord[]>((resolve) => {
+          release = resolve;
+        }).then((data) => ({ results: data.map(hit) }));
+      }
+      return Promise.resolve({
+        results: [{ url: "/quick/", excerpt: "Quick.", meta: { title: "Quick" } }].map(hit),
+      });
+    },
+  };
+  const { button, dialog, input, results, parts } = partsOf();
+  activate(parts, envWith(api));
+  button.click();
+  await tick();
+
+  input.type("slow");
+  await tick();
+  input.type("quick");
+  await tick();
+  dialog.fire("keydown", key("ArrowDown", input));
+  assert.equal(input.active, "search-option-1", "the newer query answered first");
+  const rows = rowsOf(results);
+
+  release([{ url: "/late/", excerpt: "late", meta: { title: "Late" } }]);
+  await tick();
+
+  assert.deepEqual(rowsOf(results), rows, "the late answer never redraws the list");
+  assert.equal(input.active, "search-option-1", "and leaves the active option where the reader left it");
+});
+
+test("closing clears the active option and restores focus to the search button", async () => {
+  const { button, dialog, input, results, parts } = partsOf();
+  activate(parts, envWith(apiOf(records)));
+  button.click();
+  await tick();
+  input.type("cache");
+  await tick();
+  dialog.fire("keydown", key("ArrowDown", input));
+  const option = rowsOf(results)[0]!;
+  assert.equal(option.attrs["aria-selected"], "true");
+
+  dialog.fire("keydown", key("Escape", input));
+
   assert.equal(dialog.open, false);
   assert.equal(button.attrs["aria-expanded"], "false");
+  assert.equal(input.attrs["aria-expanded"], "false");
+  assert.equal(input.active, undefined);
+  assert.equal(option.attrs["aria-selected"], "false", "no row stays selected behind a closed dialog");
   assert.equal(button.focused, 1);
+  assert.equal(input.focused, 2, "the field held focus throughout, so closing had one place to go: " + input.focused);
+});
+
+test("reopening starts at the field, not on the row the last query left selected", async () => {
+  const { button, dialog, input, results, parts } = partsOf();
+  activate(parts, envWith(apiOf(records)));
+  button.click();
+  await tick();
+  input.type("cache");
+  await tick();
+  dialog.fire("keydown", key("ArrowDown", input));
+  const options = rowsOf(results);
+  assert.equal(options[0]?.attrs["aria-selected"], "true");
+
+  dialog.fire("keydown", key("Escape", input));
+  button.click();
+  await tick();
+
+  assert.equal(input.active, undefined);
+  assert.equal(options[0]?.attrs["aria-selected"], "false");
+  assert.equal(input.attrs["aria-expanded"], "true");
 });
 
 test("a press on the modal backdrop closes the dialog and returns focus to the search button", async () => {
@@ -759,61 +1358,24 @@ test("a press on the modal backdrop closes the dialog and returns focus to the s
 });
 
 test("a press on the panel or a row is left to the control under it", async () => {
-  const first = fakeLink("first");
-  const { dialog, button, input, parts } = partsOf({ links: [first] });
+  const { dialog, button, input, results, parts } = partsOf();
   activate(parts, envWith(apiOf(records)));
   button.click();
+  await tick();
+  input.type("cache");
   await tick();
 
   dialog.fire("click", { target: input, preventDefault() {} });
-  dialog.fire("click", { target: first, preventDefault() {} });
+  dialog.fire("click", { target: rowsOf(results)[0], preventDefault() {} });
 
   assert.equal(dialog.open, true);
-});
-
-test("arrow keys move between result links and wrap at both ends", async () => {
-  const first = fakeLink("first");
-  const second = fakeLink("second");
-  const { dialog, button, input, parts } = partsOf({ links: [first, second] });
-  activate(parts, envWith(apiOf(records)));
-  button.click();
-  await tick();
-
-  const downFromField = key("ArrowDown", input);
-  dialog.fire("keydown", downFromField);
-  assert.equal(downFromField.prevented, true);
-  assert.equal(first.focused, 1);
-
-  dialog.fire("keydown", key("ArrowDown", second));
-  assert.equal(first.focused, 2, "past the last result, focus wraps to the first");
-
-  dialog.fire("keydown", key("ArrowUp", first));
-  assert.equal(second.focused, 1, "before the first result, focus wraps to the last");
-
-  dialog.fire("keydown", key("ArrowUp", input));
-  assert.equal(second.focused, 2);
-});
-
-test("Enter in the field opens the first result", async () => {
-  const first = fakeLink("first");
-  const second = fakeLink("second");
-  const { dialog, button, input, parts } = partsOf({ links: [first, second] });
-  activate(parts, envWith(apiOf(records)));
-  button.click();
-  await tick();
-
-  const event = key("Enter", input);
-  dialog.fire("keydown", event);
-
-  assert.equal(event.prevented, true);
-  assert.equal(first.clicks, 1);
-  assert.equal(second.clicks, 0);
+  assert.equal(button.focused, 0);
 });
 
 test("Tab past the last control wraps to the first; Shift+Tab before the first wraps to the last", () => {
-  const close = fakeLink("close");
-  const first = fakeLink("first");
-  const last = fakeLink("last");
+  const close = fakeButton("close");
+  const first = fakeButton("first");
+  const last = fakeButton("last");
   const dialog = fakeDialog({ focusables: [close, first, last] });
 
   const forward = key("Tab", last);
@@ -832,7 +1394,7 @@ test("Tab past the last control wraps to the first; Shift+Tab before the first w
 });
 
 test("focus that has left the dialog is brought back to its first control", () => {
-  const close = fakeLink("close");
+  const close = fakeButton("close");
   const dialog = fakeDialog({ focusables: [close] });
 
   const event = key("Tab", {});
@@ -852,13 +1414,29 @@ test("a dialog with no focusable control keeps Tab from leaving it", () => {
 });
 
 test("keys other than Tab are left to the browser", () => {
-  const first = fakeLink("first");
+  const first = fakeButton("first");
   const dialog = fakeDialog({ focusables: [first] });
   const event = key("a", first);
 
   trap(dialog as unknown as SearchDialog, event);
 
   assert.equal(event.prevented, false);
+});
+
+test("the trap's selector skips the rows, which a combobox never tabs through", () => {
+  const seen: string[] = [];
+  const dialog = {
+    querySelectorAll(selector: string): Iterable<SearchFocusable> {
+      seen.push(selector);
+      return [];
+    },
+  };
+
+  trap(dialog as unknown as SearchDialog, key("Tab", {}));
+
+  assert.equal(seen.length, 1);
+  assert.match(seen[0]!, /a\[href\]:not\(\[tabindex='-1'\]\)/);
+  assert.match(seen[0]!, /button:not\(\[disabled\]\):not\(\[tabindex='-1'\]\)/);
 });
 
 test("style.css uses only token names from tokens/names.json for var(--*) references", () => {
@@ -885,4 +1463,101 @@ test("style.css uses logical properties and keeps the dialog hidden without Java
   assert.doesNotMatch(declarations, /(?<![\w-])(min-|max-)?(width|height)\s*:/);
   assert.match(css, /\.search\[hidden\] \{/);
   assert.match(css, /\.search::backdrop \{/);
+});
+
+test("style.css shows the active option as the element the combobox names", () => {
+  const css = readFileSync(new URL("../chrome/search/style.css", import.meta.url), "utf8");
+
+  assert.match(css, /\.search-result-link\[aria-selected="true"\],/);
+  assert.match(css, /\.search-action-button\[aria-selected="true"\] \{/);
+  assert.match(css, /outline: 2px solid var\(--state-focus-ring\);/);
+  assert.match(css, /border-inline-start-color: var\(--color-accent\);/);
+  assert.doesNotMatch(css, /\.search-result\[aria-selected/, "the row carries no selection state of its own");
+});
+
+/** The WCAG 2 contrast ratio of two `#rrggbb` colours, as axe measures small text. */
+function contrastRatio(foreground: string, background: string): number {
+  const channel = (byte: number): number => {
+    const scaled = byte / 255;
+    return scaled <= 0.03928 ? scaled / 12.92 : ((scaled + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance = (hex: string): number => {
+    const [red, green, blue] = [1, 3, 5].map((at) => channel(parseInt(hex.slice(at, at + 2), 16)));
+    return 0.2126 * red! + 0.7152 * green! + 0.0722 * blue!;
+  };
+  const [first, second] = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
+  return (first! + 0.05) / (second! + 0.05);
+}
+
+test("the dark dialog's secondary text clears 4.5:1 on the raised surface it sits on", () => {
+  const css = readFileSync(new URL("../chrome/search/style.css", import.meta.url), "utf8");
+  const dark = JSON.parse(readFileSync(new URL("../tokens/color.json", import.meta.url), "utf8")) as Record<
+    string,
+    { $extensions?: { lateen?: { dark?: string } } }
+  >;
+  const surface = dark["surface-raised"]?.$extensions?.lateen?.dark;
+  const muted = dark.muted?.$extensions?.lateen?.dark;
+  const text = dark.text?.$extensions?.lateen?.dark;
+  assert.ok(surface !== undefined && muted !== undefined && text !== undefined, "the dark tokens are present");
+
+  // The reason the override exists: muted on the dialog's own surface is not enough for small text.
+  assert.ok(contrastRatio(muted!, surface!) < 4.5, `muted on raised measures ${contrastRatio(muted!, surface!).toFixed(2)}`);
+  assert.ok(contrastRatio(text!, surface!) >= 4.5, `text on raised measures ${contrastRatio(text!, surface!).toFixed(2)}`);
+
+  // Every rule that paints muted small text on that surface gives way in dark, or the gate only
+  // catches the two rows an empty query happens to draw.
+  const override = css.slice(css.indexOf(':root[data-theme="dark"] .search-status'));
+  for (const selector of [".search-status", ".search-group-title", ".search-result-excerpt", ".search-action-hint"]) {
+    const rule = css.slice(css.indexOf(`\n${selector} {`), css.indexOf("}", css.indexOf(`\n${selector} {`)));
+    if (rule.includes("var(--color-muted)")) {
+      assert.ok(override.includes(selector), `${selector} paints muted text and dark has no override`);
+    }
+  }
+  assert.match(override, /color: var\(--color-text\);/);
+});
+
+test("the group heading and action hint clear AA in both themes, including a selected row", () => {
+  const color = JSON.parse(readFileSync(new URL("../tokens/color.json", import.meta.url), "utf8")) as Record<
+    string,
+    { $value?: string; $extensions?: { lateen?: { dark?: string } } }
+  >;
+  const light = JSON.parse(readFileSync(new URL("../tokens/color.light.json", import.meta.url), "utf8")) as Record<
+    string,
+    string
+  >;
+  const state = JSON.parse(readFileSync(new URL("../tokens/state.json", import.meta.url), "utf8")) as Record<
+    string,
+    { $value?: string; $extensions?: { lateen?: { dark?: string } } }
+  >;
+
+  const raised = { light: color["surface-raised"]?.$value, dark: color["surface-raised"]?.$extensions?.lateen?.dark };
+  const muted = light.muted;
+  const text = color.text?.$extensions?.lateen?.dark;
+  const hover = {
+    light: state["hover-bg"]?.$value,
+    dark: state["hover-bg"]?.$extensions?.lateen?.dark,
+  };
+  assert.ok(raised.light && raised.dark && muted && text && hover.light && hover.dark, "the tokens are present");
+
+  const blend = (overlay: string, background: string): string => {
+    const alpha = overlay.length === 9 ? parseInt(overlay.slice(7, 9), 16) / 255 : 1;
+    const channels = [1, 3, 5].map((at) =>
+      Math.round(parseInt(overlay.slice(at, at + 2), 16) * alpha + parseInt(background.slice(at, at + 2), 16) * (1 - alpha)),
+    );
+    return `#${channels.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
+  };
+
+  assert.ok(contrastRatio(muted!, raised.light!) >= 4.5, "light muted on raised");
+  assert.ok(contrastRatio(muted!, blend(hover.light!, raised.light!)) >= 4.5, "light muted on selection");
+  assert.ok(contrastRatio(text!, raised.dark!) >= 4.5, "dark text on raised");
+  assert.ok(contrastRatio(text!, blend(hover.dark!, raised.dark!)) >= 4.5, "dark text on selection");
+
+  const css = readFileSync(new URL("../chrome/search/style.css", import.meta.url), "utf8");
+  for (const selector of [".search-group-title", ".search-action-hint"]) {
+    const start = css.indexOf(`\n${selector} {`);
+    assert.ok(start !== -1, `${selector} rule exists`);
+    const rule = css.slice(start, css.indexOf("}", start));
+    assert.match(rule, /color: var\(--color-muted\);/, `${selector} uses muted in light`);
+    assert.match(css, new RegExp(`:root\\[data-theme="dark"\\] ${selector.replace(".", "\\.")}`), `${selector} has a dark override`);
+  }
 });

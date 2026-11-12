@@ -4,25 +4,40 @@
  * the dialog. No index is fetched until the reader opens search, so a page that never searches
  * downloads no search JavaScript data.
  *
+ * The field is a combobox and the list is the listbox it controls. Every row `chrome/search/options.ts`
+ * produces puts its option role on its own control, so a keyboard, a pointer, and assistive tech all meet
+ * one element, and the active option is the control the field names in `aria-activedescendant`: the arrow
+ * keys, a pointer entering a row, and a redraw all move that one active option, and focus stays in the
+ * field while the dialog is open. A redraw re-resolves the active option by key, so the field can never
+ * point at a row the new query removed.
+ *
  * The action list arrives as inert JSON from `chrome/command-palette/`; this module parses it,
  * filters it on the same query as the page results, and runs the chosen action. The module and its
  * client-only helper (`shortcut.ts`) import no server module, so they are safe to serve as an island.
  */
 
 import type { PaletteAction, PalettePayload, PaletteRun, ThemeChoice } from "../command-palette/actions.ts";
+import {
+  ACTIONS_LABEL,
+  groupBySection,
+  optionList,
+  OTHER_SECTION,
+  safeHref,
+  SECTION_FILTER,
+  sectionOf,
+  type OptionGroup,
+  type OptionKind,
+  type OptionList,
+  type OptionRow,
+  type PagefindApi,
+  type ResultGroup,
+  type SearchHit,
+  type SearchRecord,
+} from "./options.ts";
 import { activateShortcuts, type ShortcutEvent } from "./shortcut.ts";
 
 /** localStorage key for the visitor's theme choice; keep in step with `layouts/base.ts`. */
 export const THEME_KEY = "lateen-theme";
-
-/** The group heading when the server sends no label. */
-export const ACTIONS_LABEL = "Actions";
-
-/** The filter the engine writes on every indexed page; its first value is the page's section. */
-export const SECTION_FILTER = "section";
-
-/** Where a result without a section lands, matching the engine's name for pages outside a group. */
-export const OTHER_SECTION = "Other";
 
 /** Most results shown for one query; Pagefind ranks them, and the top of the list is what a reader wants. */
 export const RESULT_LIMIT = 20;
@@ -68,29 +83,9 @@ export const MESSAGES: SearchMessages = {
   actions: "Actions",
 };
 
-/** One result Pagefind returns, as `data()` gives it. */
-export interface SearchRecord {
-  readonly url: string;
-  readonly excerpt: string;
-  readonly meta?: { readonly title?: string | undefined };
-  readonly filters?: Readonly<Record<string, readonly string[]>>;
-}
-
-/** One hit in a Pagefind result list. */
-export interface SearchHit {
-  data(): Promise<SearchRecord>;
-}
-
-/** The part of Pagefind's browser API the dialog uses. */
-export interface PagefindApi {
-  search(term: string): Promise<{ readonly results: readonly SearchHit[] }>;
-}
-
-/** Results that share one section, in the order Pagefind ranked them. */
-export interface ResultGroup {
-  readonly section: string;
-  readonly results: readonly SearchRecord[];
-}
+// The option model is the listbox's contract, and this unit is the dialog's only entry to it.
+export { ACTIONS_LABEL, groupBySection, OTHER_SECTION, safeHref, SECTION_FILTER, sectionOf };
+export type { OptionGroup, OptionKind, OptionList, OptionRow, PagefindApi, ResultGroup, SearchHit, SearchRecord };
 
 /** The header's search button: `client.ts` reveals it and returns focus to it when the dialog closes. */
 export interface SearchButton {
@@ -104,23 +99,17 @@ export interface SearchButton {
 /** The dialog's close button; it has the same shape as the search button. */
 export type SearchClose = SearchButton;
 
-/** The query field. */
+/**
+ * The query field. It is the combobox, so it carries the popup's state: `aria-expanded` while the
+ * dialog is open, and the active option in `aria-activedescendant`. That attribute is removed rather
+ * than emptied when no row is active, because a reference to a row that is not there would dangle.
+ */
 export interface SearchInput {
   value: string;
   focus(): void;
+  setAttribute(name: string, value: string): void;
+  removeAttribute?(name: string): void;
   addEventListener(type: "input", listener: () => void): void;
-}
-
-/** A result link the dialog can move focus to. */
-export interface SearchLink {
-  focus(): void;
-  click(): void;
-  getAttribute?(name: string): string | null;
-}
-
-/** The element that currently has focus, for keeping it across an async redraw. */
-export interface SearchActiveElement extends SearchFocusable {
-  getAttribute?(name: string): string | null;
 }
 
 /** Anything in the dialog that can take keyboard focus, for the focus trap. */
@@ -131,28 +120,27 @@ export interface SearchFocusable {
 /** A node in the result list; the browser supplies real nodes, tests a small tree. */
 export interface SearchNode {}
 
-/** An element the result renderer builds. */
+/** An element the option renderer builds. */
 export interface SearchElement extends SearchNode {
   setAttribute(name: string, value: string): void;
   append(...nodes: SearchNode[]): void;
-  /** Only action buttons need a listener; the result renderer never adds one. */
-  addEventListener?(type: "click", listener: () => void): void;
+  /** A row listens for a pointer entering it; its own control listens for a click. */
+  addEventListener?(type: string, listener: () => void): void;
+  /** Follows a result link or presses an action button, as the browser would. */
+  click?(): void;
+  /** Brings a row into view, so the active option is visible wherever the list is scrolled. */
+  scrollIntoView?(options: { readonly block: "nearest" }): void;
 }
 
-/** The part of `document` the result renderer uses. */
+/** The part of `document` the option renderer uses. */
 export interface SearchDocument {
   createElement(tag: string): SearchElement;
   createTextNode(text: string): SearchNode;
-  /** The focused element, when the browser reports one; a redraw keeps keyboard focus on it. */
-  readonly activeElement?: SearchActiveElement | null;
 }
 
-/** The container `client.ts` fills with result nodes. */
+/** The container `client.ts` fills with option nodes. */
 export interface SearchResults {
   replaceChildren(...nodes: SearchNode[]): void;
-  querySelectorAll(selector: string): Iterable<SearchLink>;
-  /** Whether `node` is inside the list, so a redraw knows the reader was navigating it. */
-  contains?(node: SearchNode): boolean;
 }
 
 /** The status region results and failures are announced on. */
@@ -218,10 +206,13 @@ export interface SearchEnv {
   messages?: SearchMessages | undefined;
 }
 
-/** What can take keyboard focus inside the dialog. */
+/**
+ * What can take keyboard focus inside the dialog. An option row is not on the list: a combobox keeps
+ * focus in its own field and points at a row instead, and every row's control carries `tabindex="-1"`.
+ */
 const FOCUSABLE = [
-  "a[href]",
-  "button:not([disabled])",
+  "a[href]:not([tabindex='-1'])",
+  "button:not([disabled]):not([tabindex='-1'])",
   "input:not([disabled])",
   "select:not([disabled])",
   "textarea:not([disabled])",
@@ -267,31 +258,6 @@ function segmentsOf(excerpt: string): readonly Segment[] {
   return segments;
 }
 
-/** The section a result belongs to, from the engine's `section` filter; a missing filter reads as `Other`. */
-export function sectionOf(record: SearchRecord): string {
-  const value = record.filters?.[SECTION_FILTER]?.[0]?.trim();
-  return value === undefined || value === "" ? OTHER_SECTION : value;
-}
-
-/** Groups ranked results by section, keeping the order each section first appears in. */
-export function groupBySection(records: readonly SearchRecord[]): readonly ResultGroup[] {
-  const groups = new Map<string, SearchRecord[]>();
-  for (const record of records) {
-    const section = sectionOf(record);
-    const group = groups.get(section);
-    if (group === undefined) groups.set(section, [record]);
-    else group.push(record);
-  }
-  return [...groups].map(([section, results]) => ({ section, results }));
-}
-
-/** Only links the browser can follow: a `javascript:` or `data:` URL from the index is never a link. */
-function safeHref(url: string): string | undefined {
-  return url.startsWith("/") || url.startsWith("./") || url.startsWith("../") || /^https?:\/\//i.test(url)
-    ? url
-    : undefined;
-}
-
 /** The excerpt as text nodes, with Pagefind's matches wrapped in plain `<mark>` elements. */
 function excerptNode(excerpt: string, doc: SearchDocument): SearchElement {
   const span = doc.createElement("span");
@@ -308,71 +274,51 @@ function excerptNode(excerpt: string, doc: SearchDocument): SearchElement {
   return span;
 }
 
-/** One result: a title and excerpt inside a link when the URL is safe, otherwise plain text. */
-function resultNode(record: SearchRecord, doc: SearchDocument): SearchNode {
-  const href = safeHref(record.url);
-  const link = doc.createElement(href === undefined ? "span" : "a");
-  link.setAttribute("class", "search-result-link");
-  if (href !== undefined) link.setAttribute("href", href);
-
+/** A result's title: the index's own, or the page URL when the index carries none. */
+function titleNode(record: SearchRecord, doc: SearchDocument): SearchElement {
   const title = record.meta?.title?.trim();
-  const titleNode = doc.createElement("span");
-  titleNode.setAttribute("class", "search-result-title");
-  titleNode.append(doc.createTextNode(title === undefined || title === "" ? record.url : title));
-
-  link.append(titleNode, excerptNode(record.excerpt, doc));
-
-  const item = doc.createElement("li");
-  item.setAttribute("class", "search-result");
-  item.append(link);
-  return item;
+  const element = doc.createElement("span");
+  element.setAttribute("class", "search-result-title");
+  element.append(doc.createTextNode(title === undefined || title === "" ? record.url : title));
+  return element;
 }
 
-/** The result list: one section per group, in rank order, built only from elements and text nodes. */
-export function resultNodes(
-  records: readonly SearchRecord[],
+/**
+ * The attributes that make one control the option the listbox owns: the id `aria-activedescendant`
+ * names, the selection assistive tech reads, and the key the dialog re-resolves after a redraw. A
+ * control is in the tab order for a pointer only: a combobox keeps keyboard focus in its own field.
+ */
+function optionAttributes(element: SearchElement, row: OptionRow): void {
+  element.setAttribute("role", "option");
+  element.setAttribute("id", row.id);
+  element.setAttribute("aria-selected", "false");
+  element.setAttribute("tabindex", "-1");
+  element.setAttribute("data-search-option", row.key);
+}
+
+/** A result's option: title and excerpt inside a link, or inside plain text when the URL is unsafe. */
+function resultContent(row: OptionRow, record: SearchRecord, doc: SearchDocument): SearchElement {
+  const link = doc.createElement(row.href === undefined ? "span" : "a");
+  link.setAttribute("class", "search-result-link");
+  if (row.href !== undefined) link.setAttribute("href", row.href);
+  // The control is the option, so a pointer, a keyboard, and assistive tech all meet the same element.
+  optionAttributes(link, row);
+  link.append(titleNode(record, doc), excerptNode(record.excerpt, doc));
+  return link;
+}
+
+/** An action's option: its label and hint, its descriptor, and the click that runs it. */
+function actionContent(
+  row: OptionRow,
+  action: PaletteAction,
   doc: SearchDocument,
-  otherSection: string = OTHER_SECTION,
-): readonly SearchNode[] {
-  return groupBySection(records).map((group) => {
-    const heading = doc.createElement("h2");
-    heading.setAttribute("class", "search-group-title");
-    heading.append(doc.createTextNode(group.section === OTHER_SECTION ? otherSection : group.section));
-
-    const list = doc.createElement("ul");
-    list.setAttribute("class", "search-list");
-    for (const record of group.results) list.append(resultNode(record, doc));
-
-    const section = doc.createElement("section");
-    section.setAttribute("class", "search-group");
-    section.append(heading, list);
-    return section;
-  });
-}
-
-/** Replaces the list's children with nodes for `records`; text never passes through an HTML string. */
-export function renderResults(results: SearchResults, records: readonly SearchRecord[], doc: SearchDocument): void {
-  results.replaceChildren(...resultNodes(records, doc));
-}
-
-/** What the palette renders: the matched actions, the Pagefind records, and how to run an action. */
-export interface PaletteRender {
-  readonly actions: readonly PaletteAction[];
-  readonly label: string;
-  readonly records: readonly SearchRecord[];
-  readonly doc: SearchDocument;
-  /** The page language's name for a result without a section. */
-  readonly otherSection?: string | undefined;
-  readonly run: (run: PaletteRun) => void;
-}
-
-/** One action: a button and its optional hint, both built from text nodes. */
-function actionNode(action: PaletteAction, doc: SearchDocument, run: (run: PaletteRun) => void): SearchNode {
+  run: (run: PaletteRun) => void,
+): SearchElement {
   const button = doc.createElement("button");
   button.setAttribute("type", "button");
   button.setAttribute("class", "search-action-button");
-  button.setAttribute("role", "option");
   button.setAttribute("data-palette-action", action.id);
+  optionAttributes(button, row);
   if (action.run !== undefined) {
     const command = action.run;
     button.addEventListener?.("click", () => run(command));
@@ -389,47 +335,118 @@ function actionNode(action: PaletteAction, doc: SearchDocument, run: (run: Palet
     hint.append(doc.createTextNode(action.hint));
     button.append(hint);
   }
-
-  const item = doc.createElement("li");
-  item.setAttribute("class", "search-result search-action");
-  item.append(button);
-  return item;
+  return button;
 }
 
-/** The "Actions" group: one heading and one list of action buttons. */
-export function actionNodes(
-  actions: readonly PaletteAction[],
-  label: string,
-  doc: SearchDocument,
-  run: (run: PaletteRun) => void,
-): readonly SearchNode[] {
-  if (actions.length === 0) return [];
-  const heading = doc.createElement("h2");
-  heading.setAttribute("class", "search-group-title");
-  heading.append(doc.createTextNode(label));
-
-  const list = doc.createElement("ul");
-  list.setAttribute("class", "search-list");
-  list.setAttribute("role", "presentation");
-  for (const action of actions) list.append(actionNode(action, doc, run));
-
-  const section = doc.createElement("section");
-  section.setAttribute("class", "search-group search-actions-group");
-  section.append(heading, list);
-  return [section];
+/** A drawn row: the shape the list shows, and the option inside it that a reader chooses. */
+interface DrawnRow {
+  readonly item: SearchElement;
+  readonly option: SearchElement;
 }
 
 /**
- * Replaces the dialog's list with the page results first, then the matched actions. The empty query
- * has no page results, so the actions stand alone; once a query finds pages they come first, because
- * search is still the dialog's main job. An empty set clears the list.
+ * One row, of either kind. The `li` is the list's shape rather than a choice of its own, so it carries
+ * no role: a row is never counted twice, and a pointer entering anywhere in it names its option.
  */
-export function renderPalette(results: SearchResults, render: PaletteRender): void {
-  const nodes = [
-    ...resultNodes(render.records, render.doc, render.otherSection),
-    ...actionNodes(render.actions, render.label, render.doc, render.run),
-  ];
-  results.replaceChildren(...nodes);
+function optionNode(row: OptionRow, index: number, render: OptionRender): DrawnRow {
+  const item = render.doc.createElement("li");
+  item.setAttribute("class", row.kind === "action" ? "search-result search-action" : "search-result");
+  item.addEventListener?.("pointerenter", () => render.hover?.(index));
+
+  let option: SearchElement | undefined;
+  const action = row.action;
+  if (row.kind === "action" && action !== undefined) option = actionContent(row, action, render.doc, render.run);
+  const record = row.record;
+  if (record !== undefined) option = resultContent(row, record, render.doc);
+  if (option === undefined) {
+    // The model gives every row a control, so this only happens for a hand-built row: it is still an
+    // option a reader can hear, and pressing it does nothing.
+    item.setAttribute("role", "option");
+    item.setAttribute("id", row.id);
+    item.setAttribute("aria-selected", "false");
+    item.setAttribute("data-search-option", row.key);
+    return { item, option: item };
+  }
+  item.setAttribute("role", "presentation");
+  item.append(option);
+  return { item, option };
+}
+
+/** One drawn option: its element, and the two things the dialog can do with it. */
+export interface RenderedOption {
+  /** The id `aria-activedescendant` names while this row is the active option. */
+  readonly id: string;
+  /** The identity that survives a redraw, so the active row can be found again. */
+  readonly key: string;
+  /** The option element itself: the row's link or button, which is what a reader chooses. */
+  readonly element: SearchElement;
+  /** Runs the option as a pointer click on it would; one with no safe target does nothing. */
+  activate(): void;
+}
+
+/** What drawing the list needs: a document, how to run an action, and how to follow a pointer. */
+export interface OptionRender {
+  readonly doc: SearchDocument;
+  readonly run: (run: PaletteRun) => void;
+  /** Called with the row's position when a pointer enters it, so the active option follows. */
+  readonly hover?: ((index: number) => void) | undefined;
+}
+
+/**
+ * Replaces the dialog's list with `list`'s groups, page results first and matched actions last, and
+ * returns its rows in the order of `list.rows` so row 4 of the model is row 4 of the DOM. A group is
+ * `role="group"`, naming itself by its heading: a heading is never an option, and every option it owns
+ * is one choice a reader can reach. Text never passes through an HTML string.
+ */
+export function renderOptions(
+  results: SearchResults,
+  list: OptionList,
+  render: OptionRender,
+): readonly RenderedOption[] {
+  const { doc } = render;
+  const drawn: RenderedOption[] = [];
+  const sections: SearchElement[] = [];
+
+  for (const group of list.groups) {
+    const heading = doc.createElement("h2");
+    heading.setAttribute("class", "search-group-title");
+    heading.setAttribute("id", group.id);
+    // Inside a listbox a heading is content the list may not own, and the group is named by it anyway:
+    // it stays the section's visible title and lends its text, without becoming a choice of its own.
+    heading.setAttribute("role", "presentation");
+    heading.append(doc.createTextNode(group.heading));
+
+    const rows = doc.createElement("ul");
+    rows.setAttribute("class", "search-list");
+    rows.setAttribute("role", "presentation");
+
+    const section = doc.createElement("section");
+    section.setAttribute("class", group.kind === "action" ? "search-group search-actions-group" : "search-group");
+    section.setAttribute("role", "group");
+    section.setAttribute("aria-labelledby", group.id);
+
+    for (const row of group.rows) {
+      const index = drawn.length;
+      const drawnRow = optionNode(row, index, render);
+      rows.append(drawnRow.item);
+      const option = drawnRow.option;
+      drawn.push({
+        id: row.id,
+        key: row.key,
+        element: option,
+        activate() {
+          option.click?.();
+          option.scrollIntoView?.({ block: "nearest" });
+        },
+      });
+    }
+
+    section.append(heading, rows);
+    sections.push(section);
+  }
+
+  results.replaceChildren(...sections);
+  return drawn;
 }
 
 /** A whole-word test for a hint, so a single typed letter does not match every hint. */
@@ -560,8 +577,9 @@ export function trap(dialog: SearchDialog, event: SearchEvent): void {
 
 /**
  * Reveals the search button and wires the dialog: the button opens it, the index loads on that first
- * open only, typing filters both groups, arrows move through actions and results as one list, Enter
- * runs or opens the first item, Escape closes, and Tab stays inside. The DOM is touched only through
+ * open only, typing redraws the options, the arrow keys move the active option, Enter runs or opens it,
+ * Escape closes, and Tab stays inside. Focus belongs to the field from the moment the dialog opens
+ * until it closes, so the active option is the only thing that moves. The DOM is touched only through
  * the small interfaces above, so tests need no browser.
  */
 export function activate(parts: SearchParts, env: SearchEnv): void {
@@ -576,10 +594,14 @@ export function activate(parts: SearchParts, env: SearchEnv): void {
   let sequence = 0;
   // A section jump is a move inside the page: the close must not pull focus back to the search button.
   let returnFocus = true;
+  // The list as drawn now, and which of its rows the field points at. `-1` is no active option.
+  let options: readonly RenderedOption[] = [];
+  let active = -1;
 
   dialog.hidden = false;
   button.hidden = false;
   button.setAttribute("aria-expanded", "false");
+  input.setAttribute("aria-expanded", "false");
 
   /** Runs one action in the browser; a copy result is announced on the status region. */
   const execute = (command: PaletteRun): void => {
@@ -608,49 +630,38 @@ export function activate(parts: SearchParts, env: SearchEnv): void {
     handlers.section?.(command.id);
   };
 
-  /** The key that identifies a focused row, so a redraw can put focus back on the same row. */
-  const focusKey = (element: SearchActiveElement): string | undefined => {
-    const action = element.getAttribute?.("data-palette-action");
-    if (action !== undefined && action !== null && action !== "") return `action:${action}`;
-    const href = element.getAttribute?.("href");
-    return href === undefined || href === null || href === "" ? undefined : `href:${href}`;
-  };
-
-  /** Keeps keyboard focus inside the list when a new result set replaces the focused row; false when the list is empty. */
-  const restoreFocus = (key: string | undefined): boolean => {
-    if (key === undefined) return false;
-    const items = [...results.querySelectorAll("a[href], [data-palette-action]")];
-    const match = items.find((item) => {
-      const action = item.getAttribute?.("data-palette-action");
-      if (action !== undefined && action !== null && action !== "") return `action:${action}` === key;
-      const href = item.getAttribute?.("href");
-      return href !== undefined && href !== null && href !== "" && `href:${href}` === key;
-    });
-    const target = match ?? items[0];
-    if (target === undefined) return false;
-    target.focus();
-    return true;
-  };
-
-  /** Draws both groups for `query`: matched actions always, page results when they are known. */
-  const draw = (query: string, records: readonly SearchRecord[], matched: readonly PaletteAction[]): void => {
-    const active = env.document.activeElement ?? null;
-    const key = active === null ? undefined : focusKey(active);
-    const inside = key !== undefined && results.contains?.(active as unknown as SearchNode) === true;
-    if (actions.length === 0 && matched.length === 0 && records.length === 0) {
-      results.replaceChildren();
-    } else {
-      renderPalette(results, {
-        actions: matched,
-        label: palette.label,
-        records,
-        doc: env.document,
-        otherSection: messages.otherSection,
-        run: execute,
-      });
+  /**
+   * Makes the row at `index` the active option, or clears the active option when `index` has no row. A
+   * key, a pointer, and a redraw all arrive here, so what a reader sees and what assistive tech reads
+   * are the same row: one selection, one id reference.
+   */
+  const markActive = (index: number): void => {
+    const current = options[active];
+    const next = options[index];
+    if (current !== undefined && current !== next) current.element.setAttribute("aria-selected", "false");
+    if (next === undefined) {
+      active = -1;
+      // Nothing is selected: the attribute goes rather than naming a row that is not there.
+      input.removeAttribute?.("aria-activedescendant");
+      return;
     }
-    // Removing the row that had focus would drop focus on the page; the field is the next step.
-    if (inside && !restoreFocus(key)) input.focus();
+    active = index;
+    next.element.setAttribute("aria-selected", "true");
+    input.setAttribute("aria-activedescendant", next.id);
+    next.element.scrollIntoView?.({ block: "nearest" });
+  };
+
+  /** Draws the page results and the matched actions, then puts the active option back where it was. */
+  const draw = (records: readonly SearchRecord[], matched: readonly PaletteAction[]): void => {
+    const key = options[active]?.key;
+    const list = optionList(records, matched, { otherSection: messages.otherSection, actionsLabel: palette.label });
+    options = renderOptions(results, list, {
+      doc: env.document,
+      run: execute,
+      hover: (index) => markActive(index),
+    });
+    // A row the new query dropped takes the active option with it; the field then names nothing.
+    markActive(key === undefined ? -1 : options.findIndex((option) => option.key === key));
   };
 
   /** Runs the field's current query: an empty field shows the actions and clears the status. */
@@ -659,12 +670,12 @@ export function activate(parts: SearchParts, env: SearchEnv): void {
     const matched = filterActions(actions, query);
     const current = ++sequence;
     if (query === "") {
-      draw(query, [], matched);
+      draw([], matched);
       status.textContent = "";
       return;
     }
     if (api === undefined) {
-      draw(query, [], matched);
+      draw([], matched);
       return;
     }
     status.textContent = matched.length === 0 ? messages.searching : "";
@@ -674,7 +685,7 @@ export function activate(parts: SearchParts, env: SearchEnv): void {
       .then(
         (records) => {
           if (current !== sequence) return;
-          draw(query, records, matched);
+          draw(records, matched);
           status.textContent =
             records.length === 0
               ? matched.length === 0
@@ -693,7 +704,10 @@ export function activate(parts: SearchParts, env: SearchEnv): void {
     returnFocus = true;
     if (!dialog.open) dialog.showModal();
     button.setAttribute("aria-expanded", "true");
+    input.setAttribute("aria-expanded", "true");
     input.focus();
+    // A fresh open starts at the field, not on the row the last query left selected.
+    markActive(-1);
     if (input.value.trim() === "") run();
     if (api !== undefined || loading) {
       if (input.value.trim() !== "") run();
@@ -724,6 +738,9 @@ export function activate(parts: SearchParts, env: SearchEnv): void {
   });
   dialog.addEventListener("close", () => {
     button.setAttribute("aria-expanded", "false");
+    input.setAttribute("aria-expanded", "false");
+    markActive(-1);
+    // Focus stayed in the field the whole time the dialog was open, so closing has one place to go.
     if (returnFocus) button.focus();
     returnFocus = true;
   });
@@ -734,29 +751,29 @@ export function activate(parts: SearchParts, env: SearchEnv): void {
       return;
     }
 
-    const links = [...results.querySelectorAll("a[href], [data-palette-action]")];
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-      if (links.length === 0) return;
+      if (options.length === 0) return;
       event.preventDefault();
-      const index = links.indexOf(event.target as SearchLink);
-      const next =
+      // The field is the one thing that may hold an active option, so it takes focus back first.
+      input.focus();
+      markActive(
         event.key === "ArrowDown"
-          ? index + 1 >= links.length
+          ? active + 1 >= options.length
             ? 0
-            : index + 1
-          : index <= 0
-            ? links.length - 1
-            : index - 1;
-      links[next]?.focus();
+            : active + 1
+          : active <= 0
+            ? options.length - 1
+            : active - 1,
+      );
       return;
     }
 
     if (event.key === "Enter" && event.target === (input as unknown)) {
-      const first = links[0];
-      if (first !== undefined) {
-        event.preventDefault();
-        first.click();
-      }
+      // Enter runs the active option, or the first one when the reader has not moved off the field.
+      const option = active >= 0 ? options[active] : options[0];
+      if (option === undefined) return;
+      event.preventDefault();
+      option.activate();
       return;
     }
 
