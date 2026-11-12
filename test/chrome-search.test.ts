@@ -1474,3 +1474,44 @@ test("style.css shows the active option as the element the combobox names", () =
   assert.match(css, /border-inline-start-color: var\(--color-accent\);/);
   assert.doesNotMatch(css, /\.search-result\[aria-selected/, "the row carries no selection state of its own");
 });
+
+/** The WCAG 2 contrast ratio of two `#rrggbb` colours, as axe measures small text. */
+function contrastRatio(foreground: string, background: string): number {
+  const channel = (byte: number): number => {
+    const scaled = byte / 255;
+    return scaled <= 0.03928 ? scaled / 12.92 : ((scaled + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance = (hex: string): number => {
+    const [red, green, blue] = [1, 3, 5].map((at) => channel(parseInt(hex.slice(at, at + 2), 16)));
+    return 0.2126 * red! + 0.7152 * green! + 0.0722 * blue!;
+  };
+  const [first, second] = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
+  return (first! + 0.05) / (second! + 0.05);
+}
+
+test("the dark dialog's secondary text clears 4.5:1 on the raised surface it sits on", () => {
+  const css = readFileSync(new URL("../chrome/search/style.css", import.meta.url), "utf8");
+  const dark = JSON.parse(readFileSync(new URL("../tokens/color.json", import.meta.url), "utf8")) as Record<
+    string,
+    { $extensions?: { lateen?: { dark?: string } } }
+  >;
+  const surface = dark["surface-raised"]?.$extensions?.lateen?.dark;
+  const muted = dark.muted?.$extensions?.lateen?.dark;
+  const text = dark.text?.$extensions?.lateen?.dark;
+  assert.ok(surface !== undefined && muted !== undefined && text !== undefined, "the dark tokens are present");
+
+  // The reason the override exists: muted on the dialog's own surface is not enough for small text.
+  assert.ok(contrastRatio(muted!, surface!) < 4.5, `muted on raised measures ${contrastRatio(muted!, surface!).toFixed(2)}`);
+  assert.ok(contrastRatio(text!, surface!) >= 4.5, `text on raised measures ${contrastRatio(text!, surface!).toFixed(2)}`);
+
+  // Every rule that paints muted small text on that surface gives way in dark, or the gate only
+  // catches the two rows an empty query happens to draw.
+  const override = css.slice(css.indexOf(':root[data-theme="dark"] .search-status'));
+  for (const selector of [".search-status", ".search-group-title", ".search-result-excerpt", ".search-action-hint"]) {
+    const rule = css.slice(css.indexOf(`\n${selector} {`), css.indexOf("}", css.indexOf(`\n${selector} {`)));
+    if (rule.includes("var(--color-muted)")) {
+      assert.ok(override.includes(selector), `${selector} paints muted text and dark has no override`);
+    }
+  }
+  assert.match(override, /color: var\(--color-text\);/);
+});
