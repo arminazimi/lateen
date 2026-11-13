@@ -122,27 +122,27 @@ test("renders only top-level items marked tab: true, in order, linking groups to
   assert.match(out, /<nav class="section-tabs" aria-label="Sections">/);
   assert.match(
     out,
-    /<a class="section-tab" href="\/example\/"><bdi>Home<\/bdi><\/a><a class="section-tab" href="\/example\/install\/" aria-current="page"><bdi>Guide<\/bdi><\/a><a class="section-tab" href="\/example\/reference\/"><bdi>Reference<\/bdi><\/a>/,
+    /<a class="section-tab" href="\/example\/">Home<\/a><a class="section-tab" href="\/example\/install\/" aria-current="page">Guide<\/a><a class="section-tab" href="\/example\/reference\/">Reference<\/a>/,
   );
   assert.doesNotMatch(out, /Operations|Features/);
 });
 
 test("the tab whose title roots the trail is current, like the active section of the navigation tree", () => {
   const out = render("/example/reference/api/", [{ title: "Reference", url: "/example/reference/" }]);
-  assert.match(out, /<a class="section-tab" href="\/example\/reference\/" aria-current="page"><bdi>Reference<\/bdi><\/a>/);
+  assert.match(out, /<a class="section-tab" href="\/example\/reference\/" aria-current="page">Reference<\/a>/);
   assert.doesNotMatch(out, /href="\/example\/" aria-current/);
-  assert.match(out, /<a class="section-tab" href="\/example\/"><bdi>Home<\/bdi><\/a>/);
+  assert.match(out, /<a class="section-tab" href="\/example\/">Home<\/a>/);
 });
 
 test("a group tab is current while a page under it is active", () => {
   const out = render("/example/quickstart/", [{ title: "Guide", url: "/example/quickstart/" }]);
-  assert.match(out, /href="\/example\/install\/" aria-current="page"><bdi>Guide<\/bdi><\/a>/);
+  assert.match(out, /href="\/example\/install\/" aria-current="page">Guide<\/a>/);
 });
 
 test("no tab is current when the trail is empty (the page is not in the navigation)", () => {
   const out = render("/example/unlisted/", []);
   assert.doesNotMatch(out, /aria-current/);
-  assert.match(out, /<a class="section-tab" href="\/example\/"><bdi>Home<\/bdi><\/a>/);
+  assert.match(out, /<a class="section-tab" href="\/example\/">Home<\/a>/);
 });
 
 test("renders nothing without a main navigation list", () => {
@@ -161,7 +161,7 @@ test("skips a tab-marked group that has no leaf to link to", () => {
   ];
   const out = render("/example/real/", [{ title: "Real", url: "/example/real/" }], empty);
   assert.doesNotMatch(out, /Hollow/);
-  assert.match(out, /<a class="section-tab" href="\/example\/real\/" aria-current="page"><bdi>Real<\/bdi><\/a>/);
+  assert.match(out, /<a class="section-tab" href="\/example\/real\/" aria-current="page">Real<\/a>/);
 });
 
 test("renders nothing when every tab-marked group only leads to empty groups", () => {
@@ -186,7 +186,7 @@ test("a nested group tab still links to its first leaf and keeps tab order", () 
   const out = render("/example/deep/", [{ title: "Outer", url: "/example/deep/" }], nested);
   assert.match(
     out,
-    /<a class="section-tab" href="\/example\/deep\/" aria-current="page"><bdi>Outer<\/bdi><\/a><a class="section-tab" href="\/example\/other\/"><bdi>Other<\/bdi><\/a>/,
+    /<a class="section-tab" href="\/example\/deep\/" aria-current="page">Outer<\/a><a class="section-tab" href="\/example\/other\/">Other<\/a>/,
   );
   assert.doesNotMatch(out, /\/example\/sibling\/<\/a>/);
 });
@@ -215,19 +215,21 @@ test("mixed-direction and neutral-only titles are isolated without changing text
   ];
   const out = render("/example/guide/", [{ title: "Guide", url: "/example/guide/" }], mixed, "fa");
 
-  // One isolating <bdi> per authored title, including a neutral-only run like a version string.
-  assert.equal(count(out, /<bdi>/g), mixed.length);
+  // Every authored title is carried verbatim and isolated by the tab's own bidi isolation.
+  assert.equal(count(out, /<bdi>/g), 0, "no extra element wraps an authored title");
   for (const item of mixed) {
-    assert.ok(out.includes(`<bdi>${item.title}</bdi>`), item.title);
+    assert.ok(out.includes(`>${item.title}</a>`), item.title);
     if ("url" in item) assert.ok(out.includes(`href="${item.url}"`), item.url);
   }
+  const css = readFileSync(new URL("../chrome/section-tabs/style.css", import.meta.url), "utf8");
+  assert.match(css, /\.section-tab\s*\{[^}]*unicode-bidi:\s*isolate/, "the tab isolates its own title");
 
   // Authored order survives the mixed directions, and only the tab rooting the trail is current.
   assert.ok(out.indexOf("راهنما") < out.indexOf("v1.2.3"));
   assert.ok(out.indexOf("v1.2.3") < out.indexOf("الأدلة"));
   assert.ok(out.indexOf("الأدلة") < out.indexOf("Guide"));
   assert.equal(count(out, /aria-current="page"/g), 1);
-  assert.match(out, /href="\/example\/guide\/" aria-current="page"><bdi>Guide<\/bdi><\/a>/);
+  assert.match(out, /href="\/example\/guide\/" aria-current="page">Guide<\/a>/);
 });
 
 test("every shipped catalog already names the landmark, so no catalog change is needed", () => {

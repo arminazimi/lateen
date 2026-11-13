@@ -18,6 +18,8 @@
   font-size: var(--type-size-sm);
   white-space: nowrap;
   text-decoration: none;
+  /* The tab is one atomic inline in the row, so a title in another direction cannot reorder its neighbours. */
+  unicode-bidi: isolate;
   transition: color var(--motion-fast) var(--motion-ease);
 }
 

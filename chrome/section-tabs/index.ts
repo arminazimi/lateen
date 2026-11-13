@@ -43,8 +43,8 @@ function tabs(items: readonly NavItem[]): NavLink[] {
  * Tabs for the header's section-tabs slot: the top-level items of the `main` navigation list
  * marked `tab: true`. The breadcrumb trail starts at the active section of the navigation tree,
  * so a tab is current when the trail's root carries its title. The landmark is named in the
- * page's language, and each authored title is isolated in `<bdi>` so a title facing the other
- * way cannot reorder it against its neighbours.
+ * page's language, and each tab isolates its own title (`unicode-bidi: isolate`) so a title
+ * facing the other way cannot reorder it against its neighbours.
  */
 const sectionTabs: Chrome = ({ site, page, trail }) => {
   const items = site.nav.main;
@@ -63,7 +63,7 @@ const sectionTabs: Chrome = ({ site, page, trail }) => {
           href: tab.url,
           ...(section !== undefined && tab.title === section.title ? { "aria-current": "page" } : {}),
         },
-        h("bdi", {}, tab.title),
+        tab.title,
       ),
     ),
   );
