@@ -75,8 +75,7 @@
 }
 
 .version-switcher-item {
-  display: flex;
-}
+  display: flex;}
 
 .version-switcher-link {
   display: flex;
@@ -130,5 +129,13 @@
     overflow: hidden;
     clip-path: inset(50%);
     white-space: nowrap;
+  }
+
+  /* The header actions wrap into their own row, and the switcher is that row's first item in both
+     directions. Anchor the popover at its inline start: anchoring at the end pushed the list past
+     the viewport edge at 320px (left in English, right in Persian). */
+  .version-switcher-list {
+    inset-inline-start: 0;
+    inset-inline-end: auto;
   }
 }

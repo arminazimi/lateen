@@ -104,7 +104,7 @@ test("renders one inert template with a hidden, localized block action", () => {
 
   assert.match(
     out,
-    /^<template data-block-actions data-prompt="Edit \{source\}\. Current text: "\{text\}"\. Change:" data-copied="Copied" data-copy-failed="Press Ctrl\+C"><button type="button" class="block-action" hidden data-block-action>Edit with your agent<\/button><\/template>$/,
+    /^<template data-block-actions data-prompt="Edit \{source\}\. Current text: "\{text\}"\. Change:" data-lang="en" data-copied="Copied" data-copy-failed="Press Ctrl\+C"><button type="button" class="block-action" hidden data-block-action>Edit with your agent<\/button><\/template>$/,
   );
 });
 
@@ -585,7 +585,9 @@ test("style.css states every edge in logical properties and keeps the hidden but
     .join("\n");
 
   assert.match(css, /\.block-action\[hidden\] \{\n  display: none;/);
-  assert.match(css, /inset-block-start: var\(--space-1\);/);
+  // Bottom end: the top end belongs to the code, terminal, and output copy controls.
+  assert.match(css, /inset-block-end: var\(--space-1\);/);
+  assert.doesNotMatch(css, /\.block-action \{[^}]*inset-block-start/s);
   assert.match(css, /inset-inline-end: var\(--space-1\);/);
   assert.doesNotMatch(declarations, /(^|[;{\s])(left|right|top|bottom)\s*:/);
   assert.doesNotMatch(declarations, /(?<![\w-])(min-|max-)?(width|height)\s*:/);

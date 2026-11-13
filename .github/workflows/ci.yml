@@ -31,6 +31,9 @@ jobs:
       - name: Type check
         run: npm run typecheck
         working-directory: lateen
+      - name: Performance budget
+        run: npm run test:performance
+        working-directory: lateen
       - name: Build the packages and install them
         run: scripts/smoke-package.sh
         working-directory: lateen

@@ -1,0 +1,7 @@
+main:
+  - title: Guide
+    url: /guide/install/
+  - title: Reference
+    url: /reference/
+  - title: فارسی
+    url: /fa/guide/install/

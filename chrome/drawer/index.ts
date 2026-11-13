@@ -1,9 +1,7 @@
 import { h, type ComponentChildren } from "preact";
 import type { Chrome } from "@velella/mizzen/contracts";
+import { t } from "../../i18n/index.ts";
 import sidebar from "../sidebar/index.ts";
-
-const LABEL = "Menu";
-const CLOSE_LABEL = "Close menu";
 
 /**
  * The mobile navigation drawer: the sidebar inside a `<dialog>`, opened by the header's menu button below
@@ -14,12 +12,13 @@ const CLOSE_LABEL = "Close menu";
 const drawer: Chrome = (props) => {
   const nav = sidebar(props);
   if (nav == null) return null;
+  const lang = props.page.lang;
   return h(
     "dialog",
-    { class: "drawer", "data-drawer": true, "aria-label": LABEL },
+    { class: "drawer", "data-drawer": true, "aria-label": t(lang, "menu") },
     h(
       "button",
-      { type: "button", class: "drawer-close", "aria-label": CLOSE_LABEL, hidden: true, "data-drawer-close": true },
+      { type: "button", class: "drawer-close", "aria-label": t(lang, "close_menu"), hidden: true, "data-drawer-close": true },
       h("span", { "aria-hidden": "true" }, "×"),
     ),
     nav as ComponentChildren,

@@ -222,6 +222,11 @@ test("the disclosure is native, so it works with the keyboard and no JavaScript"
   const css = readFileSync(new URL("../chrome/version-switcher/style.css", import.meta.url), "utf8");
   assert.match(css, /\.version-switcher-summary:focus-visible \{\n {2}outline: 2px solid var\(--state-focus-ring\);\n {2}outline-offset: 2px;\n\}/);
   assert.match(css, /\.version-switcher-summary::-webkit-details-marker \{\n {2}display: none;\n\}/);
+  // At 320px the header actions wrap; the popover must anchor at its inline start in both directions.
+  assert.match(
+    css,
+    /@media \(max-width: 40rem\) \{[\s\S]*?\.version-switcher-list \{\n {4}inset-inline-start: 0;\n {4}inset-inline-end: auto;\n {2}\}/,
+  );
 });
 
 test("escaping: version names and URLs are escaped, and an unsafe URL is dropped", () => {

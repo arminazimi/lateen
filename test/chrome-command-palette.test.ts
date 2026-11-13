@@ -14,7 +14,7 @@ import {
   type PalettePayload,
 } from "../chrome/command-palette/actions.ts";
 import searchDialog, { SEARCH_RESULTS_ID } from "../chrome/search/index.ts";
-import { optionList } from "../chrome/search/options.ts";
+import { optionList } from "../chrome/search/client.ts";
 import {
   ACTIONS_LABEL,
   activate,

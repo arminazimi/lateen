@@ -213,6 +213,15 @@ test("the edit link sits between the body and the page footer, and is absent wit
   assert.doesNotMatch(html(doc(layoutProps(page))), /class="edit-page"/);
 });
 
+test("a page date and edit link appear once, not again in the footer", () => {
+  const page = pageWith({ frontMatter: { last_modified_at: "2026-03-04" } });
+  const rendered = html(doc(layoutProps(page, [], [], {}, { url: "https://github.com/o/r" })));
+
+  assert.equal(rendered.match(/data-date-source="source"/g)?.length, 1);
+  assert.equal(rendered.match(/class="edit-page-link"/g)?.length, 1);
+  assert.doesNotMatch(rendered, /page-footer-meta|page-footer-edit|page-footer-updated/);
+});
+
 test("the banner shows `since`, and a deprecated page links to its replacement", () => {
   const page = out(
     pageWith({ frontMatter: { status: "deprecated", since: "0.3.0", replaced_by: "/guide/new-install/" } }),

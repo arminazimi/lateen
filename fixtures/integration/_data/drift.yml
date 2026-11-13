@@ -1,0 +1,9 @@
+pages:
+  "/guide/install/":
+    - kind: drift.missing-symbol
+      reference: src/app.ts:12:5
+      severity: error
+      message: The example calls a symbol the file no longer exports.
+      url: /drift/build-42/#finding-1
+  "/guide/legacy/":
+    unavailable: true

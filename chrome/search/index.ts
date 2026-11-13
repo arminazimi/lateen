@@ -13,7 +13,7 @@ export const SEARCH_RESULTS_ID = "search-results-list";
 /**
  * The search dialog, extended into a command palette: a combobox field, a status region, and the
  * listbox it controls, which `client.ts` fills with options — the page results and the page's actions,
- * as rows of one model (`chrome/search/options.ts`). The actions are published by
+ * as rows of one model (this module). The actions are published by
  * `chrome/command-palette/` as inert JSON inside the same dialog, so there is still one dialog.
  * The dialog starts `hidden` and the header's search button stays `hidden`, so a visitor without
  * JavaScript never sees a control that would do nothing. `client.ts` removes both when it runs, and

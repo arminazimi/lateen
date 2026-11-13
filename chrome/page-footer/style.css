@@ -1,4 +1,4 @@
-/* Page footer: last updated, edit and feedback links, and the agent prompt button, under the article. */
+/* Page footer: the agent prompt button and the feedback link, under the article. */
 
 /* The footer's children join the page's action row (`.doc-actions`), so the buttons share one line. */
 .page-footer {
@@ -8,21 +8,12 @@
   color: var(--color-muted);
 }
 
-.page-footer-meta {
-  flex: 1 1 100%;
-}
-
-.page-footer-meta,
 .page-footer-feedback {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2) var(--space-6);
   margin: 0;
-}
-
-.page-footer-updated time {
-  color: var(--color-text);
 }
 
 .page-footer-copy {
@@ -46,19 +37,16 @@
 }
 
 .page-footer-copy:focus-visible,
-.page-footer-edit:focus-visible,
 .page-footer-feedback a:focus-visible {
   outline: 2px solid var(--state-focus-ring);
   outline-offset: 2px;
 }
 
-.page-footer-edit,
 .page-footer-feedback a {
   color: var(--color-accent);
   text-decoration: none;
 }
 
-.page-footer-edit:hover,
 .page-footer-feedback a:hover {
   color: var(--color-accent-hover);
   text-decoration: underline;

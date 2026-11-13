@@ -1,6 +1,6 @@
 {
   "name": "@velella/lateen",
-  "version": "0.1.0",
+  "version": "0.2.0-rc.1",
   "description": "A docs theme for people and agents, built on Mizzen.",
   "keywords": [
     "docs",
@@ -36,6 +36,7 @@
     "tokens:check": "node scripts/tokens.ts --check",
     "test": "node scripts/tokens.ts --check && node --test \"test/**/*.test.ts\"",
     "test:a11y": "node scripts/test-a11y.ts",
+    "test:performance": "node scripts/performance-budget.ts",
     "test:coverage": "node scripts/tokens.ts --check && mkdir -p coverage && node --test --experimental-test-coverage --test-coverage-exclude=\"test/**\" --test-coverage-exclude=\"scripts/**\" --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage/lcov.info \"test/**/*.test.ts\"",
     "coverage:badge": "node scripts/coverage-badge.ts coverage/lcov.info coverage/coverage.json",
     "typecheck": "tsc --noEmit -p tsconfig.json"

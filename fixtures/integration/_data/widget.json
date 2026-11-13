@@ -1,0 +1,15 @@
+{
+  "type": "object",
+  "required": ["name"],
+  "properties": {
+    "name": { "type": "string", "description": "The widget's name." },
+    "size": { "enum": ["s", "m", "l"], "default": "m", "description": "The rendered size." },
+    "nested": {
+      "type": "object",
+      "description": "Nested options.",
+      "properties": {
+        "retries": { "type": "integer", "default": 2 }
+      }
+    }
+  }
+}
