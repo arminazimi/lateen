@@ -127,6 +127,12 @@
   block-size: 1em;
 }
 
+.changelog-entry-category-label {
+  /* The words carry the category; the chip's border and icon keep its colour. Category colours on
+     their own do not reach 4.5:1 on the surface, so the label uses the body text colour. */
+  color: var(--color-text);
+}
+
 .changelog-entry-category-added {
   color: var(--color-success);
 }

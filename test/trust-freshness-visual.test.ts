@@ -113,8 +113,8 @@ test("the evidence surfaces are prepared for forced colors, print, zoom, RTL, an
   const reduced = css("styles/tokens.css");
   assert.match(reduced, /@media \(prefers-reduced-motion: reduce\)/);
   for (const path of [
-    "components/trust-panel/style.css",
-    "components/drift-banner/style.css",
+    "styles/parts-trust-panel.css",
+    "styles/parts-drift-banner.css",
     "components/tested-chip/style.css",
     "components/version-badge/style.css",
     "components/version-diff/style.css",

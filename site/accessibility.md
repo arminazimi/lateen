@@ -81,7 +81,7 @@ axe checks the rules it has; a pass is not an audit. A person still reviews each
 
 ## Release candidate QA record
 
-`0.2.0` was checked in Chromium against the built docs site and `fixtures/integration`, on Node 24
+`0.2.1` was checked in Chromium against the built docs site and `fixtures/integration`, on Node 24
 with `@velella/mizzen` 0.2.0:
 
 | Check | Result |

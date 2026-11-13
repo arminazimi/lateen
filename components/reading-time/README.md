@@ -19,7 +19,7 @@ count. The doc layout places it automatically on every doc page that has an entr
   grouping, so `en-IN` keeps `12,34,567` while only the default digits come from the language.
   Plurals and the `data-minutes` and `data-words` attributes keep the numeric value itself, so the
   machine-readable digits stay ASCII.
-- `style.css` draws the chip with tokens and logical properties.
+- `styles/parts-reading-time.css` draws the chip with tokens and logical properties.
 - `test/component-reading-time.test.ts` covers the fact lookup in every shape, the props override,
   singular and plural text in English, Persian, and Arabic, locale digits with regional tags,
   `-u-nu-` extensions, large grouped counts, and fail-soft fallbacks, the ASCII data attributes,

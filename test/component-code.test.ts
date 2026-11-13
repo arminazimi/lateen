@@ -11,7 +11,7 @@ function render(props: Record<string, string>, html: string): string {
   return renderToString(code(input as never) as never);
 }
 
-const css = readFileSync(new URL("../components/code/style.css", import.meta.url), "utf8");
+const css = readFileSync(new URL("../styles/parts-code.css", import.meta.url), "utf8");
 const names = JSON.parse(readFileSync(new URL("../tokens/names.json", import.meta.url), "utf8")) as Record<string, Record<string, unknown>>;
 const tokenNames = new Set(Object.entries(names).flatMap(([g, e]) => Object.keys(e).map((n) => `${g}-${n}`)));
 

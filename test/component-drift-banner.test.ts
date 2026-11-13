@@ -65,7 +65,7 @@ const tokenNames = new Set(
   Object.entries(names).flatMap(([group, entries]) => Object.keys(entries).map((name) => `${group}-${name}`)),
 );
 
-const css = readFileSync(new URL("../components/drift-banner/style.css", import.meta.url), "utf8");
+const css = readFileSync(new URL("../styles/parts-drift-banner.css", import.meta.url), "utf8");
 
 test("default export is the drift banner component", () => {
   assert.equal(typeof driftBanner, "function");
