@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "velella.skill-evals.v1",
+  "cases": [
+    { "id": "lt-component", "kind": "positive", "prompt": "Add a callout component to Lateen with variants, escaping, and rendered-output tests.", "shouldTrigger": true, "reason": "Lateen component workflow." },
+    { "id": "lt-rtl", "kind": "positive", "prompt": "Fix the Lateen sidebar alignment in Persian RTL mode.", "shouldTrigger": true, "reason": "Lateen RTL work." },
+    { "id": "lt-contrast", "kind": "positive", "prompt": "The dark-mode focus ring fails WCAG contrast in Lateen; fix it.", "shouldTrigger": true, "reason": "Theme accessibility and color work." },
+    { "id": "lt-keyboard", "kind": "positive", "prompt": "Make Lateen's search dialog return keyboard focus to its trigger when closed.", "shouldTrigger": true, "reason": "Browser-island accessibility." },
+    { "id": "lt-tokens", "kind": "positive", "prompt": "Change the Lateen accent token and regenerate the committed CSS.", "shouldTrigger": true, "reason": "Token generation workflow." },
+    { "id": "lt-layout", "kind": "positive", "prompt": "Add a glossary layout to the Lateen docs theme using the base layout.", "shouldTrigger": true, "reason": "Lateen layout workflow." },
+    { "id": "lt-nojs", "kind": "ambiguous", "prompt": "These documentation tabs must remain readable when JavaScript is disabled.", "shouldTrigger": true, "reason": "Progressive enhancement without the product name." },
+    { "id": "lt-baseline", "kind": "positive", "prompt": "Resolve the new serious axe violation instead of adding it to Lateen's accessibility baseline.", "shouldTrigger": true, "reason": "Lateen accessibility gate." },
+    { "id": "lt-mobile", "kind": "ambiguous", "prompt": "The docs drawer clips Arabic text on a 375-pixel mobile viewport.", "shouldTrigger": true, "reason": "Responsive RTL theme debugging." },
+    { "id": "lt-preact", "kind": "positive", "prompt": "Implement a Lateen chrome unit with Preact h(), an optional island, and logical CSS.", "shouldTrigger": true, "reason": "Lateen chrome conventions." },
+    { "id": "lt-mizzen-pipeline", "kind": "negative", "prompt": "Fix nondeterministic file ordering in Mizzen's build pipeline.", "shouldTrigger": false, "reason": "Engine behavior uses the mizzen Skill." },
+    { "id": "lt-mizzen-cli", "kind": "negative", "prompt": "Add SARIF output and exit-code tests to the mizzen check CLI.", "shouldTrigger": false, "reason": "Mizzen CLI behavior." },
+    { "id": "lt-sourcemap", "kind": "negative", "prompt": "Correct the exact source positions in Mizzen's sourcemap output.", "shouldTrigger": false, "reason": "Engine source-map work." },
+    { "id": "lt-offing", "kind": "negative", "prompt": "Find deprecated GitHub Actions in this repository and migrate them.", "shouldTrigger": false, "reason": "Lifecycle migration belongs to Offing." },
+    { "id": "lt-ebb", "kind": "negative", "prompt": "Check whether this npm package is end of life before installing it.", "shouldTrigger": false, "reason": "Dependency lifecycle verification." },
+    { "id": "lt-react", "kind": "negative", "prompt": "Build a blue button for our React analytics dashboard.", "shouldTrigger": false, "reason": "Generic application UI is not Lateen." },
+    { "id": "lt-security", "kind": "negative", "prompt": "Run Snyk and fix all high-severity dependency findings.", "shouldTrigger": false, "reason": "Security remediation is unrelated." },
+    { "id": "lt-algorithm", "kind": "negative", "prompt": "Implement a Markdown parser in Rust.", "shouldTrigger": false, "reason": "Generic parser implementation is not the Lateen theme." },
+    { "id": "lt-upgrade", "kind": "ambiguous", "prompt": "Upgrade every npm dependency to its latest release.", "shouldTrigger": false, "reason": "Routine dependency upgrades are unrelated." },
+    { "id": "lt-api", "kind": "negative", "prompt": "Migrate our deprecated REST endpoint to v2.", "shouldTrigger": false, "reason": "Application API migration is unrelated." }
+  ]
+}

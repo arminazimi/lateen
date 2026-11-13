@@ -1,0 +1,41 @@
+{
+  "skill_name": "lateen",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Plan a new Lateen quote component with optional caption, token-based styles, and no required JavaScript. Do not implement; name the files, rendering conventions, accessibility and RTL checks, and tests.",
+      "expected_output": "A plan covering components/quote discovery, Preact h() and default export, token-based logical CSS, semantic no-JS output, component tests, typecheck, full tests, and relevant browser gates.",
+      "files": [],
+      "expectations": [
+        "Names components/quote/index.ts with a default Preact h() component and no JSX or shared-index edit.",
+        "Uses token-based logical CSS in components/quote/style.css and requires no client island.",
+        "Covers semantic no-JavaScript output, captions, escaping, RTL, and focused component tests.",
+        "Runs typecheck, full tests, and the relevant accessibility verification."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Lateen's search dialog has poor dark-mode focus contrast and clips Arabic text on mobile. Give a debugging and verification plan without hiding new violations in the accessibility baseline. Do not edit code.",
+      "expected_output": "A plan covering the owning chrome unit, tokens, logical CSS, keyboard focus, dark and Arabic mobile states, targeted debugging followed by the full accessibility gate, and no baseline suppression.",
+      "files": [],
+      "expectations": [
+        "Inspects the owning chrome/search unit and shared tokens rather than adding unrelated global overrides.",
+        "Covers dark focus contrast, keyboard focus, Arabic RTL text, mobile layout, and logical CSS.",
+        "Explicitly rejects adding new violations to the accessibility baseline.",
+        "Uses targeted browser debugging followed by full typecheck, tests, and test:a11y."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Plan a new Lateen glossary layout that reuses the base layout and existing chrome. Do not implement; include the Mizzen contract boundary, Preact convention, tests, docs check, and accessibility verification.",
+      "expected_output": "A plan naming layouts/glossary.ts, type-only @velella/mizzen/contracts imports, Preact h(), base layout reuse, layout tests, docs check, full tests, and accessibility coverage.",
+      "files": [],
+      "expectations": [
+        "Names layouts/glossary.ts with a default Preact h() layout that reuses base and existing chrome.",
+        "Uses import type from @velella/mizzen/contracts and no relative or runtime engine import.",
+        "Adds a focused layout test and runs the Mizzen docs-site check with zero errors.",
+        "Runs typecheck, full tests, and the full accessibility gate."
+      ]
+    }
+  ]
+}
