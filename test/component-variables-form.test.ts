@@ -21,6 +21,7 @@ import variablesForm, {
   fieldsFor,
   idBase,
   inputTypeOf,
+  instanceBase,
   mergeDeclarations,
   parseDeclarations,
   valueOf,
@@ -64,6 +65,35 @@ function render(props: VariablesFormProps = {}, options: RenderOptions = {}): st
   const site = { data: options.data ?? {} };
   const node = variablesForm({ props, page, site, html: "" } as unknown as ComponentProps<VariablesFormProps>);
   return node === null ? null : renderToString(node as never);
+}
+
+/** A page a test can render several forms on, so they share one instance allocator. */
+function pageFor(lang = "en"): { lang: string; dir: "ltr" | "rtl"; html: string; frontMatter: Record<string, unknown> } {
+  return { lang, dir: lang === "fa" || lang === "ar" ? "rtl" : "ltr", html: "<p>page</p>", frontMatter: {} };
+}
+
+/** Render one form on an existing page object, the way the render host does inside a single page. */
+function renderOn(page: Record<string, unknown>, props: VariablesFormProps = {}): string | null {
+  const node = variablesForm({
+    props,
+    page,
+    site: { data: {} },
+    html: "",
+  } as unknown as ComponentProps<VariablesFormProps>);
+  return node === null ? null : renderToString(node as never);
+}
+
+/** Every `id` in some markup, in document order. */
+function idsOf(markup: string): string[] {
+  return [...markup.matchAll(/\bid="([^"]*)"/g)].map((match) => match[1]!);
+}
+
+/** Every `for`, `aria-describedby`, and `id` association in a form, as the browser would resolve it. */
+function associationsOf(markup: string): { readonly forIds: string[]; readonly describedBy: string[] } {
+  return {
+    forIds: [...markup.matchAll(/\bfor="([^"]*)"/g)].map((match) => match[1]!),
+    describedBy: [...markup.matchAll(/\baria-describedby="([^"]*)"/g)].map((match) => match[1]!),
+  };
 }
 
 /** A page declaration list in the N33 shape. */
@@ -312,6 +342,156 @@ test("the id prop prefixes the ids and is reduced to safe characters", () => {
   assert.match(out, /for="quick-start-api-key-1"/);
   assert.match(out, /id="quick-start-api-key-1"/);
   assert.match(out, /id="quick-start-hint"/);
+});
+
+test("two default forms on one page keep separate ids and associations", () => {
+  const page = pageFor();
+  const props = { variables: '[{"name":"api_key","default":"YOUR_KEY"}]' };
+  const first = renderOn(page, props);
+  const second = renderOn(page, props);
+  assert.ok(first);
+  assert.ok(second);
+
+  assert.match(first, /id="variables-form-legend"/);
+  assert.match(first, /id="variables-form-hint"/);
+  assert.match(first, /id="variables-form-api_key-1"/);
+  assert.match(second, /id="variables-form-2-legend"/);
+  assert.match(second, /id="variables-form-2-hint"/);
+  assert.match(second, /id="variables-form-2-api_key-1"/);
+
+  const ids = [...idsOf(first), ...idsOf(second)];
+  assert.equal(new Set(ids).size, ids.length, "no id is duplicated across the page");
+  for (const form of [first, second]) {
+    const { forIds, describedBy } = associationsOf(form);
+    for (const id of forIds) assert.ok(idsOf(form).includes(id), `label for ${id} stays inside its form`);
+    for (const id of describedBy) assert.ok(idsOf(form).includes(id), `description ${id} stays inside its form`);
+    assert.equal(new Set(forIds).size, forIds.length);
+  }
+});
+
+test("forms whose explicit ids sanitize alike get deterministic suffixes", () => {
+  const page = pageFor();
+  const one = renderOn(page, { id: "quick start", variables: '[{"name":"host"}]' });
+  const two = renderOn(page, { id: "quick@start", variables: '[{"name":"host"}]' });
+  const three = renderOn(page, { id: "quick_start", variables: '[{"name":"host"}]' });
+  assert.ok(one);
+  assert.ok(two);
+  assert.ok(three);
+
+  assert.match(one, /id="quick-start-legend"/);
+  assert.match(two, /id="quick-start-2-legend"/);
+  assert.match(three, /id="quick_start-legend"/, "a distinct sanitized id is not pushed aside");
+  assert.equal(new Set([...idsOf(one), ...idsOf(two), ...idsOf(three)]).size, idsOf(one).length * 3);
+});
+
+test("an explicit id keeps its first published ids beside a default form", () => {
+  const page = pageFor();
+  const manual = renderOn(page, { id: "release", variables: '[{"name":"host"}]' });
+  const automatic = renderOn(page, { variables: '[{"name":"host"}]' });
+  const repeated = renderOn(page, { id: "variables-form", variables: '[{"name":"host"}]' });
+  assert.ok(manual);
+  assert.ok(automatic);
+  assert.ok(repeated);
+
+  assert.match(manual, /id="release-legend"/);
+  assert.match(automatic, /id="variables-form-legend"/, "the first default form keeps the published ids");
+  assert.match(repeated, /id="variables-form-2-legend"/, "an explicit id cannot take another form's ids");
+});
+
+test("ids are deterministic on a fresh page and reset when the page HTML is rebuilt", () => {
+  const props = { variables: '[{"name":"host"}]' };
+  const pair = (): string[] => {
+    const page = pageFor();
+    return [renderOn(page, props)!, renderOn(page, props)!];
+  };
+  assert.deepEqual(pair(), pair());
+
+  const page = pageFor();
+  assert.match(renderOn(page, props)!, /id="variables-form-legend"/);
+  assert.match(renderOn(page, props)!, /id="variables-form-2-legend"/);
+  page.html = "<p>rebuilt page</p>";
+  assert.match(renderOn(page, props)!, /id="variables-form-legend"/, "a rebuild starts from the first id again");
+});
+
+test("a page with no variables consumes no instance id", () => {
+  const page = pageFor();
+  assert.equal(renderOn(page, { variables: "[]" }), null);
+  assert.match(renderOn(page, { variables: '[{"name":"host"}]' })!, /id="variables-form-legend"/);
+});
+
+test("repeated variable names get distinct ids and labels inside one form", () => {
+  const out = render(
+    { variables: '[{"name":"api_key","default":"ONE"},{"name":"api_key","default":"TWO"}]' },
+  );
+  assert.ok(out);
+  const ids = idsOf(out);
+  assert.equal(new Set(ids).size, ids.length);
+  assert.match(out, /for="variables-form-api_key-1"/);
+  assert.match(out, /for="variables-form-api_key-2"/);
+  assert.equal(associationsOf(out).forIds.length, 2, "each duplicate name keeps its own label");
+});
+
+test("instanceBase allocates per page without leaking into another page", () => {
+  const one = pageFor();
+  const two = pageFor();
+  assert.equal(instanceBase(one as never, undefined), "variables-form");
+  assert.equal(instanceBase(one as never, undefined), "variables-form-2");
+  assert.equal(instanceBase(two as never, undefined), "variables-form");
+  assert.equal(instanceBase(two as never, "variables-form-2"), "variables-form-2");
+});
+
+test("duplicate variable names across two forms still follow the same examples on input", () => {
+  const span = new FakeElement({ "data-var": "api_key" }, [new FakeText("{{api_key}}")]);
+  const { output } = outputWith(["api_key"]);
+  const root = new FakeRoot([span], [], [output]);
+  const page = pageFor();
+
+  const first = renderOn(page, { variables: '[{"name":"api_key","default":"YOUR_KEY"}]' });
+  const second = renderOn(page, { variables: '[{"name":"api_key","default":"YOUR_KEY"}]' });
+  assert.ok(first);
+  assert.ok(second);
+  assert.match(second, /id="variables-form-2-api_key-1"/);
+
+  const one = new FakeInput("api_key", "YOUR_KEY");
+  const two = new FakeInput("api_key", "YOUR_KEY");
+  const reset = new FakeReset();
+  activate(root, new FakeForm([one]));
+  activate(root, new FakeForm([two], reset));
+
+  one.type("FIRST");
+  assert.equal(span.textContent, "FIRST");
+  assert.equal(output.getAttribute("data-output-stale"), "true");
+  assert.equal(two.value, "YOUR_KEY", "typing in one form never writes the other form's input");
+
+  two.type("SECOND");
+  assert.equal(span.textContent, "SECOND");
+
+  reset.click();
+  assert.equal(two.value, "YOUR_KEY");
+  assert.equal(one.value, "FIRST", "reset restores only its own form's inputs");
+  assert.equal(span.textContent, "YOUR_KEY");
+  assert.equal(output.getAttribute("data-output-stale"), null);
+});
+
+test("a right-to-left page keeps every id and association intact", () => {
+  const page = pageFor("fa");
+  const first = renderOn(page, {
+    variables: '[{"name":"api_key","default":"YOUR_KEY"},{"name":"host","default":"https://api.example.com"}]',
+  });
+  const second = renderOn(page, {
+    variables: '[{"name":"api_key","default":"YOUR_KEY"},{"name":"host","default":"https://api.example.com"}]',
+  });
+  assert.ok(first);
+  assert.ok(second);
+
+  for (const form of [first, second]) {
+    const ids = idsOf(form);
+    assert.equal(new Set(ids).size, ids.length);
+    for (const id of ids) assert.match(id, /^[\x20-\x7e]+$/, "ids stay ASCII on an RTL page");
+    const { forIds, describedBy } = associationsOf(form);
+    for (const id of [...forIds, ...describedBy]) assert.ok(ids.includes(id));
+    assert.ok(form.includes(">متغیرها</legend>"));
+  }
 });
 
 test("the legend and hint follow the page language", () => {
