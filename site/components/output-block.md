@@ -46,7 +46,7 @@ from the output text itself:
 
 ```markdown
 :::output-block{stream=stderr exit=1 duration=340ms}
-error: no such file or directory: {{path}}
+error: no such file or directory: \{{path}}
 :::
 ```
 
@@ -108,7 +108,7 @@ error: no such file or directory
 
 - An empty body, or one that holds only whitespace, renders nothing.
 - The body stays text: `<b>` written in it is shown as it is written, never turned into markup.
-- A body that names a variable (`{{project}}`) records it. `deps` declares inputs the text never repeats, such as an exit status or a timing result; both are recorded together. When the reader changes one of those values, the block is marked stale instead of pretending the recorded output still matches.
+- A body that names a variable (`\{{project}}`) records it. `deps` declares inputs the text never repeats, such as an exit status or a timing result; both are recorded together. When the reader changes one of those values, the block is marked stale instead of pretending the recorded output still matches.
 - The recorded output is never rewritten: the stale note explains why the text did not follow, and copying returns the original text exactly.
 - A malformed `deps` value is ignored, so the block still renders with the names its text mentions.
 - Evidence declarations never change the recorded text: an invalid `stream`, `exit`, or `duration` is
