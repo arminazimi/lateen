@@ -55,7 +55,7 @@ const names = JSON.parse(readFileSync(new URL("../tokens/names.json", import.met
 const tokenNames = new Set(
   Object.entries(names).flatMap(([group, entries]) => Object.keys(entries).map((name) => `${group}-${name}`)),
 );
-const css = readFileSync(new URL("../components/reading-time/style.css", import.meta.url), "utf8");
+const css = readFileSync(new URL("../styles/parts-reading-time.css", import.meta.url), "utf8");
 
 test("default export is the component and the plural prefixes are stable", () => {
   assert.equal(typeof readingTime, "function");

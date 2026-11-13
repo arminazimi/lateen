@@ -10,7 +10,7 @@ Escape without JavaScript; the island only adds the focus return to the chip.
   so a page with no trust record never gets a chip. An entry that is present but unreadable renders an
   `unknown` panel marked `data-trust-evidence="invalid"`, so a malformed record is reported instead of
   disappearing.
-- `style.css` draws the chip and the panel with tokens and logical properties. The panel sits under
+- `styles/parts-trust-panel.css` draws the chip and the panel with tokens and logical properties. The panel sits under
   the chip on a wide screen and in the flow on a narrow one, so it works under RTL too. Long reasons
   wrap (`overflow-wrap: anywhere`) and the panel never grows wider than the viewport, so a long
   translation stays readable at narrow widths and zoom.

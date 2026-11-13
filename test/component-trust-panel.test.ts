@@ -101,7 +101,7 @@ const tokenNames = new Set(
   Object.entries(names).flatMap(([group, entries]) => Object.keys(entries).map((name) => `${group}-${name}`)),
 );
 
-const css = readFileSync(new URL("../components/trust-panel/style.css", import.meta.url), "utf8");
+const css = readFileSync(new URL("../styles/parts-trust-panel.css", import.meta.url), "utf8");
 
 test("default export is the trust panel component, and the class names are stable", () => {
   assert.equal(typeof trustPanel, "function");

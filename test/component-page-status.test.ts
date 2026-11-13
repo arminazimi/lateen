@@ -62,7 +62,7 @@ const tokenNames = new Set(
   Object.entries(names).flatMap(([group, entries]) => Object.keys(entries).map((name) => `${group}-${name}`)),
 );
 
-const css = readFileSync(new URL("../components/page-status/style.css", import.meta.url), "utf8");
+const css = readFileSync(new URL("../styles/parts-page-status.css", import.meta.url), "utf8");
 
 test("default export is the page status component", () => {
   assert.equal(typeof pageStatus, "function");

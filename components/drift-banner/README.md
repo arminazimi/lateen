@@ -29,7 +29,7 @@ and it never presents an unchecked page as a healthy one.
   inventing a reference. Malformed spans and unsafe URLs never become text or links. A non-record
   finding, or one whose authored severity is not recognized, keeps its row and reads as `unknown`;
   only a missing severity takes the `warning` default.
-- `style.css` draws the banner with an accent on the inline start edge, so it moves under RTL, and
+- `styles/parts-drift-banner.css` draws the banner with an accent on the inline start edge, so it moves under RTL, and
   colours it by severity. Machine values stay left to right under RTL. Text and icon carry the state;
   colour is never the only signal.
 - `test/component-drift-banner.test.ts` covers the three states, the finding rows and anchors, span

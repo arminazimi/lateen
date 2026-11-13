@@ -4,6 +4,17 @@ Releases of this package are tagged `v<version>`. Add a one-line fragment in `ch
 
 ## Unreleased
 
+## 0.2.1 — 2026-11-13
+
+### Fixed
+
+- Components a layout renders directly now load their CSS on every page. The engine bundles a page's
+  component styles from the components its Markdown used, so a layout-only `style.css` never loaded:
+  the trust chip's unsized icon filled the viewport, and reading time, page status, the drift banner,
+  changelog entries, and code blocks rendered unstyled. Their rules now live in `styles/parts-<name>.css`,
+  which is always loaded. This costs 1.3 KB gzip on the base stylesheet; the performance baseline was
+  re-measured and updated.
+
 ## 0.2.0 — 2026-11-13
 
 The first complete Lateen theme. Every layout, chrome unit, and component ships with its keyboard,
