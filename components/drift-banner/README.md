@@ -12,8 +12,11 @@ and it never presents an unchecked page as a healthy one.
   - `unavailable` — the entry is `null` or `{ unavailable: true }`, so the check has no result for this
     page. It says "Drift has not been checked for this page." and draws a dashed accent, so unknown is
     not mistaken for clean.
-- The severity comes from the worst finding (`error`, `warning`, `info`; a missing or unknown severity
-  is `warning`). `unavailable` is `unknown` and is never `error`, `warning`, or `info`.
+- The severity comes from the worst finding (`error`, `warning`, `info`; a missing severity is
+  `warning`, the engine's documented default). An unrecognized severity, a non-record finding, and the
+  `unavailable` entry are `unknown` and are never `error`, `warning`, or `info`. `unknown` outranks
+  `warning` and `info`, so an all-unknown list never reads as a confident warning; a known `error`
+  still wins.
 - Below the summary it renders one row per finding, so the list length always matches the count. Each
   row has a stable anchor, `drift-banner-finding-<position>`, its own severity, the check id (`kind`, or
   a diagnostic `id`), the message, and the validated source span. A span comes from `reference`
@@ -23,7 +26,9 @@ and it never presents an unchecked page as a healthy one.
 - A safe `url` on a finding turns its reference into the evidence link: a root-relative path gets `base`
   in front, an `https` link is kept, and anything else is dropped. The generic report link remains.
 - A finding with no readable kind, span, message, or link renders as "Not recorded" instead of
-  inventing a reference. Malformed spans and unsafe URLs never become text or links.
+  inventing a reference. Malformed spans and unsafe URLs never become text or links. A non-record
+  finding, or one whose authored severity is not recognized, keeps its row and reads as `unknown`;
+  only a missing severity takes the `warning` default.
 - `style.css` draws the banner with an accent on the inline start edge, so it moves under RTL, and
   colours it by severity. Machine values stay left to right under RTL. Text and icon carry the state;
   colour is never the only signal.

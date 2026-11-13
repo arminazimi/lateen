@@ -38,13 +38,15 @@ Each key is the page URL including the site's `base`, such as `/evergreen/guide/
 | `kind` or `id` | The check that found the problem, such as `drift.missing-symbol`. Shown as a machine token. |
 | `reference` | The cited code span: `path:line`, `path:line-endLine`, or `path:line:column`. Only a repository-relative path is accepted. |
 | `path` or `file`, `line`, `endLine`, `column` | The same span as separate fields, when the data does not use `reference`. |
-| `severity` | `error`, `warning`, or `info`. A missing or unknown value reads as `warning`, matching the banner. |
+| `severity` | `error`, `warning`, or `info`. A missing value reads as `warning`, the engine's documented default. Any other value, such as an unknown string, `null`, a number, or an object, stays `unknown` and is never promoted to `warning`. |
 | `message` | A human-readable explanation. Rendered as text. |
 | `url` | Optional evidence link. A root-relative path gets `base` in front; an `https` URL is kept as written. |
 
 Each row gets a stable anchor from its position, `drift-banner-finding-1`, `drift-banner-finding-2`, and so on, and carries its own `data-drift-severity`. A validated span also fills `data-drift-path`, `data-drift-line`, `data-drift-end-line`, and `data-drift-column`, so a reader or agent can link to the exact finding.
 
-Malformed data is never turned into a source claim. An unsafe `url` is dropped, so the reference stays plain text. A malformed span, a non-record finding, or a finding with nothing readable is shown as "Not recorded" instead of an invented path, line, or link. The banner itself stays plain HTML, so the whole list reads without JavaScript.
+The banner's severity is the worst finding's. A known `error` beats an `unknown` finding, but `unknown` beats `warning` and `info`, because an unreadable finding could be worse than either. A list whose findings are all unknown therefore stays `unknown` with the dashed accent, instead of making a warning or info claim the data never made.
+
+Malformed data is never turned into a source claim. An unsafe `url` is dropped, so the reference stays plain text. A malformed span, a non-record finding, or a finding with nothing readable is shown as "Not recorded" instead of an invented path, line, or link. A non-record finding and an unrecognized `severity` are also `unknown`, never a warning. The banner itself stays plain HTML, so the whole list reads without JavaScript.
 
 ## Options
 

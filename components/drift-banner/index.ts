@@ -49,7 +49,7 @@ export const STATES = ["drifting", "stale", "unavailable"] as const;
 
 export type DriftState = (typeof STATES)[number];
 
-/** How serious the evidence is. `unknown` is the unavailable state; it never reads as healthy. */
+/** How serious the evidence is. `unknown` is unreadable evidence; it never reads as healthy. */
 export const SEVERITIES = ["error", "warning", "info", "unknown"] as const;
 
 export type DriftSeverity = (typeof SEVERITIES)[number];
@@ -88,7 +88,7 @@ export interface DriftEvidence {
   readonly state: DriftState;
   /** The number of findings. `0` for the unavailable state, which has no count. */
   readonly count: number;
-  /** The worst finding severity, or `unknown` when the check has no result. */
+  /** The worst finding severity, or `unknown` when the check has no result or no readable severity. */
   readonly severity: DriftSeverity;
 }
 
@@ -132,15 +132,24 @@ export function findingsOf(site: Site, url: string): readonly unknown[] | undefi
   return Array.isArray(value) ? value : undefined;
 }
 
-/** How serious a finding is; a missing or unknown value reads as `warning`, the engine's default. */
+/**
+ * How serious a finding is. A missing severity takes the engine's documented `warning` default. An
+ * authored but unrecognized value, and a finding that is not a record, stay `unknown` instead of
+ * being promoted to a claim the data never made.
+ */
 function severityOf(finding: unknown): DriftSeverity {
-  if (isRecord(finding) && (finding.severity === "error" || finding.severity === "info")) return finding.severity;
-  return "warning";
+  if (!isRecord(finding)) return "unknown";
+  const severity = finding.severity;
+  if (severity === undefined) return "warning";
+  return severity === "error" || severity === "warning" || severity === "info" ? severity : "unknown";
 }
 
-/** The worst of two severities; `error` beats `warning` beats `info`. */
+/**
+ * The worst of two severities. `unknown` outranks `warning` and `info`, because an unreadable finding
+ * could be worse than either, so an all-unknown list never reads as confident; a known `error` still wins.
+ */
 function worst(a: DriftSeverity, b: DriftSeverity): DriftSeverity {
-  const rank: Readonly<Record<DriftSeverity, number>> = { error: 0, warning: 1, info: 2, unknown: 3 };
+  const rank: Readonly<Record<DriftSeverity, number>> = { error: 0, unknown: 1, warning: 2, info: 3 };
   return rank[b] < rank[a] ? b : a;
 }
 
@@ -205,7 +214,7 @@ export interface FindingSpan {
 export interface FindingDetail {
   /** The stable anchor id: `drift-banner-finding-<position>`, counting from one. */
   readonly id: string;
-  /** The finding's severity; a missing or unknown value reads as `warning`, like the banner's. */
+  /** The finding's severity; a missing value reads as `warning`, unrecognized and non-record values as `unknown`. */
   readonly severity: DriftSeverity;
   /** The check that found it, `kind` or a diagnostic `id`, when it is a single safe token. */
   readonly kind?: string;

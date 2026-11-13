@@ -117,13 +117,57 @@ test("findings that only describe the page are stale, not drifting", () => {
   assert.match(out, /<span class="drift-banner-what">This page may be out of date\.<\/span>/);
 });
 
-test("the severity is the worst finding's, and a missing or unknown one reads as warning", () => {
+test("the severity is the worst finding's, while a missing severity uses the engine default", () => {
   const severity = (findings: unknown[]) => evidenceOf(siteOf({ drift: { "/guide/": findings } }), "/guide/")!.severity;
   assert.equal(severity([{ kind: "drift.missing-file", severity: "info" }]), "info");
   assert.equal(severity([{ kind: "drift.missing-file", severity: "info" }, { kind: "drift.moved-symbol", severity: "warning" }]), "warning");
   assert.equal(severity([{ kind: "drift.missing-file", severity: "warning" }, { kind: "drift.moved-symbol", severity: "error" }]), "error");
-  assert.equal(severity([{ kind: "drift.missing-file", severity: "fatal" }]), "warning");
-  assert.equal(severity([{ kind: "drift.missing-file" }]), "warning");
+  assert.equal(severity([{ kind: "drift.missing-file", severity: "error" }, { kind: "drift.moved-symbol", severity: "fatal" }]), "error", "a known error still wins");
+  assert.equal(severity([{ kind: "drift.missing-file" }]), "warning", "missing severity is the documented default");
+  assert.equal(severity([{ kind: "drift.missing-file", severity: undefined }]), "warning");
+});
+
+test("an authored but unrecognized severity stays unknown instead of becoming a warning", () => {
+  const severity = (findings: unknown[]) => evidenceOf(siteOf({ drift: { "/guide/": findings } }), "/guide/")!.severity;
+  for (const value of ["fatal", "", "ERROR", " warning ", 42, 0, true, null, {}, []]) {
+    assert.equal(severity([{ kind: "drift.missing-file", severity: value }]), "unknown", `${String(value)} severity is unknown`);
+  }
+  for (const finding of ["not a finding", 42, null, ["error"], true]) {
+    assert.equal(severity([finding]), "unknown", `${String(finding)} is not a record`);
+  }
+  assert.deepEqual(
+    findingDetailsOf([{ severity: "fatal" }, { severity: null }, "not a finding", null]).map((detail) => detail.severity),
+    ["unknown", "unknown", "unknown", "unknown"],
+  );
+  assert.equal(evidenceOf(siteOf({ drift: { "/guide/": ["x"] } }), "/guide/")!.severity, "unknown");
+  assert.equal(evidenceOf(siteOf({ drift: { "/guide/": ["x"] } }), "/guide/")!.state, "stale", "the page entry is still stale");
+});
+
+test("an all-unknown finding list never reads as a confident warning or info banner", () => {
+  const findings = [
+    { kind: "drift.missing-file", reference: "src/app.ts:12", severity: "fatal" },
+    { message: "The severity was malformed.", severity: { level: "error" } },
+    "not a finding",
+  ];
+  const out = render({ drift: { "/guide/": findings } });
+  assert.ok(out);
+  assert.match(out, new RegExp(`class="${CLASS} ${CLASS}-drifting"`), "the cited source keeps the state");
+  assert.match(out, /data-drift-state="drifting"/);
+  assert.match(out, /data-drift-severity="unknown"/);
+  assert.doesNotMatch(out, /data-drift-severity="(?:error|warning|info)"/, "no known severity is invented");
+  assert.match(out, /<span class="drift-banner-message">3 drift findings<\/span>/);
+
+  const rows = [...out.matchAll(/<li id="([^"]+)" class="[^"]*" data-drift-severity="([^"]+)"/g)].map((match) => [
+    match[1],
+    match[2],
+  ]);
+  assert.deepEqual(rows, [
+    ["drift-banner-finding-1", "unknown"],
+    ["drift-banner-finding-2", "unknown"],
+    ["drift-banner-finding-3", "unknown"],
+  ]);
+  assert.match(out, /data-drift-path="src\/app.ts" data-drift-line="12"/, "the source span survives the unknown severity");
+  assert.match(out, new RegExp(`<span class="${FINDING_SEVERITY_CLASS}" dir="ltr">unknown</span>`));
 });
 
 test("an explicit unavailable marker is its own state, never healthy", () => {
@@ -385,13 +429,37 @@ test("mixed valid and invalid findings keep the count, severity, and list in agr
   assert.match(out, /data-drift-severity="error"/, "the worst finding still sets the banner severity");
 
   const rows = [...out.matchAll(/<li id="[^"]+" class="[^"]*" data-drift-severity="([^"]+)"/g)].map((match) => match[1]);
-  assert.deepEqual(rows, ["info", "warning", "error", "warning"], "every finding has its own severity");
+  assert.deepEqual(rows, ["info", "unknown", "error", "unknown"], "every finding has its own severity");
 
   const unavailable = [...out.matchAll(/data-drift-finding-available="false"/g)];
   assert.equal(unavailable.length, 2, "the string and null findings are plainly unavailable");
   assert.doesNotMatch(out, /drift-banner-finding-link/, "an unsafe link is not rendered");
   assert.doesNotMatch(out, /app\.ts:0/, "a malformed span is not shown");
   assert.match(out, new RegExp(`<span class="${FINDING_CLASS}-note">Not recorded</span>`));
+});
+
+test("a mixed known and unknown list keeps its count, anchors, and evidence links", () => {
+  const findings = [
+    { kind: "drift.missing-file", reference: "src/app.ts:12", severity: "info", url: "/evidence/1" },
+    { kind: "drift.moved-symbol", severity: "fatal", url: "https://ci.example/build/2" },
+    null,
+  ];
+  const out = render({ drift: { "/guide/": findings } });
+  assert.ok(out);
+  assert.match(out, /<span class="drift-banner-message">3 drift findings<\/span>/);
+  assert.match(out, /data-drift-severity="unknown"/, "unreadable evidence keeps the banner unknown");
+
+  const rows = [...out.matchAll(/<li id="([^"]+)" class="[^"]*" data-drift-severity="([^"]+)"/g)].map((match) => [
+    match[1],
+    match[2],
+  ]);
+  assert.deepEqual(rows, [
+    ["drift-banner-finding-1", "info"],
+    ["drift-banner-finding-2", "unknown"],
+    ["drift-banner-finding-3", "unknown"],
+  ]);
+  assert.match(out, new RegExp(`<a class="${FINDING_REFERENCE_CLASS} ${FINDING_LINK_CLASS}" href="/evidence/1" dir="ltr">src/app.ts:12</a>`));
+  assert.match(out, new RegExp(`<a class="${FINDING_KIND_CLASS} ${FINDING_LINK_CLASS}" href="https://ci.example/build/2" dir="ltr">drift.moved-symbol</a>`));
 });
 
 test("machine values stay left to right on an RTL page while the labels translate", () => {
