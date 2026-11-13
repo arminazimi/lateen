@@ -4,6 +4,7 @@ import { test } from "node:test";
 import { Fragment } from "preact";
 import type { ChromeProps, NavItem, Page, Pager, Site, SiteConfig, SourcePos, Trail } from "@velella/mizzen/contracts";
 import sectionTabs from "../chrome/section-tabs/index.ts";
+import { languages, stringsOf } from "../i18n/index.ts";
 
 /** Navigation items as navigation.yml carries them: the contract fields plus authoring marks like `tab`. */
 type NavSource = NavItem & { readonly tab?: unknown };
@@ -27,14 +28,19 @@ const config: SiteConfig = {
   outputs: {},
 };
 
-function pageAt(url: string): Page {
+/** True for the right-to-left page languages the theme ships catalogs for, including regional codes. */
+function isRtl(lang: string): boolean {
+  return /^(fa|ar)([-_]|$)/.test(lang);
+}
+
+function pageAt(url: string, lang = "en"): Page {
   return {
     url,
     source: pos,
     frontMatter: { title: "Install" },
     title: "Install",
-    lang: "en",
-    dir: "ltr",
+    lang,
+    dir: isRtl(lang) ? "rtl" : "ltr",
     headings: [],
     html: "",
     markdown: "",
@@ -58,9 +64,20 @@ const nav: readonly NavSource[] = [
   { title: "Features", url: "/example/features/" },
 ];
 
-function propsWith(url: string, trail: Trail, items: readonly NavItem[] | undefined): ChromeProps {
-  const page = pageAt(url);
-  const site: Site = { config, pages: [page], nav: items === undefined ? {} : { main: items }, data: {} };
+function propsWith(
+  url: string,
+  trail: Trail,
+  items: readonly NavItem[] | undefined,
+  lang = "en",
+  siteLang = "en",
+): ChromeProps {
+  const page = pageAt(url, lang);
+  const site: Site = {
+    config: { ...config, lang: siteLang },
+    pages: [page],
+    nav: items === undefined ? {} : { main: items },
+    data: {},
+  };
   return { site, page, trail, pager: {} satisfies Pager };
 }
 
@@ -87,7 +104,18 @@ function html(node: unknown): string {
   return `<${tag}${attrs}>${html(children)}</${tag}>`;
 }
 
-const render = (url: string, trail: Trail, items: readonly NavItem[] = nav) => html(sectionTabs(propsWith(url, trail, items)));
+/** Count the non-overlapping matches of `pattern` in `text`. */
+function count(text: string, pattern: RegExp): number {
+  return [...text.matchAll(pattern)].length;
+}
+
+const render = (
+  url: string,
+  trail: Trail,
+  items: readonly NavItem[] = nav,
+  lang = "en",
+  siteLang = "en",
+) => html(sectionTabs(propsWith(url, trail, items, lang, siteLang)));
 
 test("renders only top-level items marked tab: true, in order, linking groups to their first leaf", () => {
   const out = render("/example/install/", [{ title: "Guide", url: "/example/install/" }]);
@@ -134,6 +162,83 @@ test("skips a tab-marked group that has no leaf to link to", () => {
   const out = render("/example/real/", [{ title: "Real", url: "/example/real/" }], empty);
   assert.doesNotMatch(out, /Hollow/);
   assert.match(out, /<a class="section-tab" href="\/example\/real\/" aria-current="page">Real<\/a>/);
+});
+
+test("renders nothing when every tab-marked group only leads to empty groups", () => {
+  const unusable: readonly NavSource[] = [
+    { title: "Hollow", children: [{ title: "Deeper", children: [{ title: "Empty", children: [] }] }], tab: true },
+  ];
+  assert.equal(sectionTabs(propsWith("/example/", [], unusable)), null);
+});
+
+test("a nested group tab still links to its first leaf and keeps tab order", () => {
+  const nested: readonly NavSource[] = [
+    {
+      title: "Outer",
+      children: [
+        { title: "Inner", children: [{ title: "Deep", url: "/example/deep/" }, { title: "Later", url: "/example/later/" }] },
+        { title: "Sibling", url: "/example/sibling/" },
+      ],
+      tab: true,
+    },
+    { title: "Other", url: "/example/other/", tab: true },
+  ];
+  const out = render("/example/deep/", [{ title: "Outer", url: "/example/deep/" }], nested);
+  assert.match(
+    out,
+    /<a class="section-tab" href="\/example\/deep\/" aria-current="page">Outer<\/a><a class="section-tab" href="\/example\/other\/">Other<\/a>/,
+  );
+  assert.doesNotMatch(out, /\/example\/sibling\/<\/a>/);
+});
+
+test("the landmark follows the page language, not the site default", () => {
+  const cases: ReadonlyArray<readonly [string, string]> = [
+    ["en", "en"],
+    ["fa", "fa"],
+    ["ar", "ar"],
+    ["fa-IR", "fa"],
+    ["ar-EG", "ar"],
+  ];
+  for (const [lang, catalog] of cases) {
+    const label = stringsOf(catalog as (typeof languages)[number]).not_found_sections;
+    const out = render("/example/install/", [{ title: "Guide", url: "/example/install/" }], nav, lang, "fa");
+    assert.ok(out.includes(`aria-label="${label}"`), `${lang} landmark`);
+  }
+});
+
+test("mixed-direction and neutral-only titles are isolated without changing text, order, URLs or the current tab", () => {
+  const mixed: readonly NavSource[] = [
+    { title: "راهنما", url: "/example/fa/", tab: true },
+    { title: "v1.2.3", url: "/example/versions/", tab: true },
+    { title: "الأدلة", url: "/example/ar/", tab: true },
+    { title: "Guide", url: "/example/guide/", tab: true },
+  ];
+  const out = render("/example/guide/", [{ title: "Guide", url: "/example/guide/" }], mixed, "fa");
+
+  // Every authored title is carried verbatim and isolated by the tab's own bidi isolation.
+  assert.equal(count(out, /<bdi>/g), 0, "no extra element wraps an authored title");
+  for (const item of mixed) {
+    assert.ok(out.includes(`>${item.title}</a>`), item.title);
+    if ("url" in item) assert.ok(out.includes(`href="${item.url}"`), item.url);
+  }
+  const css = readFileSync(new URL("../chrome/section-tabs/style.css", import.meta.url), "utf8");
+  assert.match(css, /\.section-tab\s*\{[^}]*unicode-bidi:\s*isolate/, "the tab isolates its own title");
+
+  // Authored order survives the mixed directions, and only the tab rooting the trail is current.
+  assert.ok(out.indexOf("راهنما") < out.indexOf("v1.2.3"));
+  assert.ok(out.indexOf("v1.2.3") < out.indexOf("الأدلة"));
+  assert.ok(out.indexOf("الأدلة") < out.indexOf("Guide"));
+  assert.equal(count(out, /aria-current="page"/g), 1);
+  assert.match(out, /href="\/example\/guide\/" aria-current="page">Guide<\/a>/);
+});
+
+test("every shipped catalog already names the landmark, so no catalog change is needed", () => {
+  for (const lang of languages) {
+    const label = stringsOf(lang).not_found_sections ?? "";
+    assert.notEqual(label.trim(), "", `${lang}.not_found_sections is not empty`);
+    const out = render("/example/install/", [{ title: "Guide", url: "/example/install/" }], nav, lang);
+    assert.ok(out.includes(`aria-label="${label}"`), `${lang} landmark comes from the catalog`);
+  }
 });
 
 test("style.css uses only token names from tokens/names.json for var(--*) references", () => {
