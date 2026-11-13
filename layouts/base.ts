@@ -2,6 +2,7 @@ import { h } from "preact";
 import type { ComponentChildren } from "preact";
 import type { Head, LayoutProps, LinkTag, MetaTag, Page, Site, SiteConfig } from "@velella/mizzen/contracts";
 import announcement from "../chrome/announcement/index.ts";
+import codeCopy from "../chrome/code-copy/index.ts";
 import footnotePopover from "../chrome/footnote-popover/index.ts";
 import { alternateLinks, canonicalLink } from "../chrome/language-switcher/index.ts";
 import siteFooter from "../chrome/site-footer/index.ts";
@@ -126,6 +127,7 @@ export default function base(props: BaseProps) {
       null,
       skipLinks({ ...props, navigation: sidebar != null }),
       announcement(props) as ComponentChildren,
+      codeCopy(props) as ComponentChildren,
       header,
       h(
         "div",

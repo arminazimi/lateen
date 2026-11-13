@@ -4,6 +4,17 @@ Releases of this package are tagged `v<version>`. Add a one-line fragment in `ch
 
 ## Unreleased
 
+## 0.2.2 — 2026-11-14
+
+### Changed
+
+- The code block copy control is one small icon button inside the block's top-right corner, on the
+  block's own background, with no header strip and no language label. It swaps to a check after a
+  copy and its accessible name follows the page language; without JavaScript no control or wrapper
+  is added.
+- Reading time is quiet metadata under the title instead of a bordered pill that competed with the
+  trust chip.
+
 ## 0.2.1 — 2026-11-14
 
 ### Fixed
