@@ -64,6 +64,7 @@
   "edit_page": "ویرایش این صفحه",
   "edit_prompt": "فایل {source} را ویرایش کن. متن فعلی: «{text}». تغییر:",
   "edited_on": "ویرایش‌شده در",
+  "endpoint_in": "در",
   "example_request": "نمونهٔ درخواست",
   "example_response": "نمونهٔ پاسخ",
   "feedback_already": "برای این صفحه قبلاً پاسخ داده‌اید.",

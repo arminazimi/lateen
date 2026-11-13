@@ -53,6 +53,7 @@ Creates a user from the JSON body.
 
 - The path is marked left-to-right even on a right-to-left page, because paths and parameter names are not prose. Descriptions follow the page direction.
 - The parameter list is generated from the path; do not repeat it by hand. An authored `parameters` entry adds the type, required state, path association, and description under that parameter. Without metadata the list stays as before: the name alone.
+- Labels and yes/no answers come from the page language (`i18n/*.json`), including regional codes such as `fa-IR`; the type and the location value stay machine tokens (`string`, `path`) marked left-to-right, and the operation JSON is never translated.
 - `type` defaults to `string` and `required` defaults to `true`, because every path parameter is part of the URL. An entry for a name the path does not contain is ignored, as is a second entry for the same name; an unreadable `parameters` value changes nothing.
 - Every endpoint also publishes an inert `<script type="application/json" data-endpoint-operation>` with its id, method, path, and typed parameters, so agents can read the operation without parsing the badge or the highlighted path.
 - Metadata is plain text, never HTML: markup in a type or description is shown as written.

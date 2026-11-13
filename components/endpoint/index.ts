@@ -1,5 +1,6 @@
 import { h } from "preact";
 import type { ComponentProps } from "@velella/mizzen/contracts";
+import { t } from "../../i18n/index.ts";
 
 /** Methods with their own badge color. Any other method gets the neutral badge. */
 export const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
@@ -176,12 +177,15 @@ export function operationJson(operation: EndpointOperation): string {
 /**
  * An API endpoint for a reference page: the method badge, the path with its parameters highlighted,
  * the parameters the path names, and the body (descriptions and request or response samples).
- * The body arrives already rendered to HTML. An inert JSON script publishes the same operation for
- * automation, so agents do not have to read the badge or the highlight marks.
+ * The body arrives already rendered to HTML. Parameter labels and yes/no answers come from the page
+ * language's catalog, while types and the location value stay machine tokens. An inert JSON script
+ * publishes the same operation for automation, so agents do not have to read the badge or the
+ * highlight marks.
  */
-export default function endpoint({ props, html }: ComponentProps<EndpointProps>) {
+export default function endpoint({ props, html, page }: ComponentProps<EndpointProps>) {
   const operation = operationOf(props);
   const { method, path, id } = operation;
+  const lang = page.lang;
   const authored = parseParameters(props.parameters);
 
   return h(
@@ -215,7 +219,7 @@ export default function endpoint({ props, html }: ComponentProps<EndpointProps>)
               "li",
               { id: parameterId(id, parameter.name), "data-param": parameter.name },
               h("code", { class: "endpoint-param", dir: "ltr" }, parameter.name),
-              authored.has(parameter.name) ? parameterMeta(parameter) : null,
+              authored.has(parameter.name) ? parameterMeta(parameter, lang) : null,
             ),
           ),
         ),
@@ -231,17 +235,20 @@ export default function endpoint({ props, html }: ComponentProps<EndpointProps>)
 }
 
 /** The accessible details of one parameter: type, required state, path association, and description. */
-function parameterMeta(parameter: EndpointParameter) {
+function parameterMeta(parameter: EndpointParameter, lang: string) {
   const rows = [
-    h("dt", null, "Type"),
+    h("dt", null, t(lang, "type")),
     h("dd", null, h("code", { class: "endpoint-param-type", dir: "ltr" }, parameter.type)),
-    h("dt", null, "Required"),
-    h("dd", { class: "endpoint-param-required" }, parameter.required ? "Yes" : "No"),
-    h("dt", null, "In"),
-    h("dd", { class: "endpoint-param-in" }, "path"),
+    h("dt", null, t(lang, "required")),
+    h("dd", { class: "endpoint-param-required" }, t(lang, parameter.required ? "yes" : "no")),
+    h("dt", null, t(lang, "endpoint_in")),
+    h("dd", { class: "endpoint-param-in", dir: "ltr" }, "path"),
   ];
   if (parameter.description !== "") {
-    rows.push(h("dt", null, "Description"), h("dd", { class: "endpoint-param-description" }, parameter.description));
+    rows.push(
+      h("dt", null, t(lang, "description")),
+      h("dd", { class: "endpoint-param-description" }, parameter.description),
+    );
   }
   return h("dl", { class: "endpoint-param-meta" }, rows);
 }
