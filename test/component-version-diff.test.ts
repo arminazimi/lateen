@@ -794,3 +794,13 @@ test("style.css marks the incomplete note apart with its own colour token", () =
   assert.match(css, /\.version-diff-note\s*\{[^}]*border-block-end/s);
   assert.match(css, /\.version-diff-note-label\s*\{[^}]*color:\s*var\(--color-warning\)/s);
 });
+
+test("two comparisons on one page get distinct ids", () => {
+  const page = { lang: "en", frontMatter: {}, html: "<p>page</p>" };
+  const props = { from: "v1", to: "v2", changes: '[{"kind":"added","title":"Retries"}]' };
+  const first = renderToString(versionDiff({ props, page, site: {}, html: "" } as never) as never);
+  const second = renderToString(versionDiff({ props, page, site: {}, html: "" } as never) as never);
+  assert.match(first, /id="version-diff-title"/);
+  assert.match(second, /id="version-diff-2-title"/);
+  assert.match(second, /id="version-diff-2-change-1"/);
+});

@@ -15,7 +15,7 @@ import {
   type CopyDocument,
   type CopyEnv,
   type CopyNode,
-} from "../components/code/client.ts";
+} from "../chrome/code-copy/client.ts";
 
 const FAILED = "Copy failed. Select the code and copy it by hand.";
 const COPIED = "Copied.";

@@ -122,7 +122,7 @@ test("an alias and its canonical name share one import and highlight identically
 });
 
 test("the browser island never imports the highlighter", () => {
-  const client = readFileSync(new URL("../components/code/client.ts", import.meta.url), "utf8");
+  const client = readFileSync(new URL("../chrome/code-copy/client.ts", import.meta.url), "utf8");
   assert.doesNotMatch(client, /\bfrom\s+"shiki|import\(\s*"shiki/);
 });
 

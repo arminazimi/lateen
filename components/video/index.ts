@@ -1,6 +1,7 @@
 import { h } from "preact";
 import type { ComponentProps } from "@velella/mizzen/contracts";
 import { t } from "../../i18n/index.ts";
+import { baseOf, withBase } from "../../src/url.ts";
 import { embedSrc, httpsHref, providerOf } from "../embed/index.ts";
 
 /** The Markdown directive this component handles: `::video`. */
@@ -92,7 +93,7 @@ function text(value: unknown): string {
  * the component renders a message instead, because the player would have no accessible name. An empty or
  * unsafe `src` renders nothing.
  */
-export default function video({ props, html, page }: ComponentProps<VideoProps>) {
+export default function video({ props, html, page, site }: ComponentProps<VideoProps>) {
   const lang = page.lang;
   const src = embedSrc(props.src);
   const href = httpsHref(props.src);
@@ -103,10 +104,13 @@ export default function video({ props, html, page }: ComponentProps<VideoProps>)
     return h("p", { class: DIAGNOSTIC_CLASS }, t(lang, "video_missing_title"));
   }
 
-  const poster = posterSrc(props.poster);
+  const base = baseOf(site);
+  const localPoster = posterSrc(props.poster);
+  const poster = localPoster === undefined ? undefined : withBase(base, localPoster);
   const provider = providerOf(href);
 
-  const captions = mediaHref(props.captions);
+  const authoredCaptions = mediaHref(props.captions);
+  const captions = authoredCaptions === undefined ? undefined : withBase(base, authoredCaptions);
   const captionsLabel = text(props.captions_label);
   const captionsNode =
     captions === undefined || captionsLabel === ""
@@ -118,7 +122,8 @@ export default function video({ props, html, page }: ComponentProps<VideoProps>)
         );
 
   const body = typeof html === "string" ? html.trim() : "";
-  const transcriptHref = mediaHref(props.transcript);
+  const authoredTranscript = mediaHref(props.transcript);
+  const transcriptHref = authoredTranscript === undefined ? undefined : withBase(base, authoredTranscript);
   const transcriptLabel = text(props.transcript_label);
 
   let transcriptNode = null;

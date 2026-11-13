@@ -45,12 +45,12 @@ const TITLE = "Big Buck Bunny";
 const WATCH = "https://www.youtube.com/watch?v=aqz-KE-bpKQ";
 const EMBED = "https://www.youtube-nocookie.com/embed/aqz-KE-bpKQ";
 
-function render(props: VideoProps, lang = "en", html = ""): string {
+function render(props: VideoProps, lang = "en", html = "", base = ""): string {
   const input = {
     props,
     html,
     page: { lang },
-    site: {},
+    site: base === "" ? {} : { config: { base } },
   } as unknown as ComponentProps<VideoProps>;
   return renderToString(video(input) as never);
 }
@@ -510,4 +510,24 @@ test("style.css keeps the box at 16:9, fills it with the player, and keeps the a
   assert.doesNotMatch(css, /\.video-link\s*\{[^}]*position:\s*absolute/);
   assert.doesNotMatch(css, /\.video-(?:captions|transcript)\s*\{[^}]*position:\s*absolute/);
   assert.match(css, /\.video-transcript > summary\s*\{[^}]*cursor:\s*pointer/);
+});
+
+test("root-relative poster, captions, and transcript take the site base", () => {
+  const out = render(
+    {
+      src: WATCH,
+      title: TITLE,
+      poster: "/brand/poster.svg",
+      captions: "/media/captions.vtt",
+      captions_label: "Captions",
+      transcript: "/media/transcript.txt",
+      transcript_label: "Transcript",
+    },
+    "en",
+    "",
+    "/lateen",
+  );
+  assert.match(out, /src="\/lateen\/brand\/poster\.svg"/);
+  assert.match(out, /href="\/lateen\/media\/captions\.vtt"/);
+  assert.match(out, /href="\/lateen\/media\/transcript\.txt"/);
 });

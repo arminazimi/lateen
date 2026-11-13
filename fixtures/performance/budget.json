@@ -13,9 +13,9 @@
         "count": 1
       },
       "js/chrome": {
-        "raw": 51469,
-        "gzip": 18656,
-        "count": 18
+        "raw": 56786,
+        "gzip": 20797,
+        "count": 20
       },
       "js/components": {
         "raw": 0,
@@ -143,9 +143,9 @@
         "count": 1
       },
       "js/chrome": {
-        "raw": 51469,
-        "gzip": 18656,
-        "count": 18
+        "raw": 56786,
+        "gzip": 20797,
+        "count": 20
       },
       "js/components": {
         "raw": 0,
@@ -273,9 +273,9 @@
         "count": 1
       },
       "js/chrome": {
-        "raw": 51469,
-        "gzip": 18656,
-        "count": 18
+        "raw": 56786,
+        "gzip": 20797,
+        "count": 20
       },
       "js/components": {
         "raw": 17000,

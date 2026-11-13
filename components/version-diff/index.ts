@@ -1,6 +1,7 @@
 import { h } from "preact";
 import type { Component } from "@velella/mizzen/contracts";
 import { patternOf, t } from "../../i18n/index.ts";
+import { instanceId } from "../../src/page-ids.ts";
 
 /** The Markdown directive this component handles: `::version-diff{from=v1 to=v2 changes='[...]'}`. */
 export const directive = "version-diff";
@@ -401,7 +402,7 @@ const versionDiff: Component<VersionDiffProps> = ({ props, page }) => {
   const diff = versionDiffFor(props, page.frontMatter);
   if (diff === undefined) return null;
 
-  const base = idBase(props.id);
+  const base = instanceId(page, idBase(props.id));
   const titleId = `${base}-title`;
   const listId = `${base}-list`;
   const noteId = `${base}-note`;

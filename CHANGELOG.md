@@ -4,7 +4,7 @@ Releases of this package are tagged `v<version>`. Add a one-line fragment in `ch
 
 ## Unreleased
 
-## 0.2.1 — 2026-11-13
+## 0.2.1 — 2026-11-14
 
 ### Fixed
 
@@ -12,8 +12,18 @@ Releases of this package are tagged `v<version>`. Add a one-line fragment in `ch
   component styles from the components its Markdown used, so a layout-only `style.css` never loaded:
   the trust chip's unsized icon filled the viewport, and reading time, page status, the drift banner,
   changelog entries, and code blocks rendered unstyled. Their rules now live in `styles/parts-<name>.css`,
-  which is always loaded. This costs 1.3 KB gzip on the base stylesheet; the performance baseline was
-  re-measured and updated.
+  which is always loaded.
+- The same gap hid two behaviours: code blocks had no copy button on most pages, and Escape did not
+  close an open trust panel. Both islands now ship as chrome parts, which load on every page.
+- Loading the changelog styles exposed three contrast failures in its category labels; the label text
+  now uses the body colour while the chip keeps its category colour on the icon and border.
+- A repeated `version-diff` on one page keeps unique ids for its title, list, note, and changes.
+- Root-relative images and media take the site base path: `figure` (`src`, `src_dark`, `srcset`) and
+  `video` (poster, captions, transcript). A site served under `/lateen` no longer requests `/brand/...`
+  from the domain root.
+
+The base stylesheet grows by 1.3 KB gzip and the chrome script by the two islands; the performance
+baseline was re-measured and updated.
 
 ## 0.2.0 — 2026-11-13
 
