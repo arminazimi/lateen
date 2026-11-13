@@ -1,0 +1,19 @@
+pages:
+  "/guide/install/":
+    level: verified
+    reasons:
+      - 3 of 3 examples passed
+      - No drift findings
+    lastReviewer: Ada Lovelace
+    buildId: build-42
+    generatedAt: 2026-03-06
+    reviewedAt: 2026-03-04
+  "/guide/legacy/":
+    level: partial
+    reasons:
+      - One example did not run
+      - The page cites code that changed
+  "/fa/guide/install/":
+    level: verified
+    reasons:
+      - همهٔ نمونه‌ها با موفقیت اجرا شدند

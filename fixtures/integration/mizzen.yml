@@ -1,0 +1,29 @@
+# A small site that exercises the complete theme: trust and freshness evidence, version and
+# language context, agent actions, progressive enhancement, and both text directions. The
+# integration tests build it with the repository's own theme and inspect the output.
+title: Lateen integration fixture
+description: Representative pages for the integration release gates.
+lang: en
+url: https://example.com
+base: ""
+languages:
+  - code: en
+    name: English
+    prefix: ""
+  - code: fa
+    name: فارسی
+    prefix: /fa
+navigation: _data/navigation.yml
+search: { text: 300 }
+theme:
+  options:
+    trust:
+      contextPackUrl: "https://example.com/context?page={url}&build={build}&lang={lang}&version={version}"
+      suggestEditUrl: "https://example.com/edit/{source}"
+    pageAgent:
+      providers:
+        - title: Example agent
+          url: "https://agent.example.com/open?page={url}&lang={lang}&version={version}&source={source}"
+    footer:
+      copyright: "© Example"
+      license: "MIT license"

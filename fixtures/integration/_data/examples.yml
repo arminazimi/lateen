@@ -1,0 +1,13 @@
+"/guide/install/":
+  passed: 3
+  failed: 0
+  total: 3
+"/guide/legacy/":
+  passed: 0
+  failed: 0
+  total: 2
+  unrun: 2
+"/fa/guide/install/":
+  passed: 3
+  failed: 0
+  total: 3
