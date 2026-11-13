@@ -4,10 +4,10 @@ Releases of this package are tagged `v<version>`. Add a one-line fragment in `ch
 
 ## Unreleased
 
-## 0.2.0-rc.1
+## 0.2.0 — 2026-11-13
 
-Release candidate for the first complete Lateen theme. Every layout, chrome unit, and component now
-ships with its keyboard, no-JavaScript, right-to-left, print, and agent path covered.
+The first complete Lateen theme. Every layout, chrome unit, and component ships with its keyboard,
+no-JavaScript, right-to-left, print, and agent path covered.
 
 ### Added
 
@@ -39,11 +39,16 @@ ships with its keyboard, no-JavaScript, right-to-left, print, and agent path cov
 - **Performance gate.** Per-route gzip budgets for base/page CSS, chrome and component JavaScript, and
   self-hosted fonts in `fixtures/performance/budget.json`, run by `npm run test:performance` in CI.
   Policy: `docs/performance.md`.
-- 2,072 `node:test` cases, `tsc --noEmit`, 97% line coverage, and a package smoke test that installs
+- **Agent skill.** A portable skill in `skills/lateen` teaches a compatible coding agent the theme
+  boundary, unit folders, and verification commands: `npx skills add velella-sh/lateen`.
+- 2,092 `node:test` cases, `tsc --noEmit`, 97% line coverage, and a package smoke test that installs
   the packed tarball into an empty project and builds the docs site from `node_modules`.
 
 ### Changed
 
+- Ships with `@velella/mizzen` 0.2.0; the theme and the engine are tested together at that version.
+- Coverage no longer counts the engine's build subprocess, which duplicated every theme module in the
+  report and halved the published percentage.
 - `chrome/page-footer` now renders page actions only: copy the agent prompt and give feedback. The edit
   link and the last-updated line are the separate `edit-page` and `last-updated` chrome units, placed
   once by the doc and tutorial layouts. A custom layout that imports `page-footer` must add those two

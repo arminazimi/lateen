@@ -42,9 +42,13 @@ export function build(name: string, env: NodeJS.ProcessEnv = process.env): Built
     recursive: true,
     filter: (path) => !path.includes(`${join("fixtures", name, ".mizzen")}`),
   });
+  // Node injects its coverage directory into every child, even one given a clean environment; an empty
+  // value disables it. Without this the build's workers add a second, partly unexecuted record for every
+  // theme module they load and halve the reported percentage.
+  const childEnv = { ...env, NODE_V8_COVERAGE: "" };
   const run = spawnSync(process.execPath, [MIZZEN, "build", source, "--out", out, "--theme", root], {
     encoding: "utf8",
-    env,
+    env: childEnv,
   });
   rmSync(source, { recursive: true, force: true });
   if (run.status !== 0) {
