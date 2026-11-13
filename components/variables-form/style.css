@@ -77,9 +77,34 @@
   outline-offset: 2px;
 }
 
-/* A value the declared type rejects: the island keeps it out of the examples until it is fixed. */
-.variables-form-input:invalid {
+/* A value the declared type rejects: the island keeps it out of the examples until it is fixed. The
+   message below the field carries the reason in words, so the border is not the only signal. */
+.variables-form-input[aria-invalid="true"] {
   border-color: var(--color-danger);
+}
+
+/* The group-level invalid state: a terminal in this group cannot copy its commands until it is fixed. */
+.variables-form[data-variables-invalid="true"] {
+  border-color: var(--color-danger);
+}
+
+.variables-form-error {
+  margin: 0;
+  color: var(--color-danger);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-xs);
+  line-height: var(--type-leading-body);
+}
+
+/* The reset announcement is for screen readers, not a visible line that would stay on the page. */
+.variables-form-status {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .variables-form-reset {

@@ -75,6 +75,13 @@ const css = readFileSync(new URL("../components/output-block/style.css", import.
 
 const OUTPUT = "<p>Written 12 pages\nin 340 ms</p>";
 
+test("a group is rendered on the block and marked explicit only when authored", () => {
+  const grouped = render(OUTPUT, "en", { group: "install" });
+  assert.match(grouped, /class="output-block"[^>]*data-variable-group="install" data-variable-group-explicit="true"/);
+  assert.doesNotMatch(render(OUTPUT), /data-variable-group/);
+  assert.doesNotMatch(render(OUTPUT, "en", { group: "bad group" }), /data-variable-group/);
+});
+
 test("the directive is output-block and the default export is a component", () => {
   assert.equal(directive, "output-block");
   assert.equal(typeof outputBlock, "function");

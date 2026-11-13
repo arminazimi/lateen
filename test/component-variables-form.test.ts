@@ -20,7 +20,6 @@ import variablesForm, {
   fieldId,
   fieldsFor,
   idBase,
-  inputTypeOf,
   instanceBase,
   mergeDeclarations,
   parseDeclarations,
@@ -52,6 +51,7 @@ import {
   type VariableInput,
 } from "../components/variables-form/client.ts";
 import { commandsOf } from "../components/terminal/client.ts";
+import { isValidValue, isUrl, validationTypeOf } from "../components/variables-form/validation.ts";
 
 type RenderOptions = {
   readonly lang?: string;
@@ -138,14 +138,26 @@ test("default export is the component and its directive is variables-form", () =
   );
 });
 
-test("a declared input type becomes the field's type, so the browser validates it", () => {
-  assert.equal(inputTypeOf("url"), "url");
-  assert.equal(inputTypeOf(" URL "), "url");
-  assert.equal(inputTypeOf("number"), "number");
-  assert.equal(inputTypeOf("string"), "text");
-  assert.equal(inputTypeOf(undefined), "text");
-  assert.equal(inputTypeOf("unknown"), "text");
-  assert.equal(inputTypeOf("checkbox"), "text", "a declaration never turns a variable into a checkbox");
+test("every variable stays a text input, and the declared type drives validation", () => {
+  assert.equal(validationTypeOf("url"), "url");
+  assert.equal(validationTypeOf(" URL "), "url");
+  assert.equal(validationTypeOf("number"), "number");
+  assert.equal(validationTypeOf("boolean"), "boolean");
+  assert.equal(validationTypeOf("string"), "string");
+  assert.equal(validationTypeOf(undefined), "string");
+  assert.equal(validationTypeOf("unknown"), "string");
+  assert.equal(validationTypeOf("checkbox"), "string", "a declaration never turns a variable into a checkbox");
+
+  assert.equal(isUrl("https://api.example.com"), true);
+  assert.equal(isUrl("/v1/status"), true);
+  assert.equal(isUrl("//host/path"), false);
+  assert.equal(isUrl("api.example.com"), false);
+  assert.equal(isUrl("https://api example.com"), false);
+  assert.equal(isValidValue("number", "-1.5e3"), true);
+  assert.equal(isValidValue("number", ""), false);
+  assert.equal(isValidValue("boolean", "TRUE"), true);
+  assert.equal(isValidValue("boolean", ""), false);
+  assert.equal(isValidValue("string", ""), true);
 
   const out = render(
     {},
@@ -155,15 +167,18 @@ test("a declared input type becomes the field's type, so the browser validates i
     ]),
   );
   assert.ok(out);
-  assert.match(out, /name="host" type="url"/);
-  assert.match(out, /name="api_key" type="text"/);
+  assert.match(out, /name="host" type="text" value="https:\/\/api\.example\.com" placeholder="https:\/\/api\.example\.com" data-var="host" data-default="https:\/\/api\.example\.com" data-type="url"/);
+  assert.match(out, /name="api_key" type="text"[^>]*data-type="string"/);
+  assert.match(out, /class="variables-form-error"[^>]*data-error-for="host"[^>]*hidden>Enter a valid URL/);
+  assert.doesNotMatch(out, /data-error-for="api_key"/);
 });
 
 test("the reset button is hidden, labelled, and carries each declared default", () => {
   const out = render({}, pageWith([{ name: "api_key", default: "YOUR_KEY" }]));
   assert.ok(out);
   assert.match(out, new RegExp(`<button type="button" class="${RESET_CLASS}" hidden data-variables-reset="true">`));
-  assert.ok(out.endsWith(">Reset values</button></fieldset>"));
+  assert.ok(out.includes(">Reset values</button><span"));
+  assert.ok(out.endsWith("</fieldset>"));
   assert.match(out, /data-default="YOUR_KEY"/);
 
   assert.ok(render({}, { lang: "fa", ...pageWith([{ name: "api_key" }]) })!.includes(">بازنشانی مقدارها</button>"));
@@ -419,16 +434,15 @@ test("a page with no variables consumes no instance id", () => {
   assert.match(renderOn(page, { variables: '[{"name":"host"}]' })!, /id="variables-form-legend"/);
 });
 
-test("repeated variable names get distinct ids and labels inside one form", () => {
+test("repeated declarations of one name collapse to the later value in a single input", () => {
   const out = render(
-    { variables: '[{"name":"api_key","default":"ONE"},{"name":"api_key","default":"TWO"}]' },
+    { variables: '[{"name":"api_key","default":"ONE","type":"string"},{"name":"api_key","default":"TWO"}]' },
   );
   assert.ok(out);
-  const ids = idsOf(out);
-  assert.equal(new Set(ids).size, ids.length);
+  assert.equal(countOf(out, /<input\b/g), 1);
   assert.match(out, /for="variables-form-api_key-1"/);
-  assert.match(out, /for="variables-form-api_key-2"/);
-  assert.equal(associationsOf(out).forIds.length, 2, "each duplicate name keeps its own label");
+  assert.match(out, /value="TWO"/);
+  assert.equal(associationsOf(out).forIds.length, 1);
 });
 
 test("instanceBase allocates per page without leaking into another page", () => {
@@ -553,7 +567,8 @@ test("style.css gives the inputs a visible focus ring and shows the placeholder"
 });
 
 test("style.css marks a rejected value and gives the reset button a visible focus ring", () => {
-  assert.match(css, /\.variables-form-input:invalid\s*\{[^}]*border-color:\s*var\(--color-danger\)/s);
+  assert.match(css, /\.variables-form-input\[aria-invalid="true"\]\s*\{[^}]*border-color:\s*var\(--color-danger\)/s);
+  assert.match(css, /\.variables-form\[data-variables-invalid="true"\]\s*\{[^}]*border-color:\s*var\(--color-danger\)/s);
   assert.match(css, /\.variables-form-reset:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--state-focus-ring\)/s);
 });
 
@@ -884,6 +899,18 @@ test("two forms on one page follow their own variables without touching the othe
   assert.equal(code.textContent, "one/four");
 });
 
+test("a longer value keeps the rest of a block split across text nodes", () => {
+  const prompt = new FakeText("$ ");
+  const line = new FakeElement({ class: "terminal-text" }, [new FakeText("curl {{host}}/v1")]);
+  const output = new FakeText("first ok");
+  const code = new FakeElement({ "data-placeholders": '[{"name":"host"}]' }, [prompt, line, output]);
+  const root = new FakeRoot([], [code]);
+
+  applyValue(root, "host", "https://first.example.com");
+  assert.equal(line.textContent, "curl https://first.example.com/v1");
+  assert.equal(output.textContent, "first ok", "the text after the token is kept whole");
+});
+
 test("the copied commands are the command text the block now shows", () => {
   const text = new FakeElement({ class: "terminal-text" }, [new FakeText("curl {{host}}/v1")]);
   const line = new FakeElement({ class: "terminal-command" }, [text]);
@@ -977,7 +1004,7 @@ test("typing updates the examples and marks dependent output stale", () => {
   assert.equal(output.getAttribute("data-output-stale"), "true");
 });
 
-test("a value the declared type rejects never reaches an example or marks output stale", () => {
+test("a rejected value never reaches an example, and the group's output is stale while it is invalid", () => {
   const span = new FakeElement({ "data-var": "host" }, [new FakeText("{{host}}")]);
   const output = new FakeElement({ "data-output-deps": '[{"name":"host"}]' }, [new FakeText("200 OK")]);
   const root = new FakeRoot([span], [], [output]);
@@ -987,8 +1014,8 @@ test("a value the declared type rejects never reaches an example or marks output
   activate(root, new FakeForm([host]));
   host.type("not a url");
 
-  assert.equal(span.textContent, "https://api.example.com");
-  assert.equal(output.getAttribute("data-output-stale"), null);
+  assert.equal(span.textContent, "{{host}}", "an invalid default never reaches an example");
+  assert.equal(output.getAttribute("data-output-stale"), "true", "an invalid input keeps the group's output stale");
 });
 
 test("the reset button starts hidden, and puts every declared default back", () => {

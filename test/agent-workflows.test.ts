@@ -17,6 +17,29 @@ after(() => rmSync(site.out, { recursive: true, force: true }));
 /** A source span as the engine writes it: `path:line:column-endLine:column`. */
 const SPAN = /^(.*):(\d+):(\d+)-(\d+):(\d+)$/;
 
+test("two forms with the same variable keep independent example groups", () => {
+  const groups = site.document("/guide/groups/");
+  const forms = all(groups, "fieldset[data-variables-form]");
+  assert.equal(forms.length, 2);
+  assert.deepEqual(
+    forms.map((form) => form.getAttribute("data-variable-group")),
+    ["first", "second"],
+  );
+  for (const form of forms) assert.equal(form.getAttribute("data-variable-group-explicit"), "true");
+
+  for (const group of ["first", "second"]) {
+    const terminal = groups.querySelector(`.terminal[data-variable-group="${group}"]`);
+    const output = groups.querySelector(`.output-block[data-variable-group="${group}"]`);
+    assert.ok(terminal, `${group} terminal is grouped`);
+    assert.ok(output, `${group} output is grouped`);
+    assert.ok(terminal!.querySelector("[data-terminal-copy]"), `${group} terminal has a copy control`);
+    assert.ok(output!.querySelector("[data-output-stale-note]"), `${group} output can report stale text`);
+  }
+
+  const ids = all(groups, "[id]").map((element) => element.id);
+  assert.equal(new Set(ids).size, ids.length, "the two forms do not share ids");
+});
+
 test("copy actions name one Markdown twin, a status region, and the same result messages", () => {
   const twin = "/guide/install/index.md";
   assert.ok(existsSync(join(site.out, "guide/install/index.md")));

@@ -111,7 +111,10 @@ test("mixed prose, code, identifiers, dates, and form values keep their own dire
     assert.ok(id);
     assert.ok(fa.querySelector(`label[for="${id}"]`));
   }
-  assert.equal(fa.querySelector(".variables-form-input[name='host']")?.getAttribute("type"), "url");
+  const host = fa.querySelector(".variables-form-input[name='host']");
+  assert.equal(host?.getAttribute("type"), "text");
+  assert.equal(host?.getAttribute("data-type"), "url");
+  assert.equal(host?.getAttribute("dir"), null, "the input keeps the page direction and its value as written");
 });
 
 test("the contributor documentation states the translation fallback and bidi authoring rules", () => {

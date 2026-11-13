@@ -20,6 +20,7 @@ Written 12 pages to dist
 | Option | Type | Default | What it does |
 | --- | --- | --- | --- |
 | `label` | string | "Output" | The accessible name of the group. |
+| `group` | string | none | The example group whose values produced this output; letters, digits, `_`, and `-`. A matching form marks it stale when its values move or become invalid. Without a group, a page with exactly one form still owns it. |
 | `deps` | JSON array of variable names | none | Inputs the output was produced from when its text does not repeat them: `'["project"]'`. |
 | `stream` | `stdout`, `stderr`, or `combined` | none | The declared stream the recorded text came out of. |
 | `exit` | decimal integer, 0–255 | none | The declared exit code of the command that printed the output. |

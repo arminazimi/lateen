@@ -28,8 +28,8 @@ import {
   type TerminalFrame,
 } from "../components/terminal/client.ts";
 
-function render(html: string, lang = "en"): string {
-  const input = { props: {}, html, page: { lang }, site: {} } as unknown as ComponentProps;
+function render(html: string, lang = "en", props: Record<string, string> = {}): string {
+  const input = { props, html, page: { lang }, site: {} } as unknown as ComponentProps;
   return renderToString(terminal(input) as never);
 }
 
@@ -55,6 +55,22 @@ const SESSION = "<p>$ npm ci\nadded 200 packages\n$ npm run check\n&lt;ok&gt; al
 test("the directive is terminal and the default export is a component", () => {
   assert.equal(directive, "terminal");
   assert.equal(typeof terminal, "function");
+});
+
+test("a group is rendered on the frame, the session, the button, and the status", () => {
+  const out = render(SESSION, "en", { group: "install" });
+  assert.match(out, /class="terminal" data-variable-group="install" data-variable-group-explicit="true"/);
+  assert.match(out, /data-terminal-copy="true"[^>]*data-variable-group="install"/);
+  assert.match(
+    out,
+    /class="terminal-status" role="status" data-terminal-status(?:="")? data-invalid-text="Fix the highlighted values before copying commands\." data-variable-group="install"/,
+  );
+  assert.match(out, /<code (?:data-placeholders="[^"]*" )?data-variable-group="install"/);
+
+  const ungrouped = render(SESSION);
+  assert.doesNotMatch(ungrouped, /data-variable-group/);
+  const malformed = render(SESSION, "en", { group: "not a group" });
+  assert.doesNotMatch(malformed, /data-variable-group/);
 });
 
 test("bodyText keeps line breaks, drops tags, and decodes entities", () => {
