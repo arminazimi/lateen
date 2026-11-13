@@ -79,6 +79,22 @@ axe checks the rules it has; a pass is not an audit. A person still reviews each
 | 3.2.3 | Consistent navigation | AA | by hand | One layout renders the navigation on every page. |
 | 4.1.2 | Name, role, value | A | axe gate, by hand | axe checks names, roles, and ARIA state; a person checks the behavior. |
 
+## Release candidate QA record
+
+`0.2.0-rc.1` was checked in Chromium against the built docs site and `fixtures/integration`:
+
+| Check | Result |
+| --- | --- |
+| Keyboard order, visible focus ring, skip link, focus return from search and drawer | pass (40 tab stops, no stop on hidden or unfocused content) |
+| Copy, block-action, and variable journeys by keyboard and pointer | pass (Markdown twin, commands only, author output, source + language + version prompt) |
+| 200% text zoom | pass (no sideways scroll, no clipped prose) |
+| 320 px reflow, LTR and RTL | pass (no page scroll; code and tables scroll inside their own regions) |
+| Reduced motion | pass (motion tokens collapse to `0s`, no animated surface) |
+| Forced colors and print | pass (evidence keeps its words; screen-only controls are hidden) |
+| JavaScript disabled | pass (full prose and code, no dead copy control) |
+| Right-to-left chrome | pass (`dir=rtl`, localized names, code and identifiers stay LTR) |
+| Screen reader reading order and announcements | **not executed in this environment**; a person must still run it before the checklist item is called verified |
+
 ## Report a problem
 
 If something on a Lateen site is hard to use, open an issue in the [repository](https://github.com/velella-sh/lateen/issues).

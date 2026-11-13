@@ -24,9 +24,9 @@ ships with its keyboard, no-JavaScript, right-to-left, print, and agent path cov
   and version badge/diff share one vocabulary: `verified`, `unverified`, `stale`, `unknown`, and
   `unavailable`. Every state carries words and an icon, never colour alone, and survives forced colors
   and print.
-- **Reproducible examples.** The variables form, terminal, and output block substitute values, validate
-  per declared type, mark recorded output stale when inputs move, and reset to the server-rendered
-  defaults. Nothing executes a command.
+- **Reproducible examples.** The variables form, terminal, and output block substitute values, use the
+  declared input type for native validation, mark recorded output stale when inputs move, and reset to
+  the server-rendered defaults. Nothing executes a command.
 - **Internationalization and RTL.** English, Persian, and Arabic catalogs, a language switcher that
   names the language actually shown, localized chrome, bidi isolation for mixed text, and right-to-left
   styles. Fallback and bidi rules: `docs/internationalization.md`.
