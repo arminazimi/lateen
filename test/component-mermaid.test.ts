@@ -4,11 +4,13 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { pathToFileURL } from "node:url";
 import { h } from "preact";
 import { renderToString } from "preact-render-to-string";
 import type { ComponentProps } from "@velella/mizzen/contracts";
 import mermaid, {
   altFromSource,
+  CHILD_BOOT,
   clearDiagramCache,
   diagramKey,
   diagramRenderCount,
@@ -103,6 +105,24 @@ function tempCacheDir(): { dir: string; clean: () => void } {
   const dir = mkdtempSync(join(tmpdir(), "lateen-mermaid-cache-"));
   return { dir, clean: () => rmSync(dir, { recursive: true, force: true }) };
 }
+
+test("the child renderer strips types for a query-versioned module under node_modules", () => {
+  const root = mkdtempSync(join(tmpdir(), "lateen-mermaid-query-"));
+  try {
+    const packageDir = join(root, "node_modules");
+    mkdirSync(packageDir, { recursive: true });
+    const probe = join(packageDir, "query-probe.ts");
+    writeFileSync(probe, 'process.stdout.write("loaded\\n");\n');
+    const child = spawnSync(process.execPath, ["--input-type=module", "-e", CHILD_BOOT], {
+      env: { ...process.env, LATEEN_MERMAID_MODULE: `${pathToFileURL(probe).href}?v=abc` },
+      encoding: "utf8",
+    });
+    assert.equal(child.status, 0, typeof child.stderr === "string" ? child.stderr : String(child.error));
+    assert.equal(child.stdout, "loaded\n");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test("a small flowchart renders inline SVG at build time, with its source kept", () => {
   const out = render({ source: FLOWCHART, alt: "Start goes to end" });

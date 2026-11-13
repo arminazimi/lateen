@@ -84,17 +84,22 @@ const invokedDirectly = process.env[CHILD_ENV] === "1";
 
 /**
  * The child's start-up script. Node strips types from a `.ts` file on its own, but not from one inside `node_modules`,
- * where this theme is installed; the hook strips them there, then the script imports this module.
+ * where this theme is installed; the hook strips them there, then the script imports this module. The URL pathname,
+ * not the whole URL, decides: an engine that keys a changed entry module by a `?v=<digest>` query still ends in `.ts`.
+ * Exported so the query-URL case can be tested.
  */
-const CHILD_BOOT = `
+export const CHILD_BOOT = `
 import { readFileSync } from "node:fs";
 import { registerHooks, stripTypeScriptTypes } from "node:module";
 import { fileURLToPath } from "node:url";
 registerHooks({
   load(url, context, nextLoad) {
-    if (url.startsWith("file:") && url.endsWith(".ts") && url.includes("/node_modules/")) {
-      const source = stripTypeScriptTypes(readFileSync(fileURLToPath(url), "utf8"), { mode: "strip" });
-      return { format: "module", source, shortCircuit: true };
+    if (url.startsWith("file:")) {
+      const parsed = new URL(url);
+      if (parsed.pathname.includes("/node_modules/") && parsed.pathname.endsWith(".ts")) {
+        const source = stripTypeScriptTypes(readFileSync(fileURLToPath(parsed), "utf8"), { mode: "strip" });
+        return { format: "module", source, shortCircuit: true };
+      }
     }
     return nextLoad(url, context);
   },
