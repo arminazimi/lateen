@@ -137,12 +137,21 @@ html[data-js] .header-search[hidden] {
 /* Narrow screens: logo, title, repository link, and the search button; the tabs and theme switch leave. */
 @media (max-width: 40rem) {
   .header-inner {
+    flex-wrap: wrap;
     gap: var(--space-4);
     padding-inline: var(--space-4);
   }
 
   .header-tabs {
     display: none;
+  }
+
+  /* The actions (version, search, language, theme, menu) can be wider than the row left beside the
+     logo; let them take their own line instead of pushing the page sideways at 320 px. */
+  .header-actions {
+    flex-wrap: wrap;
+    gap: var(--space-1);
+    min-inline-size: 0;
   }
 }
 

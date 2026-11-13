@@ -245,6 +245,12 @@ test("the header places the section tabs from the main navigation", () => {
   assert.match(out, /<\/nav><\/div>/);
 });
 
+test("the narrow header wraps its actions instead of scrolling the page at 320px", () => {
+  const css = readFileSync(new URL("../chrome/header/style.css", import.meta.url), "utf8");
+  assert.match(css, /@media \(max-width: 40rem\)[\s\S]*?\.header-inner \{[^}]*flex-wrap: wrap/s);
+  assert.match(css, /@media \(max-width: 40rem\)[\s\S]*?\.header-actions \{[^}]*flex-wrap: wrap[^}]*min-inline-size: 0/s);
+});
+
 test("style.css uses only token names from tokens/names.json for var(--*) references", () => {
   const names = JSON.parse(readFileSync(new URL("../tokens/names.json", import.meta.url), "utf8")) as Record<
     string,
