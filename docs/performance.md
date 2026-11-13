@@ -109,6 +109,38 @@ controls.
    correct. A budget update without that explanation should not be merged.
 4. A decrease is recorded the same way. The budget ratchets down so the saving is not lost later.
 
+### The 0.2.0 baseline refresh
+
+The baseline was last written before the Wave 2–5 features landed. Re-measured on Node 24.22.2 on
+2026-11-13, the fixture moved as follows:
+
+| Route | Class | Before | After | Change |
+| --- | --- | --- | --- | --- |
+| every route | `css/base` | 8,934 B gzip | 9,224 B gzip | +290 B (3.2%) |
+| every route | `js/chrome` | 17,558 B gzip, 18 assets | 18,851 B gzip, 19 assets | +1,293 B (7.4%), +1 module |
+| `/` | `css/page` | 915 B gzip | 920 B gzip | +5 B |
+| `/guide/` | `css/page` | 1,214 B gzip | 1,222 B gzip | +8 B |
+| `/reference/` | `css/page` | 1,676 B gzip | 1,695 B gzip | +19 B |
+| `/reference/` | `js/components` | 6,196 B gzip | 6,170 B gzip | −26 B |
+
+The growth is the search combobox and the evidence presentation, not unrelated drift:
+
+- `js/chrome`: the combobox's pure option model is a new module (`chrome/search/options.ts`) and the
+  search client grew with grouped results, the active-option model, and localized messages
+  (`#135`, `#190`). The one extra asset is that model; inlining it into the client would save
+  about 212 B gzip but would make the browser-only client the only way to unit-test the model, so the
+  module boundary stays and the count is recorded at 19.
+- `css/base`: the active option and dark-surface contrast rules, `unicode-bidi: isolate` on section
+  tabs, the shared styles for the paired figure, schema reference, tested chip, and version-diff
+  note (`#134`, `#147`, `#145`, `#146`, `#191`), and the release-candidate rules that keep trust,
+  drift, tested, version, and recency evidence legible in forced colors and print (+169 B of the
+  total).
+- The page bundles only carry component styles for the components the route uses, so `/` moves least
+  and `/reference/` most. `js/components` shrank slightly.
+
+No compiler, minifier, or tolerance setting changed; `TOLERANCE_BYTES` is still 64. The new numbers
+are the measured bytes of the integrated theme, so the next regression fails against them.
+
 The check allows each class `64` bytes of gzip headroom, the `TOLERANCE_BYTES` constant in
 `scripts/performance-budget.ts`. It absorbs small differences in gzip output between zlib builds, so a
 clean checkout on another Node release does not fail for a byte; it is not a growth allowance.

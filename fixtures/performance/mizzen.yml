@@ -5,6 +5,7 @@ title: Lateen performance fixture
 description: A fixed site for measuring the theme's shipped JavaScript and CSS.
 lang: en
 base: ""
+url: https://example.com
 search: false
 theme:
   options:
