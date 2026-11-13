@@ -20,6 +20,8 @@ import {
   activate,
   closeOnEscape,
   closeOutside,
+  handleClick,
+  openPanels,
   PANEL_SELECTOR,
   SUMMARY_SELECTOR,
   type SymbolChip,
@@ -51,9 +53,10 @@ class FakeNode implements SymbolNode {
   open: boolean;
   readonly chip = new FakeChip();
   readonly children = new Set<unknown>();
-  readonly listeners = new Map<string, Array<(event: SymbolEvent) => void>>();
+  readonly listeners = new Map<string, Set<(event: SymbolEvent) => void>>();
+  containsCalls = 0;
 
-  constructor(open = true) {
+  constructor(open = false) {
     this.open = open;
   }
 
@@ -63,15 +66,32 @@ class FakeNode implements SymbolNode {
   }
 
   contains(target: unknown): boolean {
+    this.containsCalls += 1;
     return this.children.has(target);
   }
 
   addEventListener(type: string, listener: (event: SymbolEvent) => void): void {
-    this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
+    this.listeners.set(type, new Set([...(this.listeners.get(type) ?? []), listener]));
+  }
+
+  removeEventListener(type: string, listener: (event: SymbolEvent) => void): void {
+    const listeners = this.listeners.get(type);
+    listeners?.delete(listener);
+    if (listeners?.size === 0) this.listeners.delete(type);
   }
 
   fire(type: string, event: SymbolEvent = { preventDefault: () => {} }): void {
     for (const listener of this.listeners.get(type) ?? []) listener(event);
+  }
+
+  /** What the browser does natively: flips `open` and dispatches the `toggle` event. */
+  setOpen(open: boolean): void {
+    this.open = open;
+    this.fire("toggle");
+  }
+
+  listenerCount(type: string): number {
+    return this.listeners.get(type)?.size ?? 0;
   }
 }
 
@@ -208,38 +228,47 @@ test("the native summary is the only control, so tap, click, Enter, and Space ne
   assert.equal(details.hasAttribute("tabindex"), false);
   assert.equal(details.querySelector("summary")?.hasAttribute("tabindex"), false);
 
-  const node = new FakeNode(false);
-  activate(node);
-  assert.deepEqual([...node.listeners.keys()], ["keydown"], "the island adds no pointer or touch handler");
+  const node = new FakeNode();
+  const off = activate(node);
+  assert.deepEqual([...node.listeners.keys()], ["toggle"], "the island adds no pointer, touch, or key handler while closed");
+  assert.equal(node.listenerCount("keydown"), 0, "a closed disclosure carries no Escape listener");
   assert.equal(node.open, false, "the island does not open the disclosure itself");
   assert.equal(node.chip.focused, false);
+  off();
 });
 
 test("Escape closes an open disclosure and returns focus to its summarised chip", () => {
   const node = new FakeNode();
-  activate(node);
+  const off = activate(node);
+  node.setOpen(true);
   let prevented = false;
   node.fire("keydown", { key: "Escape", preventDefault: () => (prevented = true) });
 
   assert.equal(node.open, false);
   assert.equal(node.chip.focused, true);
   assert.equal(prevented, true);
+  assert.equal(node.listenerCount("keydown"), 0, "the Escape listener is gone once the panel closes");
+  assert.deepEqual(openPanels(), []);
+  off();
 });
 
 test("Escape on a closed disclosure is left to the browser and does not move focus", () => {
-  const node = new FakeNode(false);
-  activate(node);
+  const node = new FakeNode();
+  const off = activate(node);
   let prevented = false;
   node.fire("keydown", { key: "Escape", preventDefault: () => (prevented = true) });
+  closeOnEscape(node, { key: "Escape", preventDefault: () => (prevented = true) });
 
   assert.equal(node.open, false);
   assert.equal(node.chip.focused, false);
   assert.equal(prevented, false);
+  off();
 });
 
 test("keys other than Escape are left alone", () => {
   const node = new FakeNode();
-  activate(node);
+  const off = activate(node);
+  node.setOpen(true);
   for (const key of ["Tab", "Enter", " ", "ArrowDown", "Shift"]) {
     let prevented = false;
     node.fire("keydown", { key, preventDefault: () => (prevented = true) });
@@ -247,10 +276,11 @@ test("keys other than Escape are left alone", () => {
     assert.equal(prevented, false, key);
   }
   assert.equal(node.chip.focused, false);
+  off();
 });
 
 test("a click outside closes the disclosure without moving focus", () => {
-  const node = new FakeNode();
+  const node = new FakeNode(true);
   const outside = {};
   const inside = {};
   node.children.add(inside);
@@ -259,36 +289,144 @@ test("a click outside closes the disclosure without moving focus", () => {
   assert.equal(node.open, false);
   assert.equal(node.chip.focused, false, "the clicked element keeps focus");
 
-  const open = new FakeNode();
+  const open = new FakeNode(true);
   open.children.add(inside);
   closeOutside(open, inside);
   assert.equal(open.open, true, "a click inside the panel leaves it open");
 
-  const closed = new FakeNode(false);
+  const closed = new FakeNode();
   closeOutside(closed, outside);
   assert.equal(closed.open, false);
 });
 
+test("a click examines only the open disclosures, never the closed ones", () => {
+  // A reference page's worth of closed symbols: a click must not touch any of them.
+  const closed = Array.from({ length: 300 }, () => new FakeNode());
+  const offClosed = closed.map((node) => activate(node));
+  for (const node of closed) node.containsCalls = 0;
+
+  handleClick({});
+  assert.deepEqual(
+    closed.map((node) => node.containsCalls),
+    closed.map(() => 0),
+    "no open disclosure means no per-panel contains checks",
+  );
+  assert.deepEqual(openPanels(), []);
+
+  const first = new FakeNode();
+  const second = new FakeNode();
+  const offOpen = [activate(first), activate(second)];
+  first.setOpen(true);
+  second.setOpen(true);
+  for (const node of closed) node.containsCalls = 0;
+  first.containsCalls = 0;
+  second.containsCalls = 0;
+
+  handleClick({});
+  assert.equal(first.containsCalls, 1, "one open panel costs one contains check");
+  assert.equal(second.containsCalls, 1, "the other open panel costs one more");
+  assert.equal(first.open, false);
+  assert.equal(second.open, false);
+  assert.equal(
+    closed.reduce((total, node) => total + node.containsCalls, 0),
+    0,
+    "work follows the open set, not the total symbol count",
+  );
+
+  offOpen.forEach((off) => off());
+  offClosed.forEach((off) => off());
+});
+
+test("a click inside one open panel closes the others and leaves it open", () => {
+  const first = new FakeNode();
+  const second = new FakeNode();
+  const off = [activate(first), activate(second)];
+  first.setOpen(true);
+  second.setOpen(true);
+  const insideSecond = {};
+  second.children.add(insideSecond);
+
+  handleClick(insideSecond);
+  assert.equal(first.open, false, "the other open panel closes");
+  assert.equal(second.open, true, "the clicked panel stays open");
+  assert.equal(first.chip.focused, false, "focus is not moved by an outside click");
+  assert.equal(second.chip.focused, false);
+
+  off.forEach((offOne) => offOne());
+});
+
+test("Escape closes only the open disclosure it belongs to", () => {
+  const first = new FakeNode();
+  const second = new FakeNode();
+  const off = [activate(first), activate(second)];
+  first.setOpen(true);
+  second.setOpen(true);
+  assert.deepEqual(openPanels(), [first, second]);
+
+  first.fire("keydown", { key: "Escape", preventDefault: () => {} });
+  assert.equal(first.open, false);
+  assert.equal(first.chip.focused, true);
+  assert.equal(second.open, true, "the other discovery is untouched");
+  assert.equal(second.chip.focused, false);
+  assert.deepEqual(openPanels(), [second]);
+
+  second.fire("keydown", { key: "Escape", preventDefault: () => {} });
+  assert.deepEqual(openPanels(), []);
+  off.forEach((offOne) => offOne());
+});
+
+test("the native toggle keeps the open set in step with the disclosure", () => {
+  const node = new FakeNode();
+  const off = activate(node);
+  assert.deepEqual(openPanels(), []);
+
+  node.setOpen(true);
+  assert.deepEqual(openPanels(), [node]);
+  assert.equal(node.listenerCount("keydown"), 1);
+
+  node.setOpen(false);
+  assert.deepEqual(openPanels(), []);
+  assert.equal(node.listenerCount("keydown"), 0);
+
+  node.setOpen(true);
+  off();
+  assert.deepEqual(openPanels(), [], "cleanup forgets an open disclosure");
+  assert.deepEqual([...node.listeners.keys()], [], "cleanup removes every listener it added");
+  node.setOpen(false);
+  node.setOpen(true);
+  assert.deepEqual(openPanels(), [], "an unwired disclosure is no longer tracked");
+  assert.equal(node.listenerCount("keydown"), 0, "an unwired disclosure gets no Escape listener back");
+});
+
 test("the island never traps focus or changes the tab order", () => {
-  const node = new FakeNode(false);
-  const before = node.open;
-  activate(node);
-  for (const key of ["Tab", "Shift", "ArrowLeft", "ArrowRight", "Escape"]) {
+  const node = new FakeNode();
+  const off = activate(node);
+  node.setOpen(true);
+  for (const key of ["Tab", "Shift", "ArrowLeft", "ArrowRight", "Enter", " "]) {
     node.fire("keydown", { key, preventDefault: () => {} });
   }
-  assert.equal(node.open, before);
-  assert.deepEqual([...node.listeners.keys()], ["keydown"]);
+  assert.equal(node.open, true);
+  assert.equal(node.chip.focused, false);
+  assert.deepEqual([...node.listeners.keys()], ["toggle", "keydown"]);
   assert.equal(PANEL_SELECTOR, "details[data-symbol]");
+  off();
 });
 
 test("closeOnEscape is the same behaviour without activate", () => {
-  const node = new FakeNode();
+  const node = new FakeNode(true);
   closeOnEscape(node, { key: "Tab", preventDefault: () => {} });
   assert.equal(node.open, true);
 
   closeOnEscape(node, { key: "Escape", preventDefault: () => {} });
   assert.equal(node.open, false);
   assert.equal(node.chip.focused, true);
+});
+
+test("a static chip has no disclosure, no island wiring, and no tab stop", () => {
+  const doc = domOf(render({ name: "runExample" })!);
+  assert.ok(doc.querySelector("span.symbol-popover-chip"));
+  assert.equal(doc.querySelectorAll(PANEL_SELECTOR).length, 0, "the island finds only details disclosures");
+  assert.equal(doc.querySelectorAll("summary, [tabindex]").length, 0);
 });
 
 test("style.css leaves the panel to the native details instead of hiding it", () => {

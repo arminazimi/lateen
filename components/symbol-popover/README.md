@@ -10,9 +10,11 @@ when the directive gives one, a link to its reference page.
   is closed and shows it when open, so the disclosure, its reference link, and keyboard and touch
   opening all work without JavaScript. It keeps a visible focus ring and logical spacing, and puts
   the panel in the flow on narrow screens.
-- `client.ts` is the island: Escape closes the panel and returns focus to the chip, and a click
-  outside closes it without moving focus. It never moves or traps focus on its own and changes no
-  tab order; the disclosure needs no generated ids, so repeated names cannot collide. The island
+- `client.ts` is the island: it tracks only the open disclosures, so a click or Escape costs work
+  proportional to what is open rather than to every symbol on the page, and a closed disclosure
+  carries no keyboard listener. Escape closes the open panel and returns focus to the chip, and a
+  click outside closes it without moving focus. It never moves or traps focus on its own and changes
+  no tab order; the disclosure needs no generated ids, so repeated names cannot collide. The island
   loads only on pages that use the component, once the engine pipeline writes component islands into
   a page; until then the native disclosure is all that runs.
 - `test/component-symbol-popover.test.ts` covers the native disclosure semantics, the signature and

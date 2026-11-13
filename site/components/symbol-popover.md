@@ -35,5 +35,6 @@ Quote a value that has spaces, braces, or angle brackets: `signature="run(input:
 
 - The chip is the `<summary>` of a `<details>` element, so the browser opens and closes it with a tap, a click, Enter, or Space. The panel holds no `role=tooltip`, so its reference link is reachable without JavaScript and is valid interactive content.
 - With JavaScript, Escape closes an open panel and returns focus to the chip; a click outside closes it without moving focus. The island never traps focus and changes no tab order.
+- The island tracks only the panels that are open, so a page with hundreds of symbols does no per-symbol work on a click or a key, and a closed panel carries no keyboard listener.
 - The disclosure needs no generated ids, so repeating a symbol name, or passing an explicit id, cannot produce duplicate relationships.
 - A symbol inside an ordinary fenced code block needs engine markers, which are not in scope yet. The directive is the supported form for now.
