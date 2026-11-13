@@ -17,7 +17,9 @@ the page, and the note's back-link still returns them to the reference.
   the containing block.
 - `client.ts`: the island. It finds every `[data-footnote-ref]`, resolves the definition by the
   link's `#id`, copies the note's text without its back-links, and shows it in the mount point when
-  any pointer (mouse, pen, or touch) enters the reference or the reference takes focus.
+  any pointer (mouse, pen, or touch) enters the reference or the reference takes focus. Each
+  definition is copied and normalized once per activation and the text is cached by its decoded id,
+  so repeated engagements — and several references to one note — reuse it instead of cloning again.
   `pointerleave`, `pointercancel`, and `blur` hide it, and Escape hides it from anywhere in the
   document without moving focus. When focus and the pointer sit on different references, the one
   engaged last stays shown and the previous reference gets its own `aria-describedby` back, so a
