@@ -137,6 +137,34 @@
     color: LinkText !important;
   }
 
+  /* Trust, freshness, and version evidence keep their wording and their edges; the palette cannot
+     be the only signal, and none of these surfaces relies on a token color to say what it means. */
+  :where(.trust-panel-chip, .trust-panel-body, .drift-banner, .tested-chip, .version-badge, .version-diff) {
+    border-color: ButtonBorder !important;
+  }
+
+  :where(.drift-banner, .drift-banner[data-drift-severity]) {
+    border-inline-start-color: CanvasText !important;
+  }
+
+  :where(
+    .trust-panel-icon,
+    .drift-banner-icon,
+    .tested-chip-icon,
+    .version-badge-icon,
+    .version-diff-icon
+  ) {
+    color: CanvasText !important;
+  }
+
+  :where(.trust-panel-label, .trust-panel-reasons-label, .drift-banner-finding-severity, .version-diff-version-label) {
+    color: GrayText !important;
+  }
+
+  :where(.trust-panel-action, .drift-banner-actions a, .version-diff-previous, .version-diff-next) {
+    color: LinkText !important;
+  }
+
   /* Diff lines keep their edge, their + or − marker, and the strikethrough on a removal. */
   .diff-block,
   .diff-block-copy {

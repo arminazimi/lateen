@@ -157,6 +157,7 @@ test("print.css hides every piece of chrome and every screen-only control", () =
     ".page-agent-menu",
     "[data-page-agent-menu]",
     ".block-actions",
+    ".block-action",
     "[data-block-actions]",
     ".search",
     "[data-search]",

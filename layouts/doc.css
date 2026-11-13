@@ -4,9 +4,12 @@
    leaves. */
 
 .layout {
-  --doc-side-w: 17rem;
+  /* The side columns are sized in rem so they follow the text, but capped by the viewport: at 200%
+     text size an uncapped 17rem sidebar would take the article's whole column and the page would
+     lose its content. The caps only bite when text is enlarged or the window is narrow. */
+  --doc-side-w: min(17rem, 21vw);
   --doc-art-w: 46rem;
-  --doc-toc-w: 14rem;
+  --doc-toc-w: min(14rem, 17vw);
   max-inline-size: 90rem;
   margin-inline: auto;
   display: grid;
