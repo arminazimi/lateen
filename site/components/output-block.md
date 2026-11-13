@@ -78,6 +78,13 @@ printed, copying returns exactly that text with nothing inserted, and an invalid
 distinguishable from a missing one for a reader with or without JavaScript, because the script is in the
 served HTML.
 
+## Scrolling
+
+A long line scrolls inside the block instead of widening the page. The body renders with a tab stop, so a
+wide result is keyboard-scrollable without JavaScript; the theme's island removes that extra tab stop when
+the output fits and restores it when the body or its content grows past the block. The block's `label`
+still names it either way, and the body adds no landmark of its own.
+
 ## Example
 
 :::output-block
@@ -108,4 +115,5 @@ error: no such file or directory
   published as `"invalid"` in the JSON record, a missing one as `"omitted"`, and neither is ever read as a
   successful run.
 - The copy button copies the whole output and nothing else. It is made by JavaScript and starts hidden; the output still reads without it.
+- Without JavaScript the body keeps its tab stop, so a wide result still scrolls from the keyboard. With JavaScript it drops that tab stop for output that fits and adds it back on resize.
 - Use a [terminal](../terminal/) when the commands and their output belong together in one block, and this block when only the result matters.

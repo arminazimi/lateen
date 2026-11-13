@@ -13,6 +13,7 @@ import outputBlock, {
   LABEL_KEY,
   outputText,
   parseDependencies,
+  SCROLL_ATTRIBUTE,
   STALE_CLASS,
   STALE_KEY,
   STATUS_CLASS,
@@ -35,14 +36,21 @@ import {
   activate,
   activateAll,
   copy,
+  enhance,
+  isOverflowing,
+  OVERFLOW_TOLERANCE,
   RESET_MS,
+  SCROLL_SELECTOR,
   STATUS_SELECTOR,
+  sync,
   type Clipboard,
   type CopyButton,
   type CopyDocument,
   type CopyEnv,
   type CopyParent,
   type CopyStatus,
+  type ScrollBody,
+  type ScrollEnv,
 } from "../components/output-block/client.ts";
 import { markStale } from "../components/variables-form/client.ts";
 
@@ -95,7 +103,7 @@ test("the default label follows the page language", () => {
 test("the body has its own class, so it is distinct from input code", () => {
   const out = render(OUTPUT);
 
-  assert.match(out, /<pre class="output-block-body" tabindex="0"><code>/);
+  assert.match(out, /<pre class="output-block-body" tabindex="0" data-output-scroll="true"><code>/);
   assert.doesNotMatch(out, /class="code"/);
 });
 
@@ -238,6 +246,68 @@ test("without JavaScript the output is fully visible and the button stays hidden
 
   assert.match(out, /<code>Written 12 pages\nin 340 ms<\/code>/);
   assert.match(out, /class="output-block-copy" hidden/);
+  assert.match(out, /<pre class="output-block-body" tabindex="0" data-output-scroll="true"><code>/);
+  assert.equal(labelsOf(out), "Output", "the focusable fallback keeps the group name");
+});
+
+test("the scroll marker matches the island selector", () => {
+  assert.equal(SCROLL_ATTRIBUTE, "data-output-scroll");
+  assert.equal(SCROLL_SELECTOR, `[${SCROLL_ATTRIBUTE}]`);
+});
+
+test("overflow is measured in CSS pixels with a one-pixel rounding tolerance", () => {
+  assert.equal(OVERFLOW_TOLERANCE, 1);
+  assert.equal(isOverflowing(fakeBody(100, 100)), false);
+  assert.equal(isOverflowing(fakeBody(101, 100)), false, "a subpixel or rounding difference is not overflow");
+  assert.equal(isOverflowing(fakeBody(102, 100)), true);
+  assert.equal(isOverflowing(fakeBody(80, 100)), false);
+});
+
+test("a fitting output leaves the tab order and keeps the group name", () => {
+  const body = fakeBody(100, 100);
+
+  assert.equal(sync(body), false);
+  assert.equal(body.attributes.has("tabindex"), false);
+  assert.equal(body.attributes.has("role"), false, "the body adds no landmark of its own");
+  assert.equal(body.attributes.has("aria-label"), false);
+});
+
+test("an overflowing output stays keyboard-scrollable inside its named group", () => {
+  const body = fakeBody(640, 320);
+
+  assert.equal(sync(body), true);
+  assert.equal(body.attributes.get("tabindex"), "0");
+  assert.equal(body.attributes.has("role"), false, "the group above keeps the accessible name");
+  assert.equal(body.attributes.has("aria-label"), false);
+});
+
+test("container and content resizes update the tab stop in both directions", () => {
+  const code = fakeBody(100, 100);
+  const body = fakeBody(100, 100, code);
+  const watched: Array<{ target: ScrollBody; update: () => void }> = [];
+
+  enhance({
+    bodies: () => [body],
+    watch: (target, update) => {
+      watched.push({ target, update });
+    },
+  });
+
+  assert.equal(body.attributes.has("tabindex"), false, "the initial sync drops the fallback tab stop");
+  assert.equal(watched.length, 2, "the body and the code inside it are both observed");
+
+  body.scrollWidth = 200;
+  for (const entry of watched) entry.update();
+  assert.equal(body.attributes.get("tabindex"), "0", "growing past the body adds the tab stop");
+
+  body.scrollWidth = 100;
+  for (const entry of watched) entry.update();
+  assert.equal(body.attributes.has("tabindex"), false, "shrinking back removes it again");
+
+  code.scrollWidth = 400;
+  body.scrollWidth = 400;
+  for (const entry of watched) entry.update();
+  assert.equal(body.attributes.get("tabindex"), "0", "new content that reflows gets the tab stop back");
 });
 
 /** The `aria-label` of the group, as the rendered HTML carries it. */
@@ -492,6 +562,30 @@ function fakeOutputBlock(html: string) {
     querySelector: () => note,
   };
   return { element, note };
+}
+
+/** An output body as the scroll island reads it: its measured widths, attributes, and code child. */
+interface FakeBody extends ScrollBody {
+  readonly attributes: Map<string, string>;
+}
+
+/** The server fallback starts focusable, as `index.ts` renders it. */
+function fakeBody(scrollWidth: number, clientWidth: number, code: ScrollBody | null = null): FakeBody {
+  const attributes = new Map<string, string>([["tabindex", "0"]]);
+  return {
+    scrollWidth,
+    clientWidth,
+    attributes,
+    setAttribute(name, value) {
+      attributes.set(name, value);
+    },
+    removeAttribute(name) {
+      attributes.delete(name);
+    },
+    querySelector(selector) {
+      return selector === "code" ? code : null;
+    },
+  };
 }
 
 /** A button with the attributes the frame renders and a click listener the test can fire. */
