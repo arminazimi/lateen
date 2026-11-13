@@ -6,8 +6,8 @@ import drawer from "../chrome/drawer/index.ts";
 import header from "../chrome/header/index.ts";
 import sidebar from "../chrome/sidebar/index.ts";
 import changelogEntry, {
-  idOf,
   versionTextOf,
+  type ChangelogEntryNode,
   type ChangelogEntryProps,
 } from "../components/changelog-entry/index.ts";
 import { t } from "../i18n/index.ts";
@@ -168,27 +168,36 @@ function titleFromBody(props: LayoutProps): boolean {
   return props.page.headings.some((heading) => heading.depth === 1);
 }
 
+/** A release through the `changelog-entry` component, carrying the id the component allocated for it. */
+interface IdentifiedRelease {
+  readonly release: Release;
+  readonly id: string;
+  readonly node: ChangelogEntryNode;
+}
+
 /** One release through the `changelog-entry` component, props-shaped. */
-function entry(release: Release, props: LayoutProps): ComponentChildren {
+function entry(release: Release, props: LayoutProps): IdentifiedRelease {
   const entryProps: ChangelogEntryProps = {
     ...(release.version === undefined ? {} : { version: release.version }),
     ...(release.date === undefined ? {} : { date: release.date }),
     ...(release.categories === undefined ? {} : { categories: release.categories }),
   };
-  return changelogEntry({
+  const node = changelogEntry({
     props: entryProps,
     page: props.page,
     site: props.site,
     html: release.body,
-  }) as ComponentChildren;
+  });
+  return { release, id: node.props.id, node };
 }
 
 /**
- * The compact contents at the top of the page: one link per release. The ids come from the entry
- * component's `idOf`, so the links and the section anchors can never drift apart.
+ * The compact contents at the top of the page: one link per release, pointing at the exact id the
+ * release's entry allocated. Reading the id from the rendered entry keeps a repeated, unversioned, or
+ * slug-equivalent release's link and section from drifting apart.
  */
-function versionToc(releases: readonly Release[], lang: string): ComponentChildren {
-  if (releases.length === 0) return null;
+function versionToc(entries: readonly IdentifiedRelease[], lang: string): ComponentChildren {
+  if (entries.length === 0) return null;
   const label = t(lang, "versions");
   return h(
     "nav",
@@ -197,11 +206,11 @@ function versionToc(releases: readonly Release[], lang: string): ComponentChildr
     h(
       "ul",
       { class: TOC_LIST_CLASS },
-      releases.map((release) =>
+      entries.map(({ release, id }) =>
         h(
           "li",
           null,
-          h("a", { href: `#${idOf(release.version)}` }, versionTextOf(release.version, lang)),
+          h("a", { href: `#${id}` }, versionTextOf(release.version, lang)),
         ),
       ),
     ),
@@ -226,15 +235,17 @@ function article(props: LayoutProps): ComponentChildren {
     );
   }
 
+  const entries = releases.map((release) => entry(release, props));
+
   return h(
     "article",
     { class: ARTICLE_CLASS, "data-pagefind-body": true },
     h("h1", { class: "changelog-title" }, page.title),
-    versionToc(releases, page.lang),
+    versionToc(entries, page.lang),
     h(
       "div",
       { class: RELEASES_CLASS },
-      releases.map((release) => entry(release, props)),
+      entries.map((identified) => identified.node),
     ),
   );
 }

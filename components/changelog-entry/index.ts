@@ -1,4 +1,5 @@
 import { h } from "preact";
+import type { VNode } from "preact";
 import type { ComponentProps, Page } from "@velella/mizzen/contracts";
 import { calendarDate } from "../../src/dates.ts";
 import { t } from "../../i18n/index.ts";
@@ -55,6 +56,12 @@ export type ChangelogEntryProps = {
   /** Categories separated by commas, or a JSON array of strings: `added`, `changed`, `fixed`, `removed`, `security`. */
   categories?: string;
 };
+
+/**
+ * A rendered entry. Its section vnode publishes the one id it allocated, so a layout that renders the
+ * entries can link its contents at exactly the id each section carries.
+ */
+export type ChangelogEntryNode = VNode<{ id: string }>;
 
 /** The i18n key of each category's visible label. */
 const CATEGORY_KEYS: Readonly<Record<Category, string>> = {
@@ -242,9 +249,14 @@ function categoryList(categories: readonly Category[], lang: string) {
  * instead of an empty heading or a bare "v". An empty body keeps the heading and shows a short "no details"
  * paragraph, so a stub entry is visibly a stub rather than an empty section. Repeated, slug-equivalent, and
  * unversioned entries still get unique ids, because the first entry to claim an id keeps it and the rest get a
- * numeric suffix in page order; an `id` prop overrides the version slug as the base.
+ * numeric suffix in page order; an `id` prop overrides the version slug as the base. The returned section
+ * vnode carries the allocated id, so a layout can point its contents at the exact fragment the section uses.
  */
-export default function changelogEntry({ props, page, html }: ComponentProps<ChangelogEntryProps>) {
+export default function changelogEntry({
+  props,
+  page,
+  html,
+}: ComponentProps<ChangelogEntryProps>): ChangelogEntryNode {
   const lang = page.lang;
   const id = uniqueIdOf(page, givenIdOf(props.id) ?? idOf(props.version));
   const textId = versionTextId(id);
@@ -288,5 +300,5 @@ export default function changelogEntry({ props, page, html }: ComponentProps<Cha
         ? h("p", { class: EMPTY_CLASS }, t(lang, "changelog_empty"))
         : h("div", { dangerouslySetInnerHTML: { __html: html } }),
     ),
-  );
+  ) as ChangelogEntryNode;
 }
