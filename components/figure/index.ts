@@ -1,5 +1,6 @@
 import { h } from "preact";
 import type { ComponentProps } from "@velella/mizzen/contracts";
+import { baseOf, srcsetWithBase, withBase } from "../../src/url.ts";
 
 /** Class on the `<figure>` element. */
 export const FIGURE_CLASS = "figure";
@@ -98,12 +99,14 @@ function captionOf(props: FigureProps, html: string) {
  * sit outside the wrapper, so they stay readable and a credit link stays operable. The body arrives
  * already rendered to HTML.
  */
-export default function figure({ props, html }: ComponentProps<FigureProps>) {
-  const src = text(props.src);
-  if (src === "") return null;
-
+export default function figure({ props, html, site }: ComponentProps<FigureProps>) {
+  const authored = text(props.src);
+  if (authored === "") return null;
+  const base = baseOf(site);
+  const src = withBase(base, authored);
   const alt = typeof props.alt === "string" ? props.alt : "";
-  const darkSrc = text(props.src_dark);
+  const authoredDark = text(props.src_dark);
+  const darkSrc = authoredDark === "" ? "" : withBase(base, authoredDark);
   const paired = darkSrc !== "" && darkSrc !== src;
   const shared = {
     width: dimension(props.width),
@@ -117,7 +120,7 @@ export default function figure({ props, html }: ComponentProps<FigureProps>) {
     src,
     alt: paired ? "" : alt,
     "aria-hidden": paired ? "true" : undefined,
-    srcset: typeof props.srcset === "string" && props.srcset !== "" ? props.srcset : undefined,
+    srcset: typeof props.srcset === "string" && props.srcset !== "" ? srcsetWithBase(base, props.srcset) : undefined,
     sizes: typeof props.sizes === "string" && props.sizes !== "" ? props.sizes : undefined,
     ...shared,
   });

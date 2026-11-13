@@ -43,7 +43,7 @@ import {
   type TrustEvent,
   type TrustPanelNode,
   type TrustSummary,
-} from "../components/trust-panel/client.ts";
+} from "../chrome/trust-panel-keys/client.ts";
 import { countsOf } from "../components/tested-chip/index.ts";
 
 /** A site with the data, theme options, and base the component reads. */

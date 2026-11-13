@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { renderToString } from "preact-render-to-string";
 import type { ComponentProps } from "@velella/mizzen/contracts";
 import figure, {
   DARK_IMAGE_CLASS,
@@ -318,4 +319,32 @@ test("style.css keeps the unshown image of a pair out of view in the light and s
     css,
     /@media \(prefers-color-scheme: dark\) \{[^}]*:root:not\(\[data-theme="light"\]\) \.figure-paired \.figure-img-light\s*\{\s*display:\s*none/,
   );
+});
+
+test("root-relative image URLs take the site base, external ones stay", () => {
+  const input = {
+    props: {
+      src: "/img/a.png",
+      src_dark: "/img/a-dark.png",
+      srcset: "/img/a.png 1x, /img/b.png 2x, https://cdn.test/c.png 3x",
+      alt: "A pair",
+    },
+    html: "",
+    page: {},
+    site: { config: { base: "/lateen" } },
+  } as unknown as ComponentProps<FigureProps>;
+  const out = renderToString(figure(input) as never);
+  assert.match(out, /src="\/lateen\/img\/a\.png"/);
+  assert.match(out, /src="\/lateen\/img\/a-dark\.png"/);
+  assert.match(out, /srcset="\/lateen\/img\/a\.png 1x, \/lateen\/img\/b\.png 2x, https:\/\/cdn\.test\/c\.png 3x"/);
+});
+
+test("an absolute image URL is never rewritten", () => {
+  const input = {
+    props: { src: "https://cdn.test/a.png", alt: "A" },
+    html: "",
+    page: {},
+    site: { config: { base: "/lateen" } },
+  } as unknown as ComponentProps<FigureProps>;
+  assert.match(renderToString(figure(input) as never), /src="https:\/\/cdn\.test\/a\.png"/);
 });

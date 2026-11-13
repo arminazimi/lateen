@@ -4,18 +4,18 @@
     "/": {
       "css/base": {
         "raw": 66058,
-        "gzip": 10511,
+        "gzip": 10551,
         "count": 1
       },
       "css/page": {
         "raw": 3122,
-        "gzip": 920,
+        "gzip": 915,
         "count": 1
       },
       "js/chrome": {
-        "raw": 51469,
-        "gzip": 18656,
-        "count": 18
+        "raw": 56786,
+        "gzip": 20867,
+        "count": 20
       },
       "js/components": {
         "raw": 0,
@@ -24,7 +24,7 @@
       },
       "js/inline": {
         "raw": 293,
-        "gzip": 212,
+        "gzip": 211,
         "count": 1
       },
       "font/self-hosted": {
@@ -134,18 +134,18 @@
     "/guide/": {
       "css/base": {
         "raw": 66058,
-        "gzip": 10511,
+        "gzip": 10551,
         "count": 1
       },
       "css/page": {
         "raw": 4612,
-        "gzip": 1222,
+        "gzip": 1214,
         "count": 1
       },
       "js/chrome": {
-        "raw": 51469,
-        "gzip": 18656,
-        "count": 18
+        "raw": 56786,
+        "gzip": 20867,
+        "count": 20
       },
       "js/components": {
         "raw": 0,
@@ -154,7 +154,7 @@
       },
       "js/inline": {
         "raw": 293,
-        "gzip": 212,
+        "gzip": 211,
         "count": 1
       },
       "font/self-hosted": {
@@ -264,27 +264,27 @@
     "/reference/": {
       "css/base": {
         "raw": 66058,
-        "gzip": 10511,
+        "gzip": 10551,
         "count": 1
       },
       "css/page": {
         "raw": 10242,
-        "gzip": 1754,
+        "gzip": 1748,
         "count": 1
       },
       "js/chrome": {
-        "raw": 51469,
-        "gzip": 18656,
-        "count": 18
+        "raw": 56786,
+        "gzip": 20867,
+        "count": 20
       },
       "js/components": {
         "raw": 17000,
-        "gzip": 6170,
+        "gzip": 6196,
         "count": 5
       },
       "js/inline": {
         "raw": 293,
-        "gzip": 212,
+        "gzip": 211,
         "count": 1
       },
       "font/self-hosted": {

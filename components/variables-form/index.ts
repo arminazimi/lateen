@@ -9,6 +9,7 @@ import {
   TYPE_ATTRIBUTE,
   groupIdOf,
 } from "./group.ts";
+import { instanceId } from "../../src/page-ids.ts";
 import { validationTypeOf } from "./validation.ts";
 
 export {
@@ -120,32 +121,14 @@ export function fieldId(base: string, name: string, index: number): string {
   return `${base}-${slug}-${index + 1}`;
 }
 
-/** The ids claimed on a page, and the page HTML they were counted against. */
-const pageIds = new WeakMap<Page, { html: string; used: Set<string> }>();
-
 /**
  * The id base one form instance owns: the author's `id` (sanitized) or `variables-form` for the first form
  * to claim it on the page, then `<base>-2`, `<base>-3` in page order, so two default forms and forms whose
  * ids sanitize alike never share an id. The legend and hint ids are reserved with the base, so no form's
- * label or description can resolve into another form. Keyed by the Page and reset when its HTML changes,
- * so one page's ids cannot leak into another page or build, and the first ordinary form keeps its
- * published ids.
+ * label or description can resolve into another form.
  */
 export function instanceBase(page: Page, raw: unknown): string {
-  let state = pageIds.get(page);
-  if (state === undefined || state.html !== page.html) {
-    state = { html: page.html, used: new Set() };
-    pageIds.set(page, state);
-  }
-  const base = idBase(raw);
-  let id = base;
-  for (let n = 2; state.used.has(id) || state.used.has(`${id}-legend`) || state.used.has(`${id}-hint`); n += 1) {
-    id = `${base}-${n}`;
-  }
-  state.used.add(id);
-  state.used.add(`${id}-legend`);
-  state.used.add(`${id}-hint`);
-  return id;
+  return instanceId(page, idBase(raw), ["legend", "hint"]);
 }
 
 /** One scalar default as the text an input carries. A missing, null, or structured default becomes empty. */

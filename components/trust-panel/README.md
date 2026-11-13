@@ -3,7 +3,8 @@
 A chip under the page title that opens a panel with the page's trust state, the examples it tested,
 its drift status, its build and review provenance, its last reviewer, and why it has that state. The
 chip is a native `<details>` summary, so the panel opens with Enter, Space, or a click and closes with
-Escape without JavaScript; the island only adds the focus return to the chip.
+Escape when JavaScript runs; without it the panel is a native disclosure. The island also puts focus
+back on the chip.
 
 - `index.ts` renders the component. It reads the page's entry from `site.data.trust`, keyed by
   `page.url`, or from the directive's props for a manual panel. A page with no entry renders nothing,
@@ -14,7 +15,9 @@ Escape without JavaScript; the island only adds the focus return to the chip.
   the chip on a wide screen and in the flow on a narrow one, so it works under RTL too. Long reasons
   wrap (`overflow-wrap: anywhere`) and the panel never grows wider than the viewport, so a long
   translation stays readable at narrow widths and zoom.
-- `client.ts` is the island: Escape closes the open panel and puts focus back on the chip.
+- `chrome/trust-panel-keys/client.ts` is the island: Escape closes the open panel and puts focus back
+  on the chip. It lives in `chrome/` because a layout draws the panel, and the engine loads a
+  component's island only when page Markdown uses that component.
 - `examples.ts` turns one page's `site.data.examples` entry into honest evidence: the tested-chip's
   run states plus the distinct `none`, `invalid`, and `absent` gaps, with the row's text, class, and
   `data-trust-examples*` attributes derived from it.
