@@ -3,8 +3,8 @@
   "routes": {
     "/": {
       "css/base": {
-        "raw": 54352,
-        "gzip": 9205,
+        "raw": 54350,
+        "gzip": 9200,
         "count": 1
       },
       "css/page": {
@@ -35,7 +35,7 @@
           {
             "path": "assets/theme/fonts/geist-mono/geist-mono-latin-400-normal-d3fead78d33b2e0e.woff2",
             "url": "/assets/theme/fonts/geist-mono/geist-mono-latin-400-normal-d3fead78d33b2e0e.woff2",
-            "stylesheet": "assets/theme/base-4e50b408880effdf.css",
+            "stylesheet": "assets/theme/base-cadf98807683d949.css",
             "family": "Geist Mono",
             "weight": "400",
             "style": "normal",
@@ -47,7 +47,7 @@
           {
             "path": "assets/theme/fonts/geist-mono/geist-mono-latin-700-normal-fd476bdd3cb372ae.woff2",
             "url": "/assets/theme/fonts/geist-mono/geist-mono-latin-700-normal-fd476bdd3cb372ae.woff2",
-            "stylesheet": "assets/theme/base-4e50b408880effdf.css",
+            "stylesheet": "assets/theme/base-cadf98807683d949.css",
             "family": "Geist Mono",
             "weight": "700",
             "style": "normal",
@@ -59,7 +59,7 @@
           {
             "path": "assets/theme/fonts/geist/geist-sans-latin-400-normal-de174d9fdfca3f7d.woff2",
             "url": "/assets/theme/fonts/geist/geist-sans-latin-400-normal-de174d9fdfca3f7d.woff2",
-            "stylesheet": "assets/theme/base-4e50b408880effdf.css",
+            "stylesheet": "assets/theme/base-cadf98807683d949.css",
             "family": "Geist",
             "weight": "400",
             "style": "normal",
@@ -71,7 +71,7 @@
           {
             "path": "assets/theme/fonts/geist/geist-sans-latin-500-normal-53caff11e4703d5a.woff2",
             "url": "/assets/theme/fonts/geist/geist-sans-latin-500-normal-53caff11e4703d5a.woff2",
-            "stylesheet": "assets/theme/base-4e50b408880effdf.css",
+            "stylesheet": "assets/theme/base-cadf98807683d949.css",
             "family": "Geist",
             "weight": "500",
             "style": "normal",
@@ -83,7 +83,7 @@
           {
             "path": "assets/theme/fonts/geist/geist-sans-latin-700-normal-757a610ff712a5d3.woff2",
             "url": "/assets/theme/fonts/geist/geist-sans-latin-700-normal-757a610ff712a5d3.woff2",
-            "stylesheet": "assets/theme/base-4e50b408880effdf.css",
+            "stylesheet": "assets/theme/base-cadf98807683d949.css",
             "family": "Geist",
             "weight": "700",
             "style": "normal",
@@ -95,7 +95,7 @@
           {
             "path": "assets/theme/fonts/vazirmatn/vazirmatn-arabic-400-normal-e31830d3a52e0259.woff2",
             "url": "/assets/theme/fonts/vazirmatn/vazirmatn-arabic-400-normal-e31830d3a52e0259.woff2",
-            "stylesheet": "assets/theme/base-4e50b408880effdf.css",
+            "stylesheet": "assets/theme/base-cadf98807683d949.css",
             "family": "Vazirmatn",
             "weight": "400",
             "style": "normal",
@@ -107,7 +107,7 @@
           {
             "path": "assets/theme/fonts/vazirmatn/vazirmatn-arabic-500-normal-d3bc3b18900b5655.woff2",
             "url": "/assets/theme/fonts/vazirmatn/vazirmatn-arabic-500-normal-d3bc3b18900b5655.woff2",
-            "stylesheet": "assets/theme/base-4e50b408880effdf.css",
+            "stylesheet": "assets/theme/base-cadf98807683d949.css",
             "family": "Vazirmatn",
             "weight": "500",
             "style": "normal",
@@ -119,7 +119,7 @@
           {
             "path": "assets/theme/fonts/vazirmatn/vazirmatn-arabic-700-normal-aa79f9419fa0f5ef.woff2",
             "url": "/assets/theme/fonts/vazirmatn/vazirmatn-arabic-700-normal-aa79f9419fa0f5ef.woff2",
-            "stylesheet": "assets/theme/base-4e50b408880effdf.css",
+            "stylesheet": "assets/theme/base-cadf98807683d949.css",
             "family": "Vazirmatn",
             "weight": "700",
             "style": "normal",
@@ -133,8 +133,8 @@
     },
     "/guide/": {
       "css/base": {
-        "raw": 54352,
-        "gzip": 9205,
+        "raw": 54350,
+        "gzip": 9200,
         "count": 1
       },
       "css/page": {
@@ -165,7 +165,7 @@
           {
             "path": "assets/theme/fonts/geist-mono/geist-mono-latin-400-normal-d3fead78d33b2e0e.woff2",
             "url": "/assets/theme/fonts/geist-mono/geist-mono-latin-400-normal-d3fead78d33b2e0e.woff2",
-            "stylesheet": "assets/theme/base-4e50b408880effdf.css",
+            "stylesheet": "assets/theme/base-cadf98807683d949.css",
             "family": "Geist Mono",
             "weight": "400",
             "style": "normal",
@@ -177,7 +177,7 @@
           {
             "path": "assets/theme/fonts/geist-mono/geist-mono-latin-700-normal-fd476bdd3cb372ae.woff2",
             "url": "/assets/theme/fonts/geist-mono/geist-mono-latin-700-normal-fd476bdd3cb372ae.woff2",
-            "stylesheet": "assets/theme/base-4e50b408880effdf.css",
+            "stylesheet": "assets/theme/base-cadf98807683d949.css",
             "family": "Geist Mono",
             "weight": "700",
             "style": "normal",
@@ -189,7 +189,7 @@
           {
             "path": "assets/theme/fonts/geist/geist-sans-latin-400-normal-de174d9fdfca3f7d.woff2",
             "url": "/assets/theme/fonts/geist/geist-sans-latin-400-normal-de174d9fdfca3f7d.woff2",
-            "stylesheet": "assets/theme/base-4e50b408880effdf.css",
+            "stylesheet": "assets/theme/base-cadf98807683d949.css",
             "family": "Geist",
             "weight": "400",
             "style": "normal",
@@ -201,7 +201,7 @@
           {
             "path": "assets/theme/fonts/geist/geist-sans-latin-500-normal-53caff11e4703d5a.woff2",
             "url": "/assets/theme/fonts/geist/geist-sans-latin-500-normal-53caff11e4703d5a.woff2",
-            "stylesheet": "assets/theme/base-4e50b408880effdf.css",
+            "stylesheet": "assets/theme/base-cadf98807683d949.css",
             "family": "Geist",
             "weight": "500",
             "style": "normal",
@@ -213,7 +213,7 @@
           {
             "path": "assets/theme/fonts/geist/geist-sans-latin-700-normal-757a610ff712a5d3.woff2",
             "url": "/assets/theme/fonts/geist/geist-sans-latin-700-normal-757a610ff712a5d3.woff2",
-            "stylesheet": "assets/theme/base-4e50b408880effdf.css",
+            "stylesheet": "assets/theme/base-cadf98807683d949.css",
             "family": "Geist",
             "weight": "700",
             "style": "normal",
@@ -225,7 +225,7 @@
           {
             "path": "assets/theme/fonts/vazirmatn/vazirmatn-arabic-400-normal-e31830d3a52e0259.woff2",
             "url": "/assets/theme/fonts/vazirmatn/vazirmatn-arabic-400-normal-e31830d3a52e0259.woff2",
-            "stylesheet": "assets/theme/base-4e50b408880effdf.css",
+            "stylesheet": "assets/theme/base-cadf98807683d949.css",
             "family": "Vazirmatn",
             "weight": "400",
             "style": "normal",
@@ -237,7 +237,7 @@
           {
             "path": "assets/theme/fonts/vazirmatn/vazirmatn-arabic-500-normal-d3bc3b18900b5655.woff2",
             "url": "/assets/theme/fonts/vazirmatn/vazirmatn-arabic-500-normal-d3bc3b18900b5655.woff2",
-            "stylesheet": "assets/theme/base-4e50b408880effdf.css",
+            "stylesheet": "assets/theme/base-cadf98807683d949.css",
             "family": "Vazirmatn",
             "weight": "500",
             "style": "normal",
@@ -249,7 +249,7 @@
           {
             "path": "assets/theme/fonts/vazirmatn/vazirmatn-arabic-700-normal-aa79f9419fa0f5ef.woff2",
             "url": "/assets/theme/fonts/vazirmatn/vazirmatn-arabic-700-normal-aa79f9419fa0f5ef.woff2",
-            "stylesheet": "assets/theme/base-4e50b408880effdf.css",
+            "stylesheet": "assets/theme/base-cadf98807683d949.css",
             "family": "Vazirmatn",
             "weight": "700",
             "style": "normal",
@@ -263,8 +263,8 @@
     },
     "/reference/": {
       "css/base": {
-        "raw": 54352,
-        "gzip": 9205,
+        "raw": 54350,
+        "gzip": 9200,
         "count": 1
       },
       "css/page": {
@@ -295,7 +295,7 @@
           {
             "path": "assets/theme/fonts/geist-mono/geist-mono-latin-400-normal-d3fead78d33b2e0e.woff2",
             "url": "/assets/theme/fonts/geist-mono/geist-mono-latin-400-normal-d3fead78d33b2e0e.woff2",
-            "stylesheet": "assets/theme/base-4e50b408880effdf.css",
+            "stylesheet": "assets/theme/base-cadf98807683d949.css",
             "family": "Geist Mono",
             "weight": "400",
             "style": "normal",
@@ -307,7 +307,7 @@
           {
             "path": "assets/theme/fonts/geist-mono/geist-mono-latin-700-normal-fd476bdd3cb372ae.woff2",
             "url": "/assets/theme/fonts/geist-mono/geist-mono-latin-700-normal-fd476bdd3cb372ae.woff2",
-            "stylesheet": "assets/theme/base-4e50b408880effdf.css",
+            "stylesheet": "assets/theme/base-cadf98807683d949.css",
             "family": "Geist Mono",
             "weight": "700",
             "style": "normal",
@@ -319,7 +319,7 @@
           {
             "path": "assets/theme/fonts/geist/geist-sans-latin-400-normal-de174d9fdfca3f7d.woff2",
             "url": "/assets/theme/fonts/geist/geist-sans-latin-400-normal-de174d9fdfca3f7d.woff2",
-            "stylesheet": "assets/theme/base-4e50b408880effdf.css",
+            "stylesheet": "assets/theme/base-cadf98807683d949.css",
             "family": "Geist",
             "weight": "400",
             "style": "normal",
@@ -331,7 +331,7 @@
           {
             "path": "assets/theme/fonts/geist/geist-sans-latin-500-normal-53caff11e4703d5a.woff2",
             "url": "/assets/theme/fonts/geist/geist-sans-latin-500-normal-53caff11e4703d5a.woff2",
-            "stylesheet": "assets/theme/base-4e50b408880effdf.css",
+            "stylesheet": "assets/theme/base-cadf98807683d949.css",
             "family": "Geist",
             "weight": "500",
             "style": "normal",
@@ -343,7 +343,7 @@
           {
             "path": "assets/theme/fonts/geist/geist-sans-latin-700-normal-757a610ff712a5d3.woff2",
             "url": "/assets/theme/fonts/geist/geist-sans-latin-700-normal-757a610ff712a5d3.woff2",
-            "stylesheet": "assets/theme/base-4e50b408880effdf.css",
+            "stylesheet": "assets/theme/base-cadf98807683d949.css",
             "family": "Geist",
             "weight": "700",
             "style": "normal",
@@ -355,7 +355,7 @@
           {
             "path": "assets/theme/fonts/vazirmatn/vazirmatn-arabic-400-normal-e31830d3a52e0259.woff2",
             "url": "/assets/theme/fonts/vazirmatn/vazirmatn-arabic-400-normal-e31830d3a52e0259.woff2",
-            "stylesheet": "assets/theme/base-4e50b408880effdf.css",
+            "stylesheet": "assets/theme/base-cadf98807683d949.css",
             "family": "Vazirmatn",
             "weight": "400",
             "style": "normal",
@@ -367,7 +367,7 @@
           {
             "path": "assets/theme/fonts/vazirmatn/vazirmatn-arabic-500-normal-d3bc3b18900b5655.woff2",
             "url": "/assets/theme/fonts/vazirmatn/vazirmatn-arabic-500-normal-d3bc3b18900b5655.woff2",
-            "stylesheet": "assets/theme/base-4e50b408880effdf.css",
+            "stylesheet": "assets/theme/base-cadf98807683d949.css",
             "family": "Vazirmatn",
             "weight": "500",
             "style": "normal",
@@ -379,7 +379,7 @@
           {
             "path": "assets/theme/fonts/vazirmatn/vazirmatn-arabic-700-normal-aa79f9419fa0f5ef.woff2",
             "url": "/assets/theme/fonts/vazirmatn/vazirmatn-arabic-700-normal-aa79f9419fa0f5ef.woff2",
-            "stylesheet": "assets/theme/base-4e50b408880effdf.css",
+            "stylesheet": "assets/theme/base-cadf98807683d949.css",
             "family": "Vazirmatn",
             "weight": "700",
             "style": "normal",

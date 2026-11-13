@@ -6,9 +6,11 @@
   position: relative;
 }
 
+/* The action sits at the block's bottom end, below the copy control that code, terminal, and
+   output blocks put at the top end; a pointer click on Copy must not land on the action instead. */
 .block-action {
   position: absolute;
-  inset-block-start: var(--space-1);
+  inset-block-end: var(--space-1);
   inset-inline-end: var(--space-1);
   z-index: var(--layer-popover);
   padding-block: var(--space-1);
