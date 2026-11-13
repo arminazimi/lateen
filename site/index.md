@@ -3,7 +3,7 @@ title: Lateen documentation
 description: Lateen is a docs theme for people and agents, built on Mizzen.
 layout: home
 hero:
-  eyebrow: v0.2.0-rc.1 · docs theme
+  eyebrow: v0.2.0 · docs theme
   title: Easy to read. Safe to edit.
   lead: Lateen gives a Mizzen site its layouts, navigation, components, and design tokens. It works without JavaScript, mirrors for right-to-left languages, and is tested against WCAG 2.2 AA.
 actions:

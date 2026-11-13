@@ -81,12 +81,14 @@ axe checks the rules it has; a pass is not an audit. A person still reviews each
 
 ## Release candidate QA record
 
-`0.2.0-rc.1` was checked in Chromium against the built docs site and `fixtures/integration`:
+`0.2.0` was checked in Chromium against the built docs site and `fixtures/integration`, on Node 24
+with `@velella/mizzen` 0.2.0:
 
 | Check | Result |
 | --- | --- |
 | Keyboard order, visible focus ring, skip link, focus return from search and drawer | pass (40 tab stops, no stop on hidden or unfocused content) |
 | Copy, block-action, and variable journeys by keyboard and pointer | pass (Markdown twin, commands only, author output, source + language + version prompt) |
+| Grouped examples, typed validation, and per-group reset | pass (two independent groups, visible localized error, terminal copy blocked only in the invalid group, stale output scoped, reset announced) |
 | 200% text zoom | pass (no sideways scroll, no clipped prose) |
 | 320 px reflow, LTR and RTL | pass (no page scroll; code and tables scroll inside their own regions; the version popover stays inside the viewport) |
 | Reduced motion | pass (motion tokens collapse to `0s`, no animated surface) |
