@@ -29,8 +29,11 @@ import trustPanel, {
   provenanceOf,
   reasonsOf,
   reviewerText,
+  trustEvidenceFor,
+  trustEvidenceOf,
   type ExampleState,
   type ExamplesEvidence,
+  type TrustEvidence,
   type TrustPanelProps,
 } from "../components/trust-panel/index.ts";
 import {
@@ -107,16 +110,134 @@ test("default export is the trust panel component, and the class names are stabl
   assert.equal(BODY_CLASS, "trust-panel-body");
 });
 
-test("renders nothing when the site has no trust data for the page", () => {
+test("renders nothing when the site has no trust entry for the page", () => {
   assert.equal(render({}), null);
   assert.equal(render({ trust: undefined }), null);
   assert.equal(render({ trust: null }), null);
   assert.equal(render({ trust: "not a map" }), null);
   assert.equal(render({ trust: [] }), null);
   assert.equal(render({ trust: { "/other/": entry } }), null);
-  assert.equal(render({ trust: { "/guide/install/": {} } }), null);
-  assert.equal(render({ trust: { "/guide/install/": { level: "maybe" } } }), null);
-  assert.equal(render({ trust: { "/guide/install/": "verified" } }), null);
+  assert.equal(render({ trust: { pages: { "/other/": entry } } }), null);
+});
+
+test("a present but unreadable entry renders unknown invalid evidence instead of hiding", () => {
+  for (const malformed of [
+    {},
+    { level: "maybe" },
+    { level: 3 },
+    { level: true },
+    { level: "" },
+    { level: "   " },
+    { level: null },
+    { level: [] },
+    { level: {} },
+    "verified",
+    ["verified"],
+    null,
+    3,
+    true,
+  ]) {
+    const out = render({ trust: { "/guide/install/": malformed } });
+    assert.ok(out, JSON.stringify(malformed));
+    assert.match(
+      out,
+      /^<details class="trust-panel trust-panel-unknown" data-trust-panel data-trust-level="unknown" data-trust-evidence="invalid">/,
+      JSON.stringify(malformed),
+    );
+    assert.ok(out.includes(`<span class="trust-panel-level">Trust: ${stringsOf("en").trust_level_unknown}</span>`));
+    assert.ok(out.includes(stringsOf("en").trust_why_unknown!));
+    assert.doesNotMatch(out, /<dl/, "unreadable evidence supplies no rows");
+  }
+
+  assert.match(
+    render({ trust: { pages: { "/guide/install/": { level: "nonsense" } } } })!,
+    /data-trust-evidence="invalid"/,
+    "the nested pages shape is read the same way",
+  );
+});
+
+test("an unreadable entry inherits no examples, drift, reviewer, provenance, or action claims", () => {
+  const out = render(
+    {
+      trust: {
+        "/guide/install/": {
+          level: "not-a-level",
+          reasons: "All examples passed.",
+          lastReviewer: "Ada",
+          buildId: "build-1",
+          generatedAt: "2026-03-06",
+          reviewedAt: "2026-03-04",
+        },
+      },
+      examples: { "/guide/install/": { passed: 9, failed: 0 } },
+      drift: { "/guide/install/": [] },
+      build: { id: "build-1", generatedAt: "2026-03-06" },
+      reviewers: { "/guide/install/": { date: "2026-03-04" } },
+    },
+    {
+      options: {
+        trust: {
+          contextPackUrl: "https://example.com/context?page={url}",
+          suggestEditUrl: "/edit?source={source}",
+        },
+      },
+      base: "/docs",
+    },
+  );
+  assert.ok(out);
+  assert.match(out, /data-trust-level="unknown"/);
+  assert.match(out, /data-trust-evidence="invalid"/);
+  assert.doesNotMatch(out, /trust-panel-examples|data-trust-examples=/);
+  assert.doesNotMatch(out, /trust-panel-drift|>Drift<\/dt>/);
+  assert.doesNotMatch(out, /trust-panel-reviewer|Reviewed by Ada/);
+  assert.doesNotMatch(out, /data-trust-build=|data-trust-generated=|data-trust-reviewed=/);
+  assert.doesNotMatch(out, /<time /);
+  assert.doesNotMatch(out, /trust-panel-actions|trust-panel-action/);
+  assert.doesNotMatch(out, /All examples passed/, "a written reason is not inherited");
+});
+
+test("a manual panel with an unreadable level renders the same invalid unknown evidence", () => {
+  const out = render(
+    {
+      trust: { "/guide/install/": entry },
+      examples: { "/guide/install/": { passed: 9, failed: 0 } },
+      build: { id: "build-1", generatedAt: "2026-03-06" },
+    },
+    { props: { level: "maybe", reasons: "Manual claim", lastReviewer: "Bo", buildId: "build-1" } },
+  );
+  assert.ok(out);
+  assert.match(out, /data-trust-evidence="invalid"/);
+  assert.match(out, /data-trust-level="unknown"/);
+  assert.doesNotMatch(out, /data-trust-examples=/);
+  assert.doesNotMatch(out, /Manual claim|Reviewed by Bo/);
+  assert.doesNotMatch(out, /data-trust-build=/);
+});
+
+test("valid entries keep their rows and are never marked invalid", () => {
+  for (const level of [...LEVELS, "review due", "at risk"]) {
+    const out = render({
+      trust: { "/guide/install/": { level, reasons: "Custom reason." } },
+      examples: { "/guide/install/": { passed: 1, failed: 0, total: 2 } },
+    });
+    assert.ok(out, level);
+    assert.doesNotMatch(out, /data-trust-evidence=/, level);
+    assert.match(out, new RegExp(`data-trust-level="(?:${LEVELS.join("|")})"`), level);
+    assert.ok(out.includes("Custom reason."), `${level} keeps its written reason`);
+    assert.match(out, /data-trust-examples="partial"/, `${level} keeps partial example evidence`);
+  }
+});
+
+test("the invalid-evidence explanation is localised and non-claiming in every language", () => {
+  for (const lang of ["en", "fa", "ar"] as const) {
+    const strings = stringsOf(lang);
+    const out = render({ trust: { "/guide/install/": { level: "not-a-level" } } }, { lang });
+    assert.ok(out, lang);
+    assert.ok(out.includes(strings.trust_level_unknown!), `${lang} names the unknown level`);
+    assert.ok(out.includes(`<li>${strings.trust_why_unknown}</li>`), `${lang} uses the unknown explanation`);
+    assert.ok(out.includes(strings.trust_reasons!), `${lang} labels the explanation`);
+    assert.ok(!out.includes(strings.trust_level_verified!), `${lang} never claims verified`);
+    assert.ok(!out.includes(strings.trust_level_partial!), `${lang} never claims partial`);
+  }
 });
 
 test("the chip shows the level, its icon, and the native disclosure controls", () => {
@@ -405,6 +526,44 @@ test("the top-level and nested pages shapes are both accepted, and nested wins",
 
   const both = { pages: { "/guide/install/": { level: "verified" } }, "/guide/install/": { level: "partial" } };
   assert.equal(entryFor(siteOf({ trust: both }), "/guide/install/")?.level, "verified");
+});
+
+test("the evidence helpers separate absent, invalid, and valid entries", () => {
+  const states: TrustEvidence[] = [trustEvidenceOf(undefined), trustEvidenceOf(null), trustEvidenceOf({ level: "verified" })];
+  assert.deepEqual(states, [
+    { state: "absent" },
+    { state: "invalid" },
+    { state: "valid", entry: { level: "verified", reasons: [] } },
+  ]);
+
+  for (const malformed of ["verified", [], 0, {}, { level: "maybe" }, { level: "  " }, { level: 1 }]) {
+    assert.deepEqual(trustEvidenceOf(malformed), { state: "invalid" }, JSON.stringify(malformed));
+    assert.equal(entryOf(malformed), undefined, JSON.stringify(malformed));
+  }
+
+  assert.deepEqual(trustEvidenceOf({ level: " at_risk ", reasons: "a|b", lastReviewer: "Ada" }), {
+    state: "valid",
+    entry: { level: "partial", reasons: ["a", "b"], lastReviewer: "Ada" },
+  });
+
+  const site = siteOf({
+    trust: {
+      "/guide/install/": { level: "maybe", reasons: "ignored" },
+      "/valid/": { level: "review due", reasons: "Reviewed long ago." },
+      "/nested/": null,
+    },
+  });
+  assert.deepEqual(trustEvidenceFor(site, "/guide/install/"), { state: "invalid" });
+  assert.deepEqual(trustEvidenceFor(site, "/valid/"), {
+    state: "valid",
+    entry: { level: "unreviewed", reasons: ["Reviewed long ago."] },
+  });
+  assert.deepEqual(trustEvidenceFor(site, "/nested/"), { state: "invalid" });
+  assert.deepEqual(trustEvidenceFor(site, "/other/"), { state: "absent" });
+  assert.deepEqual(trustEvidenceFor(site, undefined), { state: "absent" });
+  assert.deepEqual(trustEvidenceFor(siteOf({}), "/guide/install/"), { state: "absent" });
+  assert.equal(entryFor(site, "/guide/install/"), undefined);
+  assert.equal(entryFor(site, "/valid/")?.level, "unreviewed");
 });
 
 test("the directive's props make a manual panel, and they win over the data", () => {

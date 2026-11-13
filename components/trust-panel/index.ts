@@ -62,7 +62,7 @@ export const ACTION_CLASS = "trust-panel-action";
 
 /** Props from the directive, for a manual panel: `::trust-panel{level=verified reasons="…" lastReviewer="…"}`. */
 export type TrustPanelProps = {
-  /** `verified`, `partial`, `unreviewed`, or `unknown`; any other value renders nothing. */
+  /** `verified`, `partial`, `unreviewed`, or `unknown`; a present level this does not know renders unknown invalid evidence. */
   level?: string;
   /** Why the page has this state. A string is split on line breaks or `|`. */
   reasons?: string;
@@ -91,6 +91,16 @@ export interface TrustEntry {
   /** When a person last reviewed the page. */
   readonly reviewedAt?: string;
 }
+
+/**
+ * What a page's trust data says: `absent` when no entry was written, `invalid` when one is present
+ * but cannot be read (it is not a record, or it has no known level), and `valid` when it names one.
+ * Invalid evidence carries no entry at all, so none of the written fields can arrive as a claim.
+ */
+export type TrustEvidence =
+  | { readonly state: "absent" }
+  | { readonly state: "invalid" }
+  | { readonly state: "valid"; readonly entry: TrustEntry };
 
 /**
  * Valid same-build provenance for one panel. Every member is optional: a site that records none gets no
@@ -181,11 +191,8 @@ export function reasonsOf(value: unknown): string[] {
   return value.map(textOf).filter((reason): reason is string => reason !== undefined);
 }
 
-/** The entry on one value, or undefined when it has no level. */
-export function entryOf(value: unknown): TrustEntry | undefined {
-  if (!isRecord(value)) return undefined;
-  const level = levelOf(value.level);
-  if (level === undefined) return undefined;
+/** The readable entry in a record whose level is already known. */
+function entryFrom(value: Record<string, unknown>, level: TrustLevel): TrustEntry {
   const lastReviewer = textOf(value.lastReviewer);
   const buildId = textOf(value.buildId);
   const generatedAt = textOf(value.generatedAt);
@@ -200,6 +207,21 @@ export function entryOf(value: unknown): TrustEntry | undefined {
   };
 }
 
+/** The evidence one value carries. Only `undefined` is absent; anything written but unreadable is invalid. */
+export function trustEvidenceOf(value: unknown): TrustEvidence {
+  if (value === undefined) return { state: "absent" };
+  if (!isRecord(value)) return { state: "invalid" };
+  const level = levelOf(value.level);
+  if (level === undefined) return { state: "invalid" };
+  return { state: "valid", entry: entryFrom(value, level) };
+}
+
+/** The entry on one value, or undefined when it is absent or unreadable. */
+export function entryOf(value: unknown): TrustEntry | undefined {
+  const evidence = trustEvidenceOf(value);
+  return evidence.state === "valid" ? evidence.entry : undefined;
+}
+
 /**
  * The URL-to-entry map inside `site.data.trust`. The future `trust.json` output may write either
  * `{ "/page/": { … } }` or `{ pages: { "/page/": { … } } }`; both are accepted, and the nested form
@@ -211,12 +233,18 @@ export function pagesOf(trust: unknown): Record<string, unknown> | undefined {
   return isRecord(nested) ? nested : trust;
 }
 
+/** The page's trust evidence from `site.data.trust`, keyed by its exact URL including `base`. */
+export function trustEvidenceFor(site: Site | undefined, url: string | undefined): TrustEvidence {
+  if (url === undefined) return { state: "absent" };
+  const pages = pagesOf(site?.data?.trust);
+  if (pages === undefined || !Object.hasOwn(pages, url)) return { state: "absent" };
+  return trustEvidenceOf(pages[url]);
+}
+
 /** The page's trust entry from `site.data.trust`, keyed by its exact URL including `base`. */
 export function entryFor(site: Site | undefined, url: string | undefined): TrustEntry | undefined {
-  if (url === undefined) return undefined;
-  const pages = pagesOf(site?.data?.trust);
-  if (pages === undefined || !Object.hasOwn(pages, url)) return undefined;
-  return entryOf(pages[url]);
+  const evidence = trustEvidenceFor(site, url);
+  return evidence.state === "valid" ? evidence.entry : undefined;
 }
 
 /** The number of drift findings the page has in `site.data.drift`, or undefined when the site records none. */
@@ -407,6 +435,16 @@ function icon(level: TrustLevel) {
   );
 }
 
+/** The disclosure's summary: the decorative icon and the localised level text. */
+function chip(level: TrustLevel, lang: string) {
+  return h(
+    "summary",
+    { class: CHIP_CLASS },
+    icon(level),
+    h("span", { class: LEVEL_CLASS }, t(lang, "trust_chip", { level: t(lang, LEVEL_KEYS[level]) })),
+  );
+}
+
 /** One row of the panel: a label and its value, with optional machine-readable attributes on the value. */
 function row(label: string, value: string, className: string, attrs: Record<string, string | number> = {}) {
   return [
@@ -438,9 +476,11 @@ function dateRow(label: string, iso: string | undefined, lang: string, className
  * island only adds Escape-to-close and returns focus to the summary.
  *
  * The entry comes from `site.data.trust`, keyed by `page.url`, or from the directive's props for a manual
- * panel. It renders nothing when neither names a state it knows, so missing evidence never becomes a
- * `verified` claim. Every state explains itself in the panel: the entry's reasons, or the state's
- * definition when it records none. Examples and drift come from
+ * panel. A page with no entry renders nothing, so missing evidence never becomes a `verified` claim. An
+ * entry that is present but unreadable (not a record, or no known level) renders `unknown` with
+ * `data-trust-evidence="invalid"`, its non-claiming explanation, and no rows, provenance, or actions,
+ * so a malformed record is reported instead of disappearing. Every state explains itself in the panel:
+ * the entry's reasons, or the state's definition when it records none. Examples and drift come from
  * `site.data.examples` and `site.data.drift`; the examples row keeps partial, unrun, failed,
  * unreadable, and absent evidence visibly and structurally distinct, in the tested-chip contract's
  * states (see `examples.ts`), and example evidence never changes the declared level. The action
@@ -452,13 +492,36 @@ function dateRow(label: string, iso: string | undefined, lang: string, className
  * and the panel stays hidden unless a site writes `_data/trust.yml`.
  */
 const trustPanel: Component<TrustPanelProps> = ({ props, page, site }) => {
-  const entry = props.level === undefined ? entryFor(site, page.url) : entryOf(props);
-  if (entry === undefined) return null;
+  const evidence = props.level === undefined ? trustEvidenceFor(site, page.url) : trustEvidenceOf(props);
+  if (evidence.state === "absent") return null;
 
   const lang = page.lang;
+
+  // A present entry that cannot be read still reports itself: unknown, marked invalid, and with no
+  // evidence rows, provenance, or actions from the unreadable record or its siblings.
+  if (evidence.state === "invalid") {
+    return h(
+      "details",
+      {
+        class: `${CLASS} ${CLASS}-unknown`,
+        "data-trust-panel": "",
+        "data-trust-level": "unknown",
+        "data-trust-evidence": "invalid",
+      },
+      chip("unknown", lang),
+      h(
+        "div",
+        { class: BODY_CLASS },
+        h("p", { class: REASONS_LABEL_CLASS }, t(lang, "trust_reasons")),
+        h("ul", { class: REASONS_CLASS }, explanationOf(lang, "unknown", []).map((reason) => h("li", null, reason))),
+      ),
+    );
+  }
+
+  const entry = evidence.entry;
   const reasons = explanationOf(lang, entry.level, entry.reasons);
   const provenance = provenanceOf(site, page.url, entry);
-  const evidence = examplesFor(site, page.url);
+  const evidenceRows = examplesFor(site, page.url);
   const options = trustOptions(site.config);
   const contextPack = actionHrefOf(site.config, page, options?.contextPackUrl, provenance);
   const suggestEdit = actionHrefOf(site.config, page, options?.suggestEditUrl, provenance);
@@ -482,12 +545,7 @@ const trustPanel: Component<TrustPanelProps> = ({ props, page, site }) => {
       ...(provenance.generatedAt === undefined ? {} : { "data-trust-generated": provenance.generatedAt }),
       ...(provenance.reviewedAt === undefined ? {} : { "data-trust-reviewed": provenance.reviewedAt }),
     },
-    h(
-      "summary",
-      { class: CHIP_CLASS },
-      icon(entry.level),
-      h("span", { class: LEVEL_CLASS }, t(lang, "trust_chip", { level: t(lang, LEVEL_KEYS[entry.level]) })),
-    ),
+    chip(entry.level, lang),
     h(
       "div",
       { class: BODY_CLASS },
@@ -496,9 +554,9 @@ const trustPanel: Component<TrustPanelProps> = ({ props, page, site }) => {
         { class: ROWS_CLASS },
         ...row(
           t(lang, "trust_examples"),
-          examplesText(lang, evidence),
-          examplesClassName(evidence.state),
-          examplesAttrs(evidence),
+          examplesText(lang, evidenceRows),
+          examplesClassName(evidenceRows.state),
+          examplesAttrs(evidenceRows),
         ),
         ...row(t(lang, "trust_drift"), driftText(lang, driftFor(site, page.url)), "trust-panel-drift"),
         ...dateRow(t(lang, "updated"), provenance.generatedAt, lang, "trust-panel-generated"),

@@ -6,8 +6,10 @@ chip is a native `<details>` summary, so the panel opens with Enter, Space, or a
 Escape without JavaScript; the island only adds the focus return to the chip.
 
 - `index.ts` renders the component. It reads the page's entry from `site.data.trust`, keyed by
-  `page.url`, or from the directive's props for a manual panel. It renders nothing when neither names
-  a state it knows, so a page with no trust record never gets a chip.
+  `page.url`, or from the directive's props for a manual panel. A page with no entry renders nothing,
+  so a page with no trust record never gets a chip. An entry that is present but unreadable renders an
+  `unknown` panel marked `data-trust-evidence="invalid"`, so a malformed record is reported instead of
+  disappearing.
 - `style.css` draws the chip and the panel with tokens and logical properties. The panel sits under
   the chip on a wide screen and in the flow on a narrow one, so it works under RTL too. Long reasons
   wrap (`overflow-wrap: anywhere`) and the panel never grows wider than the viewport, so a long
@@ -16,8 +18,9 @@ Escape without JavaScript; the island only adds the focus return to the chip.
 - `examples.ts` turns one page's `site.data.examples` entry into honest evidence: the tested-chip's
   run states plus the distinct `none`, `invalid`, and `absent` gaps, with the row's text, class, and
   `data-trust-examples*` attributes derived from it.
-- `test/component-trust-panel.test.ts` covers the missing-data case, every state, every evidence row,
-  provenance, the action links, localisation, escaping, the island, and the stylesheet's tokens.
+- `test/component-trust-panel.test.ts` covers absent versus malformed entries, every state, every
+  evidence row, provenance, the action links, localisation, escaping, the island, and the
+  stylesheet's tokens.
 
 ## Data
 
@@ -82,7 +85,14 @@ unknown panel into a verified one.
 
 The names are matched without regard to case or surrounding spaces, and spaces and `_` read as `-`.
 The first trust score's names still work: `review-due` reads as `unreviewed` and `at-risk` as
-`partial`. A missing or unrecognised level hides the panel rather than guessing a state.
+`partial`. A page with no entry for its URL stays hidden: absent data is not a claim either way. An
+entry that is present but cannot be read — a bare string, list, number, or `null`, or a record with a
+missing or unrecognised `level` — renders an `unknown` panel with `data-trust-evidence="invalid"` on
+its root and the unknown explanation from the i18n table. That malformed entry supplies no reasons,
+reviewer, build, dates, or actions, and the panel does not borrow the page's examples or drift either,
+so none of its written fields can arrive as a valid trust claim. A manual panel with an unreadable
+`level` is reported the same way; the directive cannot express "no level" and "malformed level"
+differently, so only a present, unreadable level is marked invalid.
 
 `reasons` is a list of sentences, or one string split on line breaks or `|`. `lastReviewer` is
 optional. When an entry records no reasons, the panel shows the state's own explanation from the
