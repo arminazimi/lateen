@@ -258,7 +258,7 @@ export function startServer(root: string, mount: string): Promise<StaticServer> 
   });
 }
 
-function build(site: string, out: string): void {
+export function build(site: string, out: string): void {
   const bin = join(dirname(createRequire(import.meta.url).resolve("@velella/mizzen/package.json")), "bin/mizzen.js");
   const result = spawnSync(process.execPath, [bin, "build", site, "--theme", ".", "--out", out], {
     cwd: ROOT,

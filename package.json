@@ -36,6 +36,7 @@
     "tokens:check": "node scripts/tokens.ts --check",
     "test": "node scripts/tokens.ts --check && node --test \"test/**/*.test.ts\"",
     "test:a11y": "node scripts/test-a11y.ts",
+    "test:journeys": "node scripts/test-journeys.ts",
     "test:performance": "node scripts/performance-budget.ts",
     "test:coverage": "node scripts/tokens.ts --check && mkdir -p coverage && node --test --experimental-test-coverage --test-coverage-exclude=\"test/**\" --test-coverage-exclude=\"scripts/**\" --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage/lcov.info \"test/**/*.test.ts\"",
     "coverage:badge": "node scripts/coverage-badge.ts coverage/lcov.info coverage/coverage.json",

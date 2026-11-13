@@ -51,6 +51,28 @@ axe checks the rules it has; a pass is not an audit. A person still reviews each
 - **Keyboard traps and focus order.** Open every overlay, tab through it, and close it with Escape.
 - **Language of parts and consistent navigation.** Read mixed-direction text and compare the navigation across pages.
 
+## Release QA record
+
+The 0.2.0 release candidate was checked on Node 24.22.2 with Chromium from Playwright 1.65.0 on
+macOS on 2026-11-13. The commands are reproducible from a clean checkout after
+`npm ci && npx playwright install chromium`.
+
+| Scenario | How it was checked | Result |
+| --- | --- | --- |
+| Keyboard: skip link, search, drawer, code tabs | `npm run test:journeys` (skip link moves focus to `#main`; ⌘/Ctrl+K opens search, arrows move the active option, Escape returns focus; the drawer closes with Escape and returns focus; code tabs respond to arrows, Home, End) | Pass |
+| Focus visibility and focus not obscured | The same run checks the focus ring on the skip-link target and that the sticky header does not cover a focused pager link | Pass |
+| 200% text size | The same run sets the root font size to 200%; no sideways scroll and the article stays readable | Pass |
+| 320 px reflow | The same run checks a 320 px viewport for sideways scroll | Pass |
+| Text spacing override | The same run applies 1.5 line height, 0.12em letter spacing, 0.16em word spacing, and 2em paragraph spacing | Pass |
+| Reduced motion | The same run emulates `prefers-reduced-motion: reduce` and checks the motion tokens are `0ms` | Pass |
+| Dark mode, forced colors, print, RTL | The same run checks a dark-stored theme, `forced-colors: active`, print media, and a Persian page whose code stays LTR; `npm run test:a11y` audits light and dark in English, Persian, and Arabic | Pass |
+| Scrollable regions | axe reports `scrollable-region-focusable` on the variables-form table in both themes; it is listed in the baseline and has not been fixed | Open, known |
+| Screen reader reading order and announcements | Not run: no screen reader or assistive-technology environment was available in this build environment | **Open — release blocker** |
+
+The screen reader item is not inferred from axe, the accessibility tree, or the browser journeys. It
+stays open until a person runs the matrix with a screen reader and records the result here. The
+remaining items above are checked by `npm run test:journeys`; CI runs that command in the `a11y` job.
+
 ## Criteria
 
 11 of 21 criteria have an automated check, three of them only in part. The rest are checked only by hand. Automated tools find only part of the problems for any criterion, so a person still reviews each release.
