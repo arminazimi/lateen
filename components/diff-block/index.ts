@@ -1,5 +1,5 @@
 import { h } from "preact";
-import type { ComponentProps } from "@velella/mizzen/contracts";
+import type { ComponentProps, Page } from "@velella/mizzen/contracts";
 import { t } from "../../i18n/index.ts";
 import { bodyText, parseDiff, patchText, sourceFilesOf, type DiffLine } from "./lines.ts";
 
@@ -55,7 +55,7 @@ const KIND_CLASS: Readonly<Record<DiffLine["kind"], string>> = {
 };
 
 export type DiffBlockProps = {
-  /** Prefix for the block's label id. Give each identical block on a page its own id. */
+  /** The id prefix. Repeated blocks are numbered per page, so this only needs to be set to name one. */
   id?: string;
 };
 
@@ -90,6 +90,33 @@ function fingerprint(text: string): string {
 export function idBase(raw: string | undefined, text: string): string {
   const clean = (raw ?? "").trim().replace(/[^\p{L}\p{N}_-]+/gu, "-").replace(/^-+|-+$/g, "");
   return clean || `diff-block-${fingerprint(text)}`;
+}
+
+/** The label id a group base carries, so the base and its label are reserved together. */
+function labelIdOf(base: string): string {
+  return `${base}-label`;
+}
+
+/** The ids claimed on a page, and the page HTML they were counted against. */
+const pageIds = new WeakMap<Page, { html: string; used: Set<string> }>();
+
+/**
+ * A base unique on its page: the base for the first block to claim it, then `<base>-2`, `<base>-3`
+ * in document order. Both the group id and the label id are reserved, so neither can collide with
+ * another block's group or label. Keyed by the Page and reset when its HTML changes, so one page's
+ * ids cannot leak into another page or build, and a first ordinary block keeps its published id.
+ */
+export function uniqueIdOf(page: Page, base: string): string {
+  let state = pageIds.get(page);
+  if (state === undefined || state.html !== page.html) {
+    state = { html: page.html, used: new Set() };
+    pageIds.set(page, state);
+  }
+  let id = base;
+  for (let n = 2; state.used.has(id) || state.used.has(labelIdOf(id)); n += 1) id = `${base}-${n}`;
+  state.used.add(id);
+  state.used.add(labelIdOf(id));
+  return id;
 }
 
 /** The machine-readable line kind and any authored file or hunk metadata, without invented values. */
@@ -160,13 +187,14 @@ export default function diffBlock({ props, html, page }: ComponentProps<DiffBloc
   if (lines.length === 0) return null;
 
   const lang = page.lang;
-  const labelId = `${idBase(props.id, html)}-label`;
+  const base = uniqueIdOf(page, idBase(props.id, html));
+  const labelId = labelIdOf(base);
   const labels = actionLabels(lang);
   const sources = sourceFilesOf(lines);
 
   return h(
     "div",
-    { class: GROUP_CLASS, role: "group", "aria-labelledby": labelId },
+    { class: GROUP_CLASS, id: base, role: "group", "aria-labelledby": labelId },
     h("span", { class: SR_CLASS, id: labelId }, t(lang, "diff")),
     h(
       "div",

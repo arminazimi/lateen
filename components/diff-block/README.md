@@ -4,6 +4,8 @@ A diff as an ordered list: added and removed lines are styled and named for scre
 copy actions take either the authored patch or the resulting file. One folder per component.
 
 - `index.ts` is the Preact component, written with `h()`. Its `directive` export is `diff-block`.
+  Repeated or slug-equivalent blocks get numbered group and label ids per page, so no two blocks on a
+  page share an id and each group names its own label.
 - `lines.ts` parses the directive's body into added, removed, context, file, hunk, and meta lines, and
   builds both exports. It is pure, so the tests exercise it without rendering.
 - `client.ts` is the island: it reveals the copy buttons only when the browser has a clipboard, and

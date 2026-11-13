@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { renderToString } from "preact-render-to-string";
-import type { ComponentProps } from "@velella/mizzen/contracts";
+import type { ComponentProps, Page } from "@velella/mizzen/contracts";
 import diffBlock, {
   ACTION_CLASS,
   ADDED_CLASS,
@@ -64,6 +64,24 @@ const MULTI_DIFF = [
 function render(html = DIFF, lang = "en", props: Record<string, string> = {}): string {
   const input = { props, html, page: { lang }, site: {} } as unknown as ComponentProps;
   return renderToString(diffBlock(input) as never);
+}
+
+/** Render on a page object the test controls, so several blocks share one page and its ids. */
+function renderOn(html: string, page: Page, props: Record<string, string> = {}): string {
+  const input = { props, html, page, site: {} } as unknown as ComponentProps;
+  return renderToString(diffBlock(input) as never);
+}
+
+/** A block's group id and the label id the group names. */
+function identityOf(out: string): { id: string; labelId: string } {
+  const match = new RegExp(`<div class="${GROUP_CLASS}" id="([^"]+)" role="group" aria-labelledby="([^"]+)"`).exec(out);
+  assert.ok(match, `expected a labelled group: ${out}`);
+  return { id: match[1]!, labelId: match[2]! };
+}
+
+/** Every id in a rendered block, in document order. */
+function idsOf(out: string): string[] {
+  return [...out.matchAll(/\bid="([^"]+)"/g)].map((match) => match[1]!);
 }
 
 const css = readFileSync(new URL("../components/diff-block/style.css", import.meta.url), "utf8");
@@ -200,11 +218,107 @@ test("empty, new, and deleted files get the right source and patch text", () => 
 
 test("the block is a group labelled by a visually hidden Diff span, around an ordered list", () => {
   const out = render();
-  const id = /aria-labelledby="([^"]+)"/.exec(out)?.[1];
-  assert.ok(id, "the group should be labelled");
-  assert.match(out, new RegExp(`^<div class="${GROUP_CLASS}" role="group" aria-labelledby="${id}"`));
-  assert.match(out, new RegExp(`<span class="${SR_CLASS}" id="${id}">Diff</span>`));
+  const base = idBase(undefined, DIFF);
+  assert.match(
+    out,
+    new RegExp(`^<div class="${GROUP_CLASS}" id="${base}" role="group" aria-labelledby="${base}-label"`),
+  );
+  assert.match(out, new RegExp(`<span class="${SR_CLASS}" id="${base}-label">Diff</span>`));
   assert.match(out, new RegExp(`<ol class="${LIST_CLASS}">`));
+});
+
+test("repeated diff content gets unique group and label ids in document order", () => {
+  const page = { lang: "en" } as unknown as Page;
+  const base = idBase(undefined, DIFF);
+  const one = renderOn(DIFF, page);
+  const two = renderOn(DIFF, page);
+
+  assert.deepEqual(identityOf(one), { id: base, labelId: `${base}-label` });
+  assert.deepEqual(identityOf(two), { id: `${base}-2`, labelId: `${base}-2-label` });
+  for (const out of [one, two]) {
+    const { labelId } = identityOf(out);
+    assert.ok(out.includes(`<span class="${SR_CLASS}" id="${labelId}">Diff</span>`), "each group names its own label");
+  }
+  const all = [...idsOf(one), ...idsOf(two)];
+  assert.equal(new Set(all).size, all.length, "no id repeats");
+});
+
+test("explicit and slug-equivalent ids are numbered per page, and label ids are reserved", () => {
+  const page = { lang: "en" } as unknown as Page;
+  const one = renderOn(DIFF, page, { id: "My Block!" });
+  const sameSlug = renderOn(DIFF, page, { id: "My-Block" });
+  const again = renderOn(DIFF, page, { id: "My Block!" });
+  const first = renderOn(DIFF, page, { id: "notice" });
+  const labelClash = renderOn(DIFF, page, { id: "notice-label" });
+
+  assert.deepEqual(identityOf(one), { id: "My-Block", labelId: "My-Block-label" });
+  assert.deepEqual(identityOf(sameSlug), { id: "My-Block-2", labelId: "My-Block-2-label" });
+  assert.deepEqual(identityOf(again), { id: "My-Block-3", labelId: "My-Block-3-label" });
+  assert.deepEqual(identityOf(first), { id: "notice", labelId: "notice-label" });
+  assert.deepEqual(identityOf(labelClash), { id: "notice-label-2", labelId: "notice-label-2-label" });
+
+  const all = [one, sameSlug, again, first, labelClash].flatMap(idsOf);
+  assert.equal(new Set(all).size, all.length);
+});
+
+test("Unicode ids survive and are numbered per page", () => {
+  const page = { lang: "fa", dir: "rtl" } as unknown as Page;
+  const one = renderOn(DIFF, page, { id: "تفاوت" });
+  const two = renderOn(DIFF, page, { id: "تفاوت" });
+
+  assert.deepEqual(identityOf(one), { id: "تفاوت", labelId: "تفاوت-label" });
+  assert.deepEqual(identityOf(two), { id: "تفاوت-2", labelId: "تفاوت-2-label" });
+  const all = [...idsOf(one), ...idsOf(two)];
+  assert.equal(new Set(all).size, all.length);
+});
+
+test("allocator state never crosses pages, and a fresh page is deterministic", () => {
+  const first = identityOf(renderOn(DIFF, { lang: "en" } as Page));
+  const second = identityOf(renderOn(DIFF, { lang: "en" } as Page));
+
+  assert.deepEqual(first, second);
+  assert.equal(first.id, idBase(undefined, DIFF), "each page's first block keeps the published id");
+});
+
+test("an authored id cannot inject markup or collide with a label id", () => {
+  const page = { lang: "en" } as unknown as Page;
+  const ordinary = renderOn(DIFF, page, { id: "block" });
+  const injected = renderOn(DIFF, page, { id: 'a"><script>alert(1)</script>' });
+  const labelClash = renderOn(DIFF, page, { id: "block-label" });
+
+  assert.doesNotMatch(injected, /<script|onload=/i);
+  assert.deepEqual(identityOf(injected), { id: "a-script-alert-1-script", labelId: "a-script-alert-1-script-label" });
+  assert.deepEqual(identityOf(labelClash), { id: "block-label-2", labelId: "block-label-2-label" });
+  const all = [...idsOf(ordinary), ...idsOf(injected), ...idsOf(labelClash)];
+  assert.equal(new Set(all).size, all.length);
+});
+
+test("a repeated block keeps every line kind and both export payloads unchanged", () => {
+  const diff = [
+    "diff --git a/a.txt b/a.txt",
+    "--- a/a.txt",
+    "+++ b/a.txt",
+    "@@ -1,2 +1,2 @@",
+    "-old",
+    "+new",
+    " keep",
+    "\\ No newline at end of file",
+  ].join("\n");
+  const page = { lang: "en" } as unknown as Page;
+  const one = renderOn(diff, page);
+  const two = renderOn(diff, page);
+
+  for (const out of [one, two]) {
+    for (const kind of ["added", "removed", "context", "file", "hunk", "meta"]) {
+      assert.match(out, new RegExp(`data-kind="${kind}"`), `${kind} line is kept`);
+    }
+    assert.ok(out.includes('data-diff="new\nkeep"'), "the source payload is unchanged");
+    assert.ok(out.includes(`data-patch="${diff}"`), "the patch payload is unchanged");
+    assert.match(out, />Copy source<\/button>/);
+    assert.match(out, />Copy patch<\/button>/);
+  }
+  assert.equal(one.match(/data-diff-copy="true"/g)?.length, two.match(/data-diff-copy="true"/g)?.length);
+  assert.equal(new Set([...idsOf(one), ...idsOf(two)]).size, 4, "one group id and one label id per block");
 });
 
 test("each line carries its kind class and a machine-readable kind", () => {
