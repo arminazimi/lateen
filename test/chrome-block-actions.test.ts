@@ -104,7 +104,7 @@ test("renders one inert template with a hidden, localized block action", () => {
 
   assert.match(
     out,
-    /^<template data-block-actions data-prompt="Edit \{source\}\. Current text: "\{text\}"\. Change:" data-copied="Copied" data-copy-failed="Press Ctrl\+C"><button type="button" class="block-action" hidden data-block-action>Edit with your agent<\/button><\/template>$/,
+    /^<template data-block-actions data-prompt="Edit \{source\}\. Current text: "\{text\}"\. Change:" data-lang="en" data-copied="Copied" data-copy-failed="Press Ctrl\+C"><button type="button" class="block-action" hidden data-block-action>Edit with your agent<\/button><\/template>$/,
   );
 });
 

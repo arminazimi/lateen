@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { renderToString } from "preact-render-to-string";
-import type { Heading, LayoutProps, Page, Site, SiteConfig, SourcePos } from "@velella/mizzen/contracts";
+import type { Heading, LayoutProps, Page, RepositoryConfig, Site, SiteConfig, SourcePos } from "@velella/mizzen/contracts";
 import tutorial, { slugOf, stepsOf } from "../layouts/tutorial.ts";
 
 const pos: SourcePos = { file: "guide/tutorial.md", line: 1, column: 1, endLine: 1, endColumn: 1 };
@@ -47,8 +47,13 @@ function pageWith(overrides: Partial<Page> = {}): Page {
   };
 }
 
-function layoutProps(page: Page, nav: Site["nav"]["main"] = []): LayoutProps {
-  const site: Site = { config: configWith(), pages: [page], nav: { main: nav }, data: {} };
+function layoutProps(page: Page, nav: Site["nav"]["main"] = [], repository?: RepositoryConfig): LayoutProps {
+  const site: Site = {
+    config: configWith(repository === undefined ? {} : { repository }),
+    pages: [page],
+    nav: { main: nav },
+    data: {},
+  };
   return {
     site,
     page,
@@ -61,6 +66,9 @@ function layoutProps(page: Page, nav: Site["nav"]["main"] = []): LayoutProps {
 
 const out = (page: Page, nav: Site["nav"]["main"] = []): string =>
   renderToString(tutorial(layoutProps(page, nav)) as never);
+
+const outWithRepository = (page: Page): string =>
+  renderToString(tutorial(layoutProps(page, [], { url: "https://github.com/o/r", branch: "main", dir: "" })) as never);
 
 const THREE_STEPS_HTML = [
   "<p>Before you start.</p>",
@@ -168,6 +176,15 @@ test("the page pager still follows the last step", () => {
 
   assert.match(page, /data-step="3"[\s\S]*<\/section><\/div><div class="doc-actions"><div class="page-footer">/);
   assert.match(page, /<nav class="pager" aria-label="Previous and next"><a class="pager-link pager-prev" href="\/guide\/" rel="prev">/);
+});
+
+test("the last-updated line and the edit link appear once, in the article flow", () => {
+  const page = pageWith({ frontMatter: { last_modified_at: "2026-03-04" } });
+  const rendered = outWithRepository(page);
+
+  assert.equal(rendered.match(/data-date-source="source"/g)?.length, 1);
+  assert.equal(rendered.match(/class="edit-page-link"/g)?.length, 1);
+  assert.doesNotMatch(rendered, /page-footer-meta|page-footer-edit|page-footer-updated/);
 });
 
 test("the progress text is localised and the page keeps its direction", () => {

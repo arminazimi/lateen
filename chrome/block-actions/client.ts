@@ -155,6 +155,7 @@ export interface ActionButton {
     copyFailed?: string | undefined;
     blockId?: string | undefined;
     lang?: string | undefined;
+    version?: string | undefined;
     file?: string | undefined;
     source?: string | undefined;
     text?: string | undefined;
@@ -170,7 +171,12 @@ export interface ActionButton {
 /** The server-rendered template: its button, and the localized prompt and result strings. */
 export interface ActionTemplate {
   readonly content: { readonly firstElementChild: ActionButton | null };
-  readonly dataset: { readonly prompt?: string | undefined; readonly copied?: string | undefined; readonly copyFailed?: string | undefined };
+  readonly dataset: {
+    readonly prompt?: string | undefined;
+    readonly copied?: string | undefined;
+    readonly copyFailed?: string | undefined;
+    readonly version?: string | undefined;
+  };
 }
 
 /** The part of `navigator.clipboard` the island uses. */
@@ -255,8 +261,9 @@ export function copy(button: ActionButton, label: string, env: ActivateEnv): Pro
 }
 
 /** The span with its language beside it, so a prompt keeps both when it leaves the page. */
-function sourceWithLang(source: string, lang: string): string {
-  return lang === "" ? source : `${source} (${lang})`;
+function sourceWithContext(source: string, lang: string, version: string): string {
+  const context = [lang, version].filter((value) => value !== "");
+  return context.length === 0 ? source : `${source} (${context.join(", ")})`;
 }
 
 /** Clones the template's button into each top-level block, unless there is no clipboard to write to. */
@@ -283,7 +290,7 @@ export function activate(env: ActivateEnv): void {
     button.hidden = false;
     const label = button.textContent ?? "";
     button.setAttribute("aria-label", `${label} (${source})`);
-    button.dataset.prompt = promptFor(env.template.dataset.prompt ?? "", sourceWithLang(source, lang), carried.text);
+    button.dataset.prompt = promptFor(env.template.dataset.prompt ?? "", sourceWithContext(source, lang, env.template.dataset.version ?? ""), carried.text);
     button.dataset.copied = env.template.dataset.copied;
     button.dataset.copyFailed = env.template.dataset.copyFailed;
     button.dataset.blockId = id ?? source;

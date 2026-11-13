@@ -13,11 +13,14 @@ import { patternOf, t } from "../../i18n/index.ts";
  */
 const blockActions: Chrome = ({ page }) => {
   const lang = page.lang;
+  const version = typeof page.frontMatter.version === "string" ? page.frontMatter.version.trim() : "";
   return h(
     "template",
     {
       "data-block-actions": true,
       "data-prompt": patternOf(lang, "edit_prompt"),
+      "data-lang": lang,
+      ...(version === "" ? {} : { "data-version": version }),
       "data-copied": t(lang, "copied"),
       "data-copy-failed": t(lang, "copy_failed"),
     },

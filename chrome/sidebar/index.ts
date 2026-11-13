@@ -1,7 +1,6 @@
 import { h, type ComponentChildren } from "preact";
 import type { Chrome, NavGroup, NavItem, NavLink, NavTree } from "@velella/mizzen/contracts";
-
-const LABEL = "Site navigation";
+import { t } from "../../i18n/index.ts";
 
 /** A group with more pages under it than this renders as one link, not every child. */
 const MAX_LISTED = 20;
@@ -198,7 +197,7 @@ const sidebar: Chrome = ({ site, page }) => {
 
   return h(
     "nav",
-    { class: "sidebar-nav", "aria-label": LABEL },
+    { class: "sidebar-nav", "aria-label": t(page.lang, "site_navigation") },
     blocks(items, page.url, site.config.base),
   );
 };
