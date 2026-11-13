@@ -17,10 +17,30 @@
 
 .terminal-bar {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: var(--space-2);
   padding-block: var(--space-1);
   padding-inline: var(--space-2);
   border-block-end: 1px solid var(--code-border);
+}
+
+/* Why the copy button is disabled while a value in the group is invalid; empty and out of the way when not. */
+.terminal-status {
+  margin-inline-end: auto;
+  color: var(--color-danger);
+  font-family: var(--type-font-ui);
+  font-size: var(--type-size-xs);
+  line-height: var(--type-leading-tight);
+}
+
+.terminal-status:empty {
+  display: none;
+}
+
+.terminal-copy:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .terminal-copy {

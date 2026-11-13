@@ -1,17 +1,33 @@
 /*
- * Variables form island: copies what a reader types into the placeholders of the same variable elsewhere on
- * the page. Inline code becomes `<span class="placeholder" data-var="name">` and a code block records its
- * variables in `data-placeholders`, both from the engine's placeholders plugin. The terminal island records
- * its session there the same way, and its copy button reads the command text from the page when it is
- * clicked. A recorded output block names its variables in `data-output-deps`; the island never rewrites it,
- * because nobody can run the command again here, and marks it stale instead. Freshness is recomputed from
- * the values the outputs were documented with: the island remembers each variable's value when the form is
- * first wired, and an output stops being stale only once every variable it depends on is back at that
- * recorded value, through typing or reset. An output that depends on a variable no wired form holds keeps
- * whatever stale state it has; the island never guesses that it is fresh. The form is complete without
- * this script; the island only makes the examples live. Values stay in the browser: no cookie, no storage,
- * no request, and no command is ever executed.
+ * Variables form island: copies what a reader types into the placeholders of the same variable in the
+ * examples that belong to the form's group. A form, a terminal, and an output block are connected only by
+ * a matching `data-variable-group`; a page with exactly one form that has no authored group keeps the
+ * original page-wide behavior, so a single form still drives inline placeholders and ungrouped code
+ * blocks. Inline code becomes `<span class="placeholder" data-var="name">` and a code block records its
+ * variables in `data-placeholders`, both from the engine's placeholders plugin; the engine has no group
+ * identity for inline code, so grouped inline and code-block annotation is not part of this island.
+ *
+ * The island validates each declared type before a value reaches an example: `url`, `number`, and
+ * `boolean` follow the documented contract, `string` (and an unknown type) accepts any text. An invalid
+ * input is marked `aria-invalid`, shows its server-rendered message, sets the form's invalid state, and
+ * blocks the copy buttons of terminals in the same group; an output block in the group is stale while any
+ * input is invalid. A recorded output is never rewritten, because nobody can run the command again here.
+ * Freshness is remembered from the values each group was wired with, and reset puts those defaults back,
+ * revalidates them, restores the examples, clears the stale state, and announces itself in a live region.
+ * Other groups are untouched. Values stay in the browser: no cookie, no storage, no request, and no
+ * command is ever executed.
  */
+
+import {
+  ERROR_ATTRIBUTE,
+  GROUP_ATTRIBUTE,
+  GROUP_EXPLICIT_ATTRIBUTE,
+  INVALID_ATTRIBUTE,
+  INVALID_TEXT_ATTRIBUTE,
+  RESET_TEXT_ATTRIBUTE,
+  TYPE_ATTRIBUTE,
+} from "./group.ts";
+import { isValidValue, validationTypeOf } from "./validation.ts";
 
 /** Attribute on the form root; the island finds forms by it. */
 export const FORM_SELECTOR = "[data-variables-form]";
@@ -34,12 +50,26 @@ export const OUTPUT_DEPENDENCY_SELECTOR = "[data-output-deps]";
 /** The note inside a recorded output that the island fills in when the output goes stale. */
 export const STALE_NOTE_SELECTOR = "[data-output-stale-note]";
 
+/** An input's visible error message. */
+export const ERROR_SELECTOR = "[data-error-for]";
+
+/** The form's live region, which announces a reset. */
+export const STATUS_SELECTOR = "[data-variables-status]";
+
+/** A terminal copy button whose group can be blocked while a value is invalid. */
+export const TERMINAL_BUTTON_SELECTOR = "[data-terminal-copy]";
+
+/** The live region beside a terminal copy button. */
+export const TERMINAL_STATUS_SELECTOR = "[data-terminal-status]";
+
 /** The part of an input the island reads and wires. */
 export interface VariableInput {
   value: string;
   /** The browser's constraint validation; an absent one is treated as valid, so a fake needs only the rest. */
   readonly validity?: { readonly valid: boolean };
   getAttribute(name: string): string | null;
+  setAttribute?(name: string, value: string): void;
+  removeAttribute?(name: string): void;
   addEventListener(type: "input", listener: () => void): void;
 }
 
@@ -49,11 +79,13 @@ export interface ResetButton {
   addEventListener(type: "click", listener: () => void): void;
 }
 
-/** A form as the island touches it. */
+/** A form as the island touches it. The node methods are optional so a small fake needs only what it uses. */
 export interface VariableForm {
-  querySelectorAll(selector: string): Iterable<VariableInput>;
-  /** The reset button inside the form, when it has one. */
-  querySelector?(selector: string): ResetButton | null;
+  getAttribute?(name: string): string | null;
+  setAttribute?(name: string, value: string): void;
+  removeAttribute?(name: string): void;
+  querySelectorAll(selector: string): Iterable<unknown>;
+  querySelector?(selector: string): unknown;
 }
 
 /** A node the island rewrites: an element, a text node, or the document. */
@@ -71,6 +103,32 @@ export interface PlaceholderNode {
 /** Everything the island reads from the page. Tests pass fakes; the browser supplies its own. */
 export interface PlaceholderRoot {
   querySelectorAll(selector: string): Iterable<PlaceholderNode>;
+}
+
+/** The group a form drives, and whether the page is in the single-form legacy mode. */
+export interface GroupScope {
+  /** The form's group; empty only for a fake or a form that predates the attribute. */
+  readonly group: string;
+  /** True for the one-form page with no authored group: ungrouped examples still follow it. */
+  readonly legacy: boolean;
+}
+
+/** The selection a direct `applyValue` call uses: the original page-wide behavior. */
+const PAGE_SCOPE: GroupScope = { group: "", legacy: true };
+
+/** The form group an example node belongs to, if it declares one. */
+export function groupOf(node: { getAttribute(name: string): string | null }): string | undefined {
+  const raw = node.getAttribute(GROUP_ATTRIBUTE);
+  return raw === null || raw === "" ? undefined : raw;
+}
+
+/**
+ * True when an example in `scope`'s group follows the form: a node in the same group always does; an
+ * ungrouped node does only in the single-form legacy mode.
+ */
+export function appliesTo(node: { getAttribute(name: string): string | null }, scope: GroupScope): boolean {
+  const own = groupOf(node);
+  return own === undefined ? scope.legacy : own === scope.group;
 }
 
 /** The `{{name}}` text a placeholder stands for. */
@@ -182,13 +240,15 @@ function editsIn(template: string, values: ReadonlyMap<string, string>): Edit[] 
 
 /** Where template offset `at` lands once the edits are applied, so each text node keeps its own slice. */
 function offsetAfter(at: number, edits: readonly Edit[]): number {
-  let out = at;
+  let delta = 0;
   for (const edit of edits) {
     if (edit.start >= at) break;
-    const before = Math.min(at, edit.end) - edit.start;
-    out += Math.min(before, edit.text.length) - before;
+    const original = Math.min(at, edit.end) - edit.start;
+    // Past the edit the whole replacement counts; inside it only the part before `at`.
+    const replacement = at >= edit.end ? edit.text.length : Math.min(original, edit.text.length);
+    delta += replacement - original;
   }
-  return out;
+  return at + delta;
 }
 
 /**
@@ -214,27 +274,31 @@ function fillTemplate(block: PlaceholderNode, values: ReadonlyMap<string, string
   }
 }
 
-/** What each root last put into its blocks per variable, so a later edit can be rendered from the template. */
-const appliedValues = new WeakMap<PlaceholderRoot, Map<string, string>>();
+/** What each block last received per variable, so a later edit can be rendered from the template. */
+const appliedValues = new WeakMap<PlaceholderNode, Map<string, string>>();
 
 /**
- * Writes `value` into every placeholder for `name` under `root`: inline code spans, and code blocks and
- * terminal sessions that recorded the name in `data-placeholders`. Other variables and escaped placeholders
- * are left alone, and each block is rendered from the text the author wrote, so a second edit replaces only
- * the tokens and never a value it showed before. A terminal's copy button reads its command text from the
- * page when it is clicked, so the copied commands follow this change too.
+ * Writes `value` into every placeholder for `name` that belongs to `scope`: inline code spans only in the
+ * single-form legacy mode, and code blocks and terminal sessions that recorded the name in
+ * `data-placeholders`. Other variables and escaped placeholders are left alone, and each block is rendered
+ * from the text the author wrote, so a second edit replaces only the tokens and never a value it showed
+ * before. A terminal's copy button reads its command text from the page when it is clicked, so the copied
+ * commands follow this change too.
  */
-export function applyValue(root: PlaceholderRoot, name: string, value: string): void {
+export function applyValue(root: PlaceholderRoot, name: string, value: string, scope: GroupScope = PAGE_SCOPE): void {
   if (name === "") return;
-  const applied = appliedValues.get(root) ?? new Map<string, string>();
-  applied.set(name, value);
-  appliedValues.set(root, applied);
 
-  for (const span of root.querySelectorAll(INLINE_SELECTOR)) {
-    if (span.getAttribute("data-var") === name) span.textContent = value;
+  if (scope.legacy) {
+    for (const span of root.querySelectorAll(INLINE_SELECTOR)) {
+      if (span.getAttribute("data-var") === name) span.textContent = value;
+    }
   }
   for (const block of root.querySelectorAll(BLOCK_SELECTOR)) {
+    if (!appliesTo(block, scope)) continue;
     if (!namesOf(block.getAttribute("data-placeholders")).includes(name)) continue;
+    const applied = appliedValues.get(block) ?? new Map<string, string>();
+    applied.set(name, value);
+    appliedValues.set(block, applied);
     fillTemplate(block, applied);
   }
 }
@@ -271,44 +335,72 @@ export function markStale(root: PlaceholderRoot, name: string): number {
   return marked;
 }
 
-/** What each root remembers about its variables' recorded values and what the forms hold now. */
-interface FreshnessState {
-  /** Each variable's value when a form was first wired, i.e. the value the documented output was produced with. */
+/** What one group remembers about its variables' recorded values, current values, and rejected inputs. */
+interface GroupState {
+  /** Each variable's server-rendered default, i.e. the value the documented output was produced with. */
   readonly baselines: Map<string, string>;
-  /** Each variable's last value a form applied to the examples, after the type the declaration set accepted it. */
+  /** Each variable's last value a form applied, after validation. */
   readonly currents: Map<string, string>;
+  /** Names whose current input the declared type rejects. */
+  readonly invalid: Set<string>;
+  /** Whether the group's terminals were blocked last time, so a live region is written only on a change. */
+  blocked: boolean;
 }
 
-const freshness = new WeakMap<PlaceholderRoot, FreshnessState>();
+const freshness = new WeakMap<PlaceholderRoot, Map<string, GroupState>>();
 
-/** The root's freshness state, created empty on first sight. */
-function freshnessStateOf(root: PlaceholderRoot): FreshnessState {
-  const existing = freshness.get(root);
+/** The state for one form's group, created empty on first sight. */
+function stateOf(root: PlaceholderRoot, group: string): GroupState {
+  const states = freshness.get(root) ?? new Map<string, GroupState>();
+  freshness.set(root, states);
+  const existing = states.get(group);
   if (existing !== undefined) return existing;
-  const created: FreshnessState = { baselines: new Map(), currents: new Map() };
-  freshness.set(root, created);
+  const created: GroupState = { baselines: new Map(), currents: new Map(), invalid: new Set(), blocked: false };
+  states.set(group, created);
   return created;
+}
+
+/** Every state on the page, for the legacy `recomputeStaleness(root)` call that predates groups. */
+function statesOf(root: PlaceholderRoot): GroupState[] {
+  const states = freshness.get(root);
+  return states === undefined ? [] : [...states.values()];
 }
 
 /**
  * Re-derives every recorded output's stale state from the current values against the recorded ones. An
  * output is fresh, and its marker cleared, only when every one of its declared and inferred dependencies
- * has both a recorded value and a current one and they are equal; any dependency that differs marks the
- * output stale, however many others were restored. A dependency no wired form has ever held gives no
+ * has both a recorded value and a current one and they are equal; any dependency that differs, and any
+ * input the group rejects, marks the output stale. With a scope only that group's outputs are touched; the
+ * legacy call without one considers every group. A dependency no wired form has ever held gives no
  * trustworthy baseline, so such an output keeps the state it already has: the island never infers freshness
  * it cannot check. Outputs without dependencies are not touched.
  */
-export function recomputeStaleness(root: PlaceholderRoot): void {
-  const state = freshness.get(root);
-  if (state === undefined) return;
+export function recomputeStaleness(root: PlaceholderRoot, scope?: GroupScope): void {
+  const states = scope === undefined ? statesOf(root) : [stateOf(root, scope.group)];
+  if (states.length === 0) return;
+
+  const baselines = new Map<string, string>();
+  const currents = new Map<string, string>();
+  let invalid = false;
+  for (const state of states) {
+    for (const [name, value] of state.baselines) if (!baselines.has(name)) baselines.set(name, value);
+    for (const [name, value] of state.currents) currents.set(name, value);
+    invalid = invalid || state.invalid.size > 0;
+  }
+
   for (const block of root.querySelectorAll(OUTPUT_DEPENDENCY_SELECTOR)) {
+    if (scope !== undefined && !appliesTo(block, scope)) continue;
     const names = namesOf(block.getAttribute("data-output-deps"));
     if (names.length === 0) continue;
+    if (invalid) {
+      markBlock(block);
+      continue;
+    }
     let differs = false;
     let untrustworthy = false;
     for (const name of names) {
-      const baseline = state.baselines.get(name);
-      const current = state.currents.get(name);
+      const baseline = baselines.get(name);
+      const current = currents.get(name);
       if (baseline === undefined || current === undefined) {
         untrustworthy = true;
         continue;
@@ -326,59 +418,133 @@ export function recomputeStaleness(root: PlaceholderRoot): void {
 /** Reads a form's current values, keyed by variable name. */
 export function valuesOf(form: VariableForm): Map<string, string> {
   const values = new Map<string, string>();
-  for (const input of form.querySelectorAll(INPUT_SELECTOR)) {
+  for (const node of form.querySelectorAll(INPUT_SELECTOR)) {
+    const input = node as VariableInput;
     const name = input.getAttribute("data-var");
     if (name !== null && name !== "") values.set(name, input.value);
   }
   return values;
 }
 
-/** Whether an input passes the type the declaration set; a value the browser rejects never reaches an example. */
-function valid(input: VariableInput): boolean {
-  return input.validity?.valid !== false;
+/** Whether an input passes its declared type; a value the island rejects never reaches an example. */
+export function isValid(input: VariableInput): boolean {
+  const type = validationTypeOf(input.getAttribute(TYPE_ATTRIBUTE));
+  if (type === "string") return input.validity?.valid !== false;
+  return isValidValue(type, input.value);
+}
+
+/** Shows or hides the server-rendered message for one variable and sets its input's invalid state. */
+function showValidity(form: VariableForm, input: VariableInput, name: string, valid: boolean): void {
+  if (valid) input.removeAttribute?.("aria-invalid");
+  else input.setAttribute?.("aria-invalid", "true");
+  for (const node of form.querySelectorAll(ERROR_SELECTOR)) {
+    if (node === null || typeof node !== "object") continue;
+    const error = node as { getAttribute(name: string): string | null; hidden?: boolean };
+    if (error.getAttribute(ERROR_ATTRIBUTE) !== name) continue;
+    error.hidden = valid;
+  }
+}
+
+/** A copy button the island can disable while its group is invalid. */
+interface CopyButton {
+  disabled?: boolean;
 }
 
 /**
- * Wires one form: every input updates its variable's placeholders on `input`, each default is applied once so
- * the examples show the documented values before the reader types, and every change recomputes the recorded
- * output's stale state against the values the form was wired with: changing a value marks the outputs that
- * depend on it stale, and returning every dependency to its recorded value makes them fresh again. An input
- * the declared type rejects never reaches an example or changes any output's state. The reset button puts
- * every declared default back and recomputes freshness once, so examples and output state change together.
- * Returns the names wired.
+ * Applies the group's invalid state to its terminals: their copy buttons are disabled and their live region
+ * says why, or both are cleared. Writes only when the state changes, so typing does not re-announce the same
+ * sentence. The output block keeps its copy button: its text is the author's, not derived from the inputs.
+ */
+function syncTerminals(root: PlaceholderRoot, form: VariableForm, scope: GroupScope, state: GroupState): void {
+  const blocked = state.invalid.size > 0;
+  if (blocked) form.setAttribute?.(INVALID_ATTRIBUTE, "true");
+  else form.removeAttribute?.(INVALID_ATTRIBUTE);
+  if (state.blocked === blocked) return;
+  state.blocked = blocked;
+  for (const node of root.querySelectorAll(TERMINAL_BUTTON_SELECTOR)) {
+    if (!appliesTo(node, scope)) continue;
+    (node as unknown as CopyButton).disabled = blocked;
+  }
+  for (const node of root.querySelectorAll(TERMINAL_STATUS_SELECTOR)) {
+    if (!appliesTo(node, scope)) continue;
+    node.textContent = blocked ? node.getAttribute(INVALID_TEXT_ATTRIBUTE) ?? "" : "";
+  }
+}
+
+/** Announces the reset in the form's live region. */
+function announce(form: VariableForm): void {
+  const status = form.querySelector?.(STATUS_SELECTOR) as { textContent: string | null } | null | undefined;
+  if (status === null || status === undefined) return;
+  status.textContent = form.getAttribute?.(RESET_TEXT_ATTRIBUTE) ?? "";
+}
+
+/**
+ * Wires one form: every input is validated and applies its default to the examples in the form's group, and
+ * every change revalidates, updates the examples, blocks or unblocks the group's terminal copy buttons, and
+ * recomputes whether the group's recorded outputs are stale. The reset button puts every declared default
+ * back, revalidates them, clears the stale state, and announces itself; other groups are untouched. Returns
+ * the names wired.
  */
 export function activate(root: PlaceholderRoot, form: VariableForm): string[] {
+  const group = form.getAttribute?.(GROUP_ATTRIBUTE) ?? "";
+  const explicit = form.getAttribute?.(GROUP_EXPLICIT_ATTRIBUTE) === "true";
+  const forms = [...root.querySelectorAll(FORM_SELECTOR)];
+  const scope: GroupScope = { group, legacy: forms.length <= 1 && !explicit };
+  const state = stateOf(root, group);
   const names: string[] = [];
-  const state = freshnessStateOf(root);
-  for (const input of form.querySelectorAll(INPUT_SELECTOR)) {
+
+  for (const node of form.querySelectorAll(INPUT_SELECTOR)) {
+    const input = node as VariableInput;
     const name = input.getAttribute("data-var");
     if (name === null || name === "") continue;
     names.push(name);
-    if (!state.baselines.has(name)) state.baselines.set(name, input.value);
+    const baseline = input.getAttribute("data-default") ?? input.value;
+    if (!state.baselines.has(name)) state.baselines.set(name, baseline);
     state.currents.set(name, input.value);
-    applyValue(root, name, input.value);
+
+    const valid = isValid(input);
+    if (valid) state.invalid.delete(name);
+    else state.invalid.add(name);
+    showValidity(form, input, name, valid);
+    if (valid) applyValue(root, name, input.value, scope);
+
     input.addEventListener("input", () => {
-      if (!valid(input)) return;
-      applyValue(root, name, input.value);
       state.currents.set(name, input.value);
-      recomputeStaleness(root);
+      const valid = isValid(input);
+      if (valid) state.invalid.delete(name);
+      else state.invalid.add(name);
+      showValidity(form, input, name, valid);
+      if (valid) applyValue(root, name, input.value, scope);
+      syncTerminals(root, form, scope, state);
+      recomputeStaleness(root, scope);
     });
   }
-  const reset = form.querySelector?.(RESET_SELECTOR) ?? null;
-  if (reset !== null) {
+
+  syncTerminals(root, form, scope, state);
+  recomputeStaleness(root, scope);
+
+  const reset = form.querySelector?.(RESET_SELECTOR) as ResetButton | null | undefined;
+  if (reset !== null && reset !== undefined) {
     reset.hidden = false;
     reset.addEventListener("click", () => {
-      for (const input of form.querySelectorAll(INPUT_SELECTOR)) {
+      for (const node of form.querySelectorAll(INPUT_SELECTOR)) {
+        const input = node as VariableInput;
         const name = input.getAttribute("data-var");
         if (name === null || name === "") continue;
         input.value = input.getAttribute("data-default") ?? "";
-        if (!valid(input)) continue;
-        applyValue(root, name, input.value);
         state.currents.set(name, input.value);
+        const valid = isValid(input);
+        if (valid) state.invalid.delete(name);
+        else state.invalid.add(name);
+        showValidity(form, input, name, valid);
+        if (valid) applyValue(root, name, input.value, scope);
       }
-      recomputeStaleness(root);
+      syncTerminals(root, form, scope, state);
+      recomputeStaleness(root, scope);
+      announce(form);
     });
   }
+
   return names;
 }
 

@@ -1,6 +1,26 @@
 import { h } from "preact";
 import type { ComponentProps, Page } from "@velella/mizzen/contracts";
 import { t } from "../../i18n/index.ts";
+import {
+  ERROR_ATTRIBUTE,
+  GROUP_ATTRIBUTE,
+  GROUP_EXPLICIT_ATTRIBUTE,
+  RESET_TEXT_ATTRIBUTE,
+  TYPE_ATTRIBUTE,
+  groupIdOf,
+} from "./group.ts";
+import { validationTypeOf } from "./validation.ts";
+
+export {
+  ERROR_ATTRIBUTE,
+  GROUP_ATTRIBUTE,
+  GROUP_EXPLICIT_ATTRIBUTE,
+  GROUP_NAME,
+  INVALID_ATTRIBUTE,
+  RESET_TEXT_ATTRIBUTE,
+  TYPE_ATTRIBUTE,
+  groupIdOf,
+} from "./group.ts";
 
 /** The Markdown directive this component handles: `::variables-form`. */
 export const directive = "variables-form";
@@ -29,8 +49,21 @@ export const INPUT_CLASS = "variables-form-input";
 /** Class on the reset button. It starts `hidden`; `client.ts` reveals it. */
 export const RESET_CLASS = "variables-form-reset";
 
-/** The `type` values an input can take from a declaration; anything else is a plain text field. */
-const INPUT_TYPES = new Set(["email", "number", "password", "search", "tel", "text", "url"]);
+/** Class on an input's visible error message. */
+export const ERROR_CLASS = "variables-form-error";
+
+/** Class on the form's live region, which announces a reset. */
+export const STATUS_CLASS = "variables-form-status";
+
+/** Attribute on the form's live region. */
+export const STATUS_ATTRIBUTE = "data-variables-status";
+
+/** The i18n key of the visible message for a type the island can reject. */
+export const ERROR_KEYS: Readonly<Record<string, string>> = {
+  url: "variables_form_invalid_url",
+  number: "variables_form_invalid_number",
+  boolean: "variables_form_invalid_boolean",
+};
 
 /** Id prefix used when the directive gives none. */
 export const DEFAULT_ID = "variables-form";
@@ -58,6 +91,11 @@ export interface VariableField {
 export type VariablesFormProps = {
   /** Prefix for this form's element ids. Give each form on a page its own id. */
   id?: string;
+  /**
+   * The example group this form drives: terminals and output blocks with the same `group` follow it.
+   * Defaults to the sanitized `id`, so one form needs no group. Letters, digits, `_`, and `-`.
+   */
+  group?: string;
   /**
    * JSON array of declarations, each `{"name":"…","default":"…","type":"…"}`, for a form that should not use the
    * page's or site's declarations. When it is missing or unreadable, the page front matter and `site.data` win.
@@ -115,15 +153,6 @@ export function valueOf(value: unknown): string {
   if (typeof value === "string") return value;
   if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") return String(value);
   return "";
-}
-
-/**
- * The input `type` for a declared type, so the browser validates a `url` or an `email` for free and shows
- * its own message. A type that is not an HTML input type, or no type at all, is a text field.
- */
-export function inputTypeOf(type: string | undefined): string {
-  const name = type?.trim().toLowerCase() ?? "";
-  return INPUT_TYPES.has(name) ? name : "text";
 }
 
 /** The declaration in one list item, or undefined when it has no usable name. */
@@ -195,7 +224,8 @@ export function declarationsFor(
   site: { readonly data?: Readonly<Record<string, unknown>> } | undefined,
 ): readonly VariableDeclaration[] {
   const fromProps = parseDeclarations(props.variables);
-  if (fromProps !== undefined) return fromProps;
+  // Duplicate names in one explicit list collapse with the same merge rule as page and site data.
+  if (fromProps !== undefined) return mergeDeclarations([], fromProps);
   const fromPage = declarationsOf(page?.frontMatter?.variables);
   const fromSite = declarationsOf(site?.data?.variables);
   return mergeDeclarations(fromSite, fromPage);
@@ -230,12 +260,20 @@ export default function variablesForm({ props, page, site }: ComponentProps<Vari
   if (fields.length === 0) return null;
 
   const base = instanceBase(page, props.id);
+  const authored = groupIdOf(props.group);
+  const group = authored ?? base;
   const lang = page?.lang ?? "en";
   const hintId = `${base}-hint`;
 
   return h(
     "fieldset",
-    { class: FORM_CLASS, "data-variables-form": "" },
+    {
+      class: FORM_CLASS,
+      "data-variables-form": "",
+      [GROUP_ATTRIBUTE]: group,
+      ...(authored === undefined ? {} : { [GROUP_EXPLICIT_ATTRIBUTE]: "true" }),
+      [RESET_TEXT_ATTRIBUTE]: t(lang, "variables_form_reset_done"),
+    },
     h("legend", { class: LEGEND_CLASS, id: `${base}-legend` }, t(lang, "variables_form_legend")),
     h("p", { class: HINT_CLASS, id: hintId }, t(lang, "variables_form_hint")),
     h(
@@ -243,6 +281,9 @@ export default function variablesForm({ props, page, site }: ComponentProps<Vari
       { class: FIELDS_CLASS },
       fields.map((field, index) => {
         const id = fieldId(base, field.name, index);
+        const type = validationTypeOf(field.type);
+        const errorId = `${id}-error`;
+        const errorKey = ERROR_KEYS[type];
         return h(
           "div",
           { class: FIELD_CLASS, key: field.name },
@@ -251,15 +292,23 @@ export default function variablesForm({ props, page, site }: ComponentProps<Vari
             class: INPUT_CLASS,
             id,
             name: field.name,
-            type: inputTypeOf(field.type),
+            type: "text",
             value: field.value,
             placeholder: field.value,
             "data-var": field.name,
             "data-default": field.value,
-            "aria-describedby": hintId,
+            [TYPE_ATTRIBUTE]: type,
+            "aria-describedby": errorKey === undefined ? hintId : `${hintId} ${errorId}`,
             autocomplete: "off",
             spellcheck: "false",
           }),
+          errorKey === undefined
+            ? null
+            : h(
+                "p",
+                { class: ERROR_CLASS, id: errorId, [ERROR_ATTRIBUTE]: field.name, hidden: true },
+                t(lang, errorKey),
+              ),
         );
       }),
     ),
@@ -268,5 +317,6 @@ export default function variablesForm({ props, page, site }: ComponentProps<Vari
       { type: "button", class: RESET_CLASS, hidden: true, "data-variables-reset": true },
       t(lang, "variables_form_reset"),
     ),
+    h("span", { class: STATUS_CLASS, role: "status", [STATUS_ATTRIBUTE]: "" }),
   );
 }

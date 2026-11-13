@@ -2,6 +2,7 @@ import { h } from "preact";
 import type { ComponentProps } from "@velella/mizzen/contracts";
 import { t } from "../../i18n/index.ts";
 import { bodyText, variableNamesOf } from "../terminal/index.ts";
+import { GROUP_ATTRIBUTE, GROUP_EXPLICIT_ATTRIBUTE, groupIdOf } from "../variables-form/group.ts";
 import { evidenceElement } from "./evidence.ts";
 
 /** The Markdown directive this component handles: `:::output-block`. */
@@ -37,6 +38,11 @@ export const STALE_KEY = "output_stale";
 export type OutputBlockProps = {
   /** Accessible name of the group; "Output" when absent. */
   label?: string;
+  /**
+   * The example group whose values produced this output; a form with the same group marks it stale when
+   * they change. Letters, digits, `_`, and `-`. Without a group, a page with exactly one form still owns it.
+   */
+  group?: string;
   /** JSON array of variable names this output was produced with, in addition to the ones its text mentions: `["project"]`. */
   deps?: string;
   /** Declared stream the output came out of: `stdout`, `stderr`, or `combined`; anything else is recorded as invalid. */
@@ -109,6 +115,8 @@ export default function outputBlock({ props, html, page }: ComponentProps<Output
   const lang = page.lang;
   const label = props.label?.trim() || t(lang, LABEL_KEY);
   const dependencies = [...new Set([...variableNamesOf(text), ...parseDependencies(props.deps)])];
+  const authored = groupIdOf(props.group);
+  const group = authored === undefined ? {} : { [GROUP_ATTRIBUTE]: authored, [GROUP_EXPLICIT_ATTRIBUTE]: "true" };
 
   return h(
     "div",
@@ -116,6 +124,7 @@ export default function outputBlock({ props, html, page }: ComponentProps<Output
       class: BLOCK_CLASS,
       role: "group",
       "aria-label": label,
+      ...group,
       ...(dependencies.length === 0
         ? {}
         : {

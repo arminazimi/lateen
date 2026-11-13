@@ -45,6 +45,24 @@ JSON or data attributes: `data-placeholders`, `data-output-deps`, `data-output-e
 `data-terminal-commands`, `data-endpoint-operation`, and `data-schema-fields`. An agent can read
 those values without scraping styled HTML.
 
+## Grouped examples
+
+A variables form, its terminal, and its output block carry one explicit `group` (letters, digits, `_`,
+and `-`). The group is rendered as `data-variable-group`, and an authored group also carries
+`data-variable-group-explicit="true"`; a form without one derives the group from its sanitized `id`, so a
+single-form page needs no group. Matching is exact: two forms with the same variable name keep
+independent values, and a change in one group never rewrites another group's terminal or output.
+
+On a page with exactly one form and no authored group, ungrouped inline placeholders and code blocks still
+follow it. With more than one form, or any authored group, ungrouped examples are left alone. The engine
+has no group identity for inline code, so grouped inline placeholders are not annotated yet; this is a
+known limit, not something the island guesses.
+
+An input the declared `url`, `number`, or `boolean` type rejects is marked `aria-invalid`, shows its
+localized message, sets `data-variables-invalid` on the form, and disables the copy buttons of terminals
+in the same group. The output block's own copy button stays available because its text is author-supplied,
+not derived from the inputs. Reset revalidates the group's defaults and announces itself in a live region.
+
 ## Keyboard and pointer
 
 The keyboard path is a click on the same native control, not a second handler:

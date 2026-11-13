@@ -54,7 +54,11 @@ The session is read, never executed or expanded: the parser only decides which l
 
 ## Options
 
-None. The prompt is `$ `.
+| Option | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `group` | string | none | The example group whose form drives this session; letters, digits, `_`, and `-`. Matching is exact. Without a group, a page with exactly one form still follows it. |
+
+The prompt is `$ `. While an input in the group is invalid, the copy button is disabled and the bar says why; output-block copy is not blocked because its text is the author's.
 
 ## Example
 

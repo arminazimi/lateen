@@ -24,9 +24,12 @@ ships with its keyboard, no-JavaScript, right-to-left, print, and agent path cov
   and version badge/diff share one vocabulary: `verified`, `unverified`, `stale`, `unknown`, and
   `unavailable`. Every state carries words and an icon, never colour alone, and survives forced colors
   and print.
-- **Reproducible examples.** The variables form, terminal, and output block substitute values, use the
-  declared input type for native validation, mark recorded output stale when inputs move, and reset to
-  the server-rendered defaults. Nothing executes a command.
+- **Reproducible examples.** The variables form, terminal, and output block connect by an explicit
+  `group`, so two forms with the same variable name keep independent values. Every variable stays a text
+  input; the declared `url`, `number`, and `boolean` types validate with visible localized messages,
+  `aria-invalid`, and a form-level invalid state that blocks terminal copy for that group. Recorded
+  output turns stale when a value moves or is invalid, and reset restores that group's server-rendered
+  defaults and announces itself. Nothing executes a command.
 - **Internationalization and RTL.** English, Persian, and Arabic catalogs, a language switcher that
   names the language actually shown, localized chrome, bidi isolation for mixed text, and right-to-left
   styles. Fallback and bidi rules: `docs/internationalization.md`.
@@ -45,6 +48,9 @@ ships with its keyboard, no-JavaScript, right-to-left, print, and agent path cov
   link and the last-updated line are the separate `edit-page` and `last-updated` chrome units, placed
   once by the doc and tutorial layouts. A custom layout that imports `page-footer` must add those two
   units itself to keep the edit link and date.
+- Variables are validated by the declared type instead of the browser's input type, so the control stays
+  a text input and a root-relative `url` is accepted. The type is exposed as `data-type`; existing forms
+  keep their markup and defaults.
 - Search option rendering moved into `chrome/search/client.ts`. The chrome asset count stays at 18 and
   no extra request is added.
 - At 40rem and below the header wraps its actions onto a second line instead of overflowing the page at

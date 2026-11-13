@@ -1,6 +1,7 @@
 import { h } from "preact";
 import type { ComponentProps } from "@velella/mizzen/contracts";
 import { t } from "../../i18n/index.ts";
+import { GROUP_ATTRIBUTE, GROUP_EXPLICIT_ATTRIBUTE, groupIdOf } from "../variables-form/group.ts";
 
 /** The Markdown directive this component handles: `:::terminal`. */
 export const directive = "terminal";
@@ -16,6 +17,23 @@ export const COPY_CLASS = "terminal-copy";
 
 /** The prompt a command line starts with. Lines that do not start with it are output. */
 export const PROMPT = "$";
+
+/** Class on the live region that reports a blocked copy. `client.ts` and the variables island use it. */
+export const STATUS_CLASS = "terminal-status";
+
+/** Attribute on the live region. */
+export const STATUS_ATTRIBUTE = "data-terminal-status";
+
+/** Attribute that carries the localized reason a copy is blocked while the group is invalid. */
+export const INVALID_TEXT_ATTRIBUTE = "data-invalid-text";
+
+export type TerminalProps = {
+  /**
+   * The example group this session belongs to; a form with the same group drives its values. Letters,
+   * digits, `_`, and `-`. Without a group, a page with exactly one form still updates it.
+   */
+  group?: string;
+};
 
 /** One line of a session: command input the reader can copy, or output that is only shown. */
 export type TerminalLine = {
@@ -249,7 +267,7 @@ function lineElement(line: TerminalLine) {
  * and, in `data-command`, which complete command it belongs to. An inert JSON script publishes the same
  * commands with the output recorded after each of them, so an agent can tell them apart without the styling.
  */
-export default function terminal({ html, page }: ComponentProps) {
+export default function terminal({ props, html, page }: ComponentProps<TerminalProps>) {
   const text = bodyText(html);
   const lines = parseLines(text);
   const variables = variableNamesOf(text);
@@ -257,10 +275,18 @@ export default function terminal({ html, page }: ComponentProps) {
   const records = commandRecords(lines);
   const lang = page.lang;
   const hasCommands = lines.some((line) => line.kind === "command");
+  const authored = groupIdOf(props.group);
+  const group: Record<string, string> = authored === undefined ? {} : { [GROUP_ATTRIBUTE]: authored };
+  const codeAttributes: Record<string, string> = { ...group };
+  if (variables.length > 0) codeAttributes["data-placeholders"] = JSON.stringify(variables.map((name) => ({ name })));
 
   return h(
     "div",
-    { class: TERMINAL_CLASS },
+    {
+      class: TERMINAL_CLASS,
+      ...group,
+      ...(authored === undefined ? {} : { [GROUP_EXPLICIT_ATTRIBUTE]: "true" }),
+    },
     hasCommands
       ? h(
           "div",
@@ -275,19 +301,23 @@ export default function terminal({ html, page }: ComponentProps) {
               "data-commands": commands,
               "data-copied": t(lang, "copied"),
               "data-copy-failed": t(lang, "copy_failed"),
+              ...group,
             },
             t(lang, "copy"),
           ),
+          h("span", {
+            class: STATUS_CLASS,
+            role: "status",
+            [STATUS_ATTRIBUTE]: "",
+            [INVALID_TEXT_ATTRIBUTE]: t(lang, "variables_form_invalid_copy"),
+            ...group,
+          }),
         )
       : null,
     h(
       "pre",
       { class: BODY_CLASS, tabindex: 0 },
-      h(
-        "code",
-        variables.length === 0 ? {} : { "data-placeholders": JSON.stringify(variables.map((name) => ({ name }))) },
-        ...lines.map(lineElement),
-      ),
+      h("code", codeAttributes, ...lines.map(lineElement)),
     ),
     records.length === 0
       ? null
