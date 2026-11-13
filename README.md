@@ -16,6 +16,7 @@
   <a href="https://github.com/velella-sh/lateen/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/velella-sh/lateen/ci.yml?branch=main&label=CI&logo=github&logoColor=white&labelColor=1F1F28&color=4C6F9A&style=flat"></a>
   <a href="https://www.npmjs.com/package/@velella/lateen"><img alt="npm" src="https://img.shields.io/npm/v/@velella/lateen?label=npm&logo=npm&logoColor=white&labelColor=1F1F28&color=4C6F9A&style=flat"></a>
   <a href="https://github.com/velella-sh/lateen/actions/workflows/ci.yml"><img alt="coverage" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fvelella-sh%2Flateen%2Fbadges%2Fcoverage.json&labelColor=1F1F28&style=flat"></a>
+  <a href="https://skills.sh/velella-sh/lateen/lateen"><img alt="skills.sh" src="https://skills.sh/b/velella-sh/lateen"></a>
 </p>
 
 <p align="center">
