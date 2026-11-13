@@ -14,6 +14,13 @@ relative path) renders nothing. Without a title the card also renders nothing, b
 would have no accessible name. The description is plain text, never markup, and the icon is
 decorative HTML hidden from assistive technology.
 
+A root-relative `href` gets the site's `base` in front, exactly once, so one card works at a domain
+root and under a subpath; an `http`/`https` address is never rewritten. Beside the link the card
+publishes one inert `<script type="application/json" data-link-card>` record with the title, the
+optional description, the final href, whether it is `internal` or `external`, and the validated
+source position from the optional `src` prop. The record adds no client JavaScript and the card
+stays one ordinary link.
+
 ## Placement
 
 The component is one card. For several, wrap them in the optional grid class, which is one column
@@ -35,6 +42,6 @@ normal page. Both draw the same card look from the theme's tokens; `cards` is un
 
 ## Files
 
-- `index.ts`: the component, its `link-card` directive, and the href check.
+- `index.ts`: the component, its `link-card` directive, the href check, the base resolution, and the JSON record.
 - `style.css`: the card, the optional grid, the icon, and the logical properties.
-- `../../test/component-link-card.test.ts`: the links, escaping, refusals, focus ring, and stylesheet.
+- `../../test/component-link-card.test.ts`: the links, base paths, record, escaping, refusals, focus ring, and stylesheet.

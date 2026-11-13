@@ -12,7 +12,11 @@ import linkCard, {
   TITLE_CLASS,
   directive,
   hrefOf,
+  relationOf,
+  sourcePositionOf,
+  withBase,
   type LinkCardProps,
+  type LinkCardRecord,
 } from "../components/link-card/index.ts";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
@@ -51,12 +55,31 @@ function html(node: unknown): string {
   return typeof node.type === "string" ? `<${node.type}${attrText}>${inner}</${node.type}>` : inner;
 }
 
-function render(props: LinkCardProps) {
-  return linkCard({ props, html: "", page: {} as ComponentProps["page"], site: {} as ComponentProps["site"] } as ComponentProps<LinkCardProps>);
+function render(props: LinkCardProps, base = "") {
+  return linkCard({
+    props,
+    html: "",
+    page: {} as ComponentProps["page"],
+    site: { config: { base } } as ComponentProps["site"],
+  } as ComponentProps<LinkCardProps>);
 }
 
-function output(props: LinkCardProps): string {
-  return html(render(props));
+function output(props: LinkCardProps, base = ""): string {
+  return html(render(props, base));
+}
+
+/** The anchor in a rendered card; a card is one link beside its inert record. */
+function anchorOf(node: unknown): VNode {
+  const anchor = (Array.isArray(node) ? node : [node]).find((child): child is VNode => isVNode(child) && child.type === "a");
+  assert.ok(anchor, "expected the card to be a link");
+  return anchor;
+}
+
+/** The inert JSON record a rendered card publishes. */
+function recordOf(out: string): LinkCardRecord {
+  const match = /<script type="application\/json" data-link-card(?:="")?>([\s\S]*?)<\/script>/.exec(out);
+  assert.ok(match, "expected an inert JSON record");
+  return JSON.parse(match[1] ?? "") as LinkCardRecord;
 }
 
 const css = readFileSync(stylePath, "utf8");
@@ -79,8 +102,9 @@ test("the whole card is one link with its title, description, and icon", () => {
     icon: "<svg><path d=\"M1 1\"></path></svg>",
   });
 
+  const anchor = out.slice(0, out.indexOf("<script"));
   assert.equal(
-    out,
+    anchor,
     `<a class="${LINK_CARD_CLASS}" href="/guide/install/">` +
       `<span class="${ICON_CLASS}" aria-hidden="true"><svg><path d="M1 1"></path></svg></span>` +
       `<span class="${TITLE_CLASS}">Install</span>` +
@@ -92,8 +116,11 @@ test("the whole card is one link with its title, description, and icon", () => {
 });
 
 test("optional icon and description are omitted when not given", () => {
-  assert.equal(output({ href: "/", title: "Home" }), `<a class="${LINK_CARD_CLASS}" href="/"><span class="${TITLE_CLASS}">Home</span></a>`);
-  assert.doesNotMatch(output({ href: "/", title: "Home" }), /aria-hidden/);
+  const out = output({ href: "/", title: "Home" });
+  const anchor = out.slice(0, out.indexOf("<script"));
+  assert.equal(anchor, `<a class="${LINK_CARD_CLASS}" href="/"><span class="${TITLE_CLASS}">Home</span></a>`);
+  assert.doesNotMatch(out, /aria-hidden/);
+  assert.equal("description" in recordOf(out), false);
 });
 
 test("values are trimmed before they render", () => {
@@ -102,6 +129,10 @@ test("values are trimmed before they render", () => {
   assert.match(out, />Guides</);
   assert.match(out, />Read on\.</);
   assert.match(out, /aria-hidden="true">→<\/span>/);
+  const record = recordOf(out);
+  assert.equal(record.title, "Guides");
+  assert.equal(record.description, "Read on.");
+  assert.equal(record.href, "/guide/");
 });
 
 test("a missing, blank, or unsafe href renders nothing", () => {
@@ -148,11 +179,129 @@ test("title and description are escaped, never parsed as markup", () => {
 });
 
 test("the link is focusable as written, with no negative tabindex", () => {
-  const node = render({ href: "/guide/", title: "Guides" });
-  assert.ok(isVNode(node));
+  const node = anchorOf(render({ href: "/guide/", title: "Guides" }));
   assert.equal(node.type, "a");
   assert.equal(node.props.href, "/guide/");
   assert.equal(node.props.tabindex, undefined);
+});
+
+test("a root-relative card resolves the site base exactly once", () => {
+  assert.equal(withBase("", "/guide/"), "/guide/");
+  assert.equal(withBase("/", "/guide/"), "/guide/");
+  assert.equal(withBase("/lateen", "/guide/"), "/lateen/guide/");
+  assert.equal(withBase("/lateen/", "/guide/"), "/lateen/guide/");
+  assert.equal(withBase("/lateen", "/"), "/lateen/");
+
+  assert.equal(withBase("/lateen", "/lateen/guide/"), "/lateen/guide/");
+  assert.equal(withBase("/lateen", "/lateen"), "/lateen");
+  assert.equal(withBase("/lateen", "/lateenish/guide/"), "/lateen/lateenish/guide/");
+
+  const out = output({ href: "/lateen/guide/", title: "Guides" }, "/lateen");
+  assert.match(out, /href="\/lateen\/guide\/"/);
+  assert.equal(recordOf(out).href, "/lateen/guide/");
+});
+
+test("the card at a domain root and under a subpath point at the same page", () => {
+  const atRoot = output({ href: "/guide/", title: "Guides" }, "");
+  const underBase = output({ href: "/guide/", title: "Guides" }, "/lateen");
+
+  assert.match(atRoot, /href="\/guide\/"/);
+  assert.match(underBase, /href="\/lateen\/guide\/"/);
+  assert.equal(recordOf(atRoot).href, "/guide/");
+  assert.equal(recordOf(underBase).href, "/lateen/guide/");
+});
+
+test("external destinations stay unchanged and are marked external", () => {
+  assert.equal(withBase("/lateen", "https://example.com/docs"), "https://example.com/docs");
+  assert.equal(withBase("/lateen", "http://example.com/docs"), "http://example.com/docs");
+  assert.equal(relationOf("https://example.com/docs"), "external");
+  assert.equal(relationOf("http://example.com/docs"), "external");
+  assert.equal(relationOf("/guide/"), "internal");
+
+  const out = output({ href: "https://example.com/docs", title: "Docs" }, "/lateen");
+  assert.match(out, /href="https:\/\/example\.com\/docs"/);
+  assert.equal(recordOf(out).href, "https://example.com/docs");
+  assert.equal(recordOf(out).relation, "external");
+});
+
+test("the JSON record matches the visible card and final href", () => {
+  const out = output(
+    {
+      href: "/guide/install/",
+      title: "Install",
+      description: "Put Lateen in a project.",
+      icon: "→",
+      src: "docs/guide/install.md:4:1-4:80",
+    },
+    "/lateen",
+  );
+
+  assert.deepEqual(recordOf(out), {
+    component: "link-card",
+    version: 1,
+    title: "Install",
+    description: "Put Lateen in a project.",
+    href: "/lateen/guide/install/",
+    relation: "internal",
+    src: "docs/guide/install.md:4:1-4:80",
+  });
+  assert.match(out, /href="\/lateen\/guide\/install\/"/);
+  assert.match(out, />Install</);
+  assert.match(out, />Put Lateen in a project\.</);
+  assert.doesNotMatch(JSON.stringify(recordOf(out)), /"icon"/);
+});
+
+test("a card with only a title records no description", () => {
+  const record = recordOf(output({ href: "/guide/", title: "Guides" }));
+  assert.deepEqual(record, {
+    component: "link-card",
+    version: 1,
+    title: "Guides",
+    href: "/guide/",
+    relation: "internal",
+  });
+});
+
+test("source positions are validated, never invented", () => {
+  assert.equal(sourcePositionOf("docs/guide/install.md:4:1-4:80"), "docs/guide/install.md:4:1-4:80");
+  assert.equal(sourcePositionOf("  docs/guide/install.md:4:1  "), "docs/guide/install.md:4:1");
+  assert.equal(sourcePositionOf("docs/guide/install.md:4"), "docs/guide/install.md:4");
+  assert.equal(sourcePositionOf("C:/docs/guide.md:4:1"), "C:/docs/guide.md:4:1");
+
+  for (const src of [undefined, "", "   ", 42, "docs/guide.md", ":4:1", "docs/guide.md:0:1", "docs/guide.md:4:2-4:1"]) {
+    assert.equal(sourcePositionOf(src), undefined, String(src));
+  }
+
+  const withEvidence = output({ href: "/guide/", title: "Guides", src: "docs/guide.md:4:1" });
+  assert.equal(recordOf(withEvidence).src, "docs/guide.md:4:1");
+
+  const malformed = output({ href: "/guide/", title: "Guides", src: "docs/guide.md:4:2-4:1" });
+  assert.equal("src" in recordOf(malformed), false);
+  assert.match(malformed, /href="\/guide\/"/);
+});
+
+test("the record cannot close its script element or inject markup", () => {
+  const out = output({
+    href: "/x/",
+    title: "</script><b>Bold</b>",
+    description: "a & b </script><img src=x onerror=alert(1)>",
+  });
+
+  const script = /<script type="application\/json" data-link-card(?:="")?>([\s\S]*?)<\/script>/.exec(out)?.[1] ?? "";
+  assert.doesNotMatch(script, /<\/script/i);
+  assert.match(script, /\\u003c\/script>/);
+  assert.equal(recordOf(out).title, "</script><b>Bold</b>");
+  assert.equal(recordOf(out).description, "a & b </script><img src=x onerror=alert(1)>");
+  assert.match(out, /&lt;\/script&gt;&lt;b&gt;Bold&lt;\/b&gt;/);
+  assert.equal((out.match(/<a\b/g) ?? []).length, 1);
+});
+
+test("the card stays one link with an inert record and no client JavaScript", () => {
+  const out = output({ href: "/guide/", title: "Guides" });
+  assert.equal((out.match(/<a\b/g) ?? []).length, 1);
+  assert.match(out, /<script type="application\/json" data-link-card(?:="")?>/);
+  assert.doesNotMatch(out, /<script[^>]*\ssrc=/i);
+  assert.doesNotMatch(out, /onclick=/i);
 });
 
 test("style.css shows a focus ring on the whole link", () => {
