@@ -46,6 +46,7 @@
   .feedback,
   [data-feedback],
   .block-actions,
+  .block-action,
   [data-block-actions],
   .search,
   [data-search],
@@ -149,6 +150,15 @@
     position: static;
     inline-size: auto;
     max-inline-size: none;
+  }
+
+  /* Evidence surfaces stay with the sentence they qualify, so a break never separates them. */
+  .trust-panel,
+  .drift-banner,
+  .tested-chip,
+  .version-badge,
+  .version-diff {
+    break-inside: avoid;
   }
 
   /* Screen code scrolls sideways. Paper cannot, so wrap long lines instead of clipping them. */
