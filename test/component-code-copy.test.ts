@@ -7,9 +7,11 @@ import {
   activate,
   BAR_CLASS,
   BUTTON_CLASS,
+  FRAME_CLASS,
   copyText,
   RESET_MS,
   STATUS_CLASS,
+  TEMPLATE_SELECTOR,
   type Clipboard,
   type CopyBlock,
   type CopyDocument,
@@ -17,8 +19,8 @@ import {
   type CopyNode,
 } from "../chrome/code-copy/client.ts";
 
-const FAILED = "Copy failed. Select the code and copy it by hand.";
-const COPIED = "Copied.";
+const FAILED = "Copy failed. Select the text and copy it by hand.";
+const COPIED = "Copied";
 
 /** An element as the island builds and reads it: attributes, children, listeners, and text. */
 class FakeNode implements CopyNode {
@@ -87,9 +89,11 @@ class FakeBlock implements CopyBlock {
 /** A document with a list of code blocks; `createElement` makes the nodes the island adds. */
 class FakeDoc implements CopyDocument {
   readonly blocks: FakeBlock[];
+  readonly template: { getAttribute(name: string): string | null } | undefined;
 
-  constructor(blocks: FakeBlock[]) {
+  constructor(blocks: FakeBlock[], template?: { getAttribute(name: string): string | null }) {
     this.blocks = blocks;
+    this.template = template;
   }
 
   createElement(tag: string): FakeNode {
@@ -103,6 +107,11 @@ class FakeDoc implements CopyDocument {
   querySelectorAll(selector: string): FakeBlock[] {
     assert.equal(selector, "pre.code");
     return this.blocks;
+  }
+
+  querySelector(selector: string): { getAttribute(name: string): string | null } | null {
+    assert.equal(selector, TEMPLATE_SELECTOR);
+    return this.template ?? null;
   }
 }
 
@@ -144,11 +153,12 @@ function page(text: string, lang: string | undefined, clip: Clipboard | undefine
   const clock = timers();
   const env: CopyEnv = { clipboard: clip, schedule: clock.schedule };
   activate(doc, env);
-  const bar = block.inserted[0]!;
+  const frame = block.inserted[0]!;
+  const bar = frame.children[0] as FakeNode;
   const button = bar.children[0] as FakeNode;
   const status = bar.children[1] as FakeNode;
   const [copyIcon, checkIcon] = button.children as FakeNode[];
-  return { block, doc, bar, button, status, copyIcon: copyIcon!, checkIcon: checkIcon!, clock };
+  return { block, doc, frame, bar, button, status, copyIcon: copyIcon!, checkIcon: checkIcon!, clock };
 }
 
 test("copyText keeps a plain block as written, whatever its language", () => {
@@ -211,7 +221,8 @@ test("a recorded session block copies its commands on every click and keeps its 
   );
   const clock = timers();
   activate(new FakeDoc([block]), { clipboard: clip, schedule: clock.schedule });
-  const bar = block.inserted[0]!;
+  const frame = block.inserted[0]!;
+  const bar = frame.children[0] as FakeNode;
   const button = bar.children[0] as FakeNode;
   const status = bar.children[1] as FakeNode;
 
@@ -252,26 +263,28 @@ test("the server output has no copy control: it appears only when the island run
   assert.doesNotMatch(out, /<button/);
 });
 
-test("activate adds one control above each code block, with the copy icon showing", () => {
+test("activate wraps each block and places one icon control at its top-right", () => {
   const block = new FakeBlock({ "data-lang": "ts" }, "const a = 1;");
   const doc = new FakeDoc([block]);
   activate(doc, { clipboard: clipboard(), schedule: timers().schedule });
 
   assert.equal(block.inserted.length, 1);
-  const bar = block.inserted[0]!;
-  assert.equal(bar.tag, "div");
-  assert.equal(bar.attrs.class, BAR_CLASS);
+  const frame = block.inserted[0]!;
+  assert.equal(frame.tag, "div");
+  assert.equal(frame.attrs.class, FRAME_CLASS);
+  assert.equal(frame.children[1], block, "the block keeps its place, inside the frame");
 
+  const bar = frame.children[0] as FakeNode;
+  assert.equal(bar.attrs.class, BAR_CLASS);
   const button = bar.children[0] as FakeNode;
   assert.equal(button.tag, "button");
   assert.equal(button.attrs.type, "button");
   assert.equal(button.attrs.class, BUTTON_CLASS);
-  assert.equal(button.attrs["aria-label"], "Copy code");
+  assert.equal(button.attrs["aria-label"], "Copy");
 
   const [copyIcon, checkIcon] = button.children as FakeNode[];
   assert.equal(copyIcon!.hasAttr("hidden"), false);
   assert.equal(checkIcon!.hasAttr("hidden"), true);
-  assert.equal(copyIcon!.attrs["aria-hidden"], "true");
 });
 
 test("the copy control keeps the block's language, source, and stable id", () => {
@@ -281,7 +294,7 @@ test("the copy control keeps the block's language, source, and stable id", () =>
   );
   activate(new FakeDoc([block]), { clipboard: clipboard(), schedule: timers().schedule });
 
-  const button = block.inserted[0]!.children[0] as FakeNode;
+  const button = (block.inserted[0]!.children[0] as FakeNode).children[0] as FakeNode;
   assert.equal(button.attrs["data-lang"], "ts");
   assert.equal(button.attrs["data-src"], "docs/a.md:3:1-9:2");
   assert.equal(button.attrs["data-block-id"], "code-docs-a-md-3-1-9-2");
@@ -291,7 +304,7 @@ test("a block with no id still carries its source span as the control's identity
   const block = new FakeBlock({ "data-lang": "ts", "data-src": "docs/a.md:3:1-9:2" }, "x");
   activate(new FakeDoc([block]), { clipboard: clipboard(), schedule: timers().schedule });
 
-  const button = block.inserted[0]!.children[0] as FakeNode;
+  const button = (block.inserted[0]!.children[0] as FakeNode).children[0] as FakeNode;
   assert.equal(button.attrs["data-block-id"], "docs/a.md:3:1-9:2");
 });
 
@@ -387,4 +400,14 @@ test("a second click keeps the newest message: the first click's reset does not 
 
   clock.pending[1]!.callback();
   assert.equal(status.textContent, "");
+});
+
+test("the control's words come from the page template", () => {
+  const words: Record<string, string> = { "data-copy": "کپی", "data-copied": "کپی شد", "data-failed": "کپی نشد" };
+  const block = new FakeBlock({}, "x");
+  const doc = new FakeDoc([block], { getAttribute: (name) => words[name] ?? null });
+  activate(doc, { clipboard: clipboard(), schedule: timers().schedule });
+
+  const button = (block.inserted[0]!.children[0] as FakeNode).children[0] as FakeNode;
+  assert.equal(button.attrs["aria-label"], "کپی");
 });

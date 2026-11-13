@@ -4,7 +4,7 @@
     "/": {
       "css/base": {
         "raw": 66058,
-        "gzip": 10551,
+        "gzip": 10654,
         "count": 1
       },
       "css/page": {
@@ -14,7 +14,7 @@
       },
       "js/chrome": {
         "raw": 56786,
-        "gzip": 20867,
+        "gzip": 21070,
         "count": 20
       },
       "js/components": {
@@ -134,7 +134,7 @@
     "/guide/": {
       "css/base": {
         "raw": 66058,
-        "gzip": 10551,
+        "gzip": 10654,
         "count": 1
       },
       "css/page": {
@@ -144,7 +144,7 @@
       },
       "js/chrome": {
         "raw": 56786,
-        "gzip": 20867,
+        "gzip": 21070,
         "count": 20
       },
       "js/components": {
@@ -264,7 +264,7 @@
     "/reference/": {
       "css/base": {
         "raw": 66058,
-        "gzip": 10551,
+        "gzip": 10654,
         "count": 1
       },
       "css/page": {
@@ -274,7 +274,7 @@
       },
       "js/chrome": {
         "raw": 56786,
-        "gzip": 20867,
+        "gzip": 21070,
         "count": 20
       },
       "js/components": {

@@ -1,10 +1,15 @@
-/* Code block copy button: copies a block's code without diff markers or shell prompts, and confirms with a check icon and a live message. The button is made here, so a visitor without JavaScript gets no control that would do nothing. */
+/* Code block copy control: copies a block's code without diff markers or shell prompts, and confirms
+ * with a short text change and a live message. The control is made here, so a visitor without
+ * JavaScript gets no control that would do nothing. */
 
 /** Class on the copy button. */
 export const BUTTON_CLASS = "code-copy";
 
-/** Class on the wrapper that holds the button and the live message, placed above the block. */
+/** Class on the wrapper that holds the button and the live message, placed over the block. */
 export const BAR_CLASS = "code-copy-bar";
+
+/** Class on the wrapper that makes the block the positioning context for its control. */
+export const FRAME_CLASS = "code-frame";
 
 /** Class on the live region that announces the result. */
 export const STATUS_CLASS = "code-copy-status";
@@ -12,18 +17,45 @@ export const STATUS_CLASS = "code-copy-status";
 /** Class on the code block the island works on (`CODE_CLASS` in `index.ts`). */
 export const BLOCK_SELECTOR = "pre.code";
 
-/** How long the result stays on the button before it goes back to the copy icon. */
+/** How long the result stays on the button before its label comes back. */
 export const RESET_MS = 2000;
 
-const LABEL = "Copy code";
-const COPIED = "Copied.";
-const FAILED = "Copy failed. Select the code and copy it by hand.";
+/** Hidden template the server writes, so the control's words follow the page's language. */
+export const TEMPLATE_SELECTOR = "[data-code-copy]";
+
+/** The words the control shows: its label, the result, and the fallback when a copy fails. */
+export interface CopyLabels {
+  readonly copy: string;
+  readonly copied: string;
+  readonly failed: string;
+}
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const COPY_PATH =
   "M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Zm5-5C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z";
 const CHECK_PATH =
   "M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z";
+
+/** An SVG icon: one path in `currentColor`, hidden from assistive tech. */
+function icon(env: CopyDocument, d: string): CopyNode {
+  const svg = env.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("viewBox", "0 0 16 16");
+  svg.setAttribute("width", "16");
+  svg.setAttribute("height", "16");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("focusable", "false");
+  const path = env.createElementNS(SVG_NS, "path");
+  path.setAttribute("d", d);
+  svg.append(path);
+  return svg;
+}
+
+/** English fallback for a test, or a page whose template an older build did not write. */
+export const DEFAULT_LABELS: CopyLabels = {
+  copy: "Copy",
+  copied: "Copied",
+  failed: "Copy failed. Select the text and copy it by hand.",
+};
 
 /** Languages for a recorded console session: only prompted lines are command input; the rest is output. */
 const SESSION = new Set(["console", "shellsession", "terminal"]);
@@ -38,7 +70,7 @@ const PYTHON = new Set(["py", "pycon", "python", "python3"]);
 export interface CopyNode {
   setAttribute(name: string, value: string): void;
   removeAttribute(name: string): void;
-  append(...children: Array<CopyNode | string>): void;
+  append(...children: unknown[]): void;
   addEventListener(type: "click", listener: () => void): void;
   textContent: string | null;
 }
@@ -55,6 +87,8 @@ export interface CopyDocument {
   createElement(tag: string): CopyNode;
   createElementNS(namespace: string, tag: string): CopyNode;
   querySelectorAll(selector: string): Iterable<CopyBlock>;
+  /** The hidden label template; an absent one keeps the English fallback. */
+  querySelector?(selector: string): { getAttribute(name: string): string | null } | null;
 }
 
 /** The part of `navigator.clipboard` the island uses. */
@@ -74,6 +108,7 @@ export interface CopyUi {
   copyIcon: CopyNode;
   checkIcon: CopyNode;
   status: CopyNode;
+  labels: CopyLabels;
 }
 
 /**
@@ -140,26 +175,12 @@ function fromDiff(lines: readonly string[]): string[] {
   return out;
 }
 
-/** An SVG icon: one path in `currentColor`, hidden from assistive tech. */
-function icon(env: CopyDocument, d: string): CopyNode {
-  const svg = env.createElementNS(SVG_NS, "svg");
-  svg.setAttribute("viewBox", "0 0 16 16");
-  svg.setAttribute("width", "16");
-  svg.setAttribute("height", "16");
-  svg.setAttribute("aria-hidden", "true");
-  svg.setAttribute("focusable", "false");
-  const path = env.createElementNS(SVG_NS, "path");
-  path.setAttribute("d", d);
-  svg.append(path);
-  return svg;
-}
-
 /**
- * Shows the result on the control, then after `RESET_MS` puts the copy icon back and clears the message.
+ * Shows the result on the control, then after `RESET_MS` puts the label back and clears the message.
  * The reset is skipped when a later click has started since, so the newest result stays on screen.
  */
 function report(ui: CopyUi, ok: boolean, env: CopyEnv, isLatest: () => boolean): void {
-  ui.status.textContent = ok ? COPIED : FAILED;
+  ui.status.textContent = ok ? ui.labels.copied : ui.labels.failed;
   if (ok) {
     ui.copyIcon.setAttribute("hidden", "");
     ui.checkIcon.removeAttribute("hidden");
@@ -187,13 +208,28 @@ export function copy(text: string, ui: CopyUi, env: CopyEnv, isLatest: () => boo
 
 /** Adds a copy button above each code block and wires it. Nothing is added to a page the island does not run on. */
 export function activate(doc: CopyDocument, env: CopyEnv): void {
+  const labels = labelsOf(doc);
   for (const block of doc.querySelectorAll(BLOCK_SELECTOR)) {
-    attach(doc, block, env);
+    attach(doc, block, env, labels);
   }
 }
 
+/** The template's words for this page, falling back to English when it has none. */
+export function labelsOf(doc: CopyDocument): CopyLabels {
+  const template = doc.querySelector?.(TEMPLATE_SELECTOR) ?? null;
+  const read = (name: string, fallback: string): string => {
+    const value = template?.getAttribute(name)?.trim() ?? "";
+    return value === "" ? fallback : value;
+  };
+  return {
+    copy: read("data-copy", DEFAULT_LABELS.copy),
+    copied: read("data-copied", DEFAULT_LABELS.copied),
+    failed: read("data-failed", DEFAULT_LABELS.failed),
+  };
+}
+
 /** One block's control: a bar above the block with the button and the live message. */
-function attach(doc: CopyDocument, block: CopyBlock, env: CopyEnv): void {
+function attach(doc: CopyDocument, block: CopyBlock, env: CopyEnv, labels: CopyLabels): void {
   const code = block.querySelector("code");
   if (code === null) return;
 
@@ -208,7 +244,7 @@ function attach(doc: CopyDocument, block: CopyBlock, env: CopyEnv): void {
   const button = doc.createElement("button");
   button.setAttribute("type", "button");
   button.setAttribute("class", BUTTON_CLASS);
-  button.setAttribute("aria-label", LABEL);
+  button.setAttribute("aria-label", labels.copy);
 
   // The source, language, and stable block id ride on the control, so a copy keeps its context.
   const lang = block.getAttribute("data-lang");
@@ -222,11 +258,14 @@ function attach(doc: CopyDocument, block: CopyBlock, env: CopyEnv): void {
   const checkIcon = icon(doc, CHECK_PATH);
   checkIcon.setAttribute("hidden", "");
   button.append(copyIcon, checkIcon);
-
   bar.append(button, status);
-  block.before(bar);
 
-  const ui: CopyUi = { button, copyIcon, checkIcon, status };
+  const frame = doc.createElement("div");
+  frame.setAttribute("class", FRAME_CLASS);
+  block.before(frame);
+  frame.append(bar, block);
+
+  const ui: CopyUi = { button, copyIcon, checkIcon, status, labels };
   let clicks = 0;
   button.addEventListener("click", () => {
     const click = ++clicks;
