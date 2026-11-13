@@ -7,8 +7,11 @@ and each value a `<dd>`, in two columns that become one below `40rem`.
 - `style.css`: the grid, the long-value wrapping, and the narrow-screen column.
 - `test/component-key-value.test.ts`: the props, body, empty, escaping, long-value, and stylesheet tests.
 
-Pairs come from `items`, a JSON array of `{key, value}` objects or `[key, value]` pairs. When that gives no
-pairs, the body is read one `key: value` per line, trimming each line and skipping blank lines. Order is kept,
-and duplicate keys stay in the list.
+Pairs come from `items`, a JSON array of `{key, value}` objects or `[key, value]` pairs. Values keep their JSON
+type: a string shows as written, and an object, array, number, boolean, or null shows as escaped JSON. When
+`items` gives no pairs, the body is read one `key: value` per line, trimming each line and skipping blank lines.
+Order is kept, and duplicate keys stay in the list.
 
-The component writes no client script: the list is complete in the HTML.
+The component writes no client script: the list is complete in the HTML. An inert
+`<script type="application/json" data-key-value-pairs>` beside the list publishes the same pairs with their JSON
+types, in order, duplicates included, so an agent reads the authored values without scraping the list.

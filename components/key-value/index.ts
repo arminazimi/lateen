@@ -19,10 +19,13 @@ export const LONG_VALUE_CLASS = "key-value-long";
 /** Values longer than this many characters also carry {@link LONG_VALUE_CLASS}. */
 export const LONG_VALUE_LENGTH = 48;
 
-/** One key and its value, in the order the author wrote them. */
+/** The JSON type of a pair's value, as the payload names it. */
+export type KeyValueType = "string" | "number" | "boolean" | "object" | "array" | "null";
+
+/** One key and its value, in the order the author wrote them. Values keep the type the prop gave them. */
 export interface KeyValueItem {
   readonly key: string;
-  readonly value: string;
+  readonly value: unknown;
 }
 
 export type KeyValueProps = {
@@ -48,12 +51,12 @@ export function decodeText(text: string): string {
   return text.replace(/&(?:#x([0-9a-f]+)|#(\d+)|([a-z][a-z0-9]*));/gi, decodeEntity);
 }
 
-/** One pair from an item, or undefined when it has no usable key. Values may be empty. */
+/** One pair from an item, or undefined when it has no usable key. Values may be empty, and keep their type. */
 function itemOf(key: unknown, value: unknown): KeyValueItem | undefined {
   if (key === undefined || key === null) return undefined;
   const name = String(key).trim();
   if (name === "") return undefined;
-  return { key: name, value: value === undefined || value === null ? "" : String(value) };
+  return { key: name, value: value === undefined ? "" : value };
 }
 
 /** One element of the `items` array: an object with `key` and `value`, or a two-item pair. */
@@ -107,15 +110,70 @@ export function parseBody(html: string): KeyValueItem[] {
   return items;
 }
 
-/** The class names of a value: the base class, plus the long-value marker when it is long. */
+/** A value as the list shows it: a string unchanged, anything else as JSON. Markup stays text, so it renders escaped. */
+export function displayOf(value: unknown): string {
+  if (typeof value === "string") return value;
+  return JSON.stringify(value) ?? String(value);
+}
+
+/** The JSON type of a value, for the published payload. */
+export function valueTypeOf(value: unknown): KeyValueType {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return "array";
+  switch (typeof value) {
+    case "string":
+      return "string";
+    case "number":
+      return "number";
+    case "boolean":
+      return "boolean";
+    default:
+      return "object";
+  }
+}
+
+/** The class names of a displayed value: the base class, plus the long-value marker when it is long. */
 export function valueClassOf(value: string): string {
   return value.length > LONG_VALUE_LENGTH ? `${VALUE_CLASS} ${LONG_VALUE_CLASS}` : VALUE_CLASS;
+}
+
+/** One pair as published for automation: order kept, duplicate keys kept, the value exactly as supplied. */
+export interface KeyValuePairNode {
+  readonly key: string;
+  readonly value: unknown;
+  readonly type: KeyValueType;
+}
+
+/** The whole payload a list publishes for automation: its ordered pairs, duplicates included. */
+export interface KeyValuePayload {
+  /** Names the component, so a consumer knows how to read the rest. */
+  readonly component: "key-value";
+  /** Shape version; bumped when the meaning of a pair changes. */
+  readonly version: 1;
+  /** Pairs in list order, duplicate keys included. Body-authored values are strings. */
+  readonly pairs: readonly KeyValuePairNode[];
+}
+
+/** The payload for one list: every displayed pair with its JSON type kept. */
+export function pairsPayloadOf(items: readonly KeyValueItem[]): KeyValuePayload {
+  return {
+    component: "key-value",
+    version: 1,
+    pairs: items.map((item) => ({ key: item.key, value: item.value, type: valueTypeOf(item.value) })),
+  };
+}
+
+/** JSON safe inside a `<script>` element: a `<` can never close the tag early. */
+export function pairsJson(payload: KeyValuePayload): string {
+  return JSON.stringify(payload).replace(/</g, "\\u003c");
 }
 
 /**
  * `:::key-value` renders a two-column list of keys and values: properties, options, metadata. Pairs come from
  * the `items` prop (a JSON array) or, when it gives none, from one `key: value` per line in the body. The markup
- * is a `<dl>`, so it reads as a description list without CSS or JavaScript; duplicates keep their order.
+ * is a `<dl>`, so it reads as a description list without CSS or JavaScript; duplicates keep their order. An
+ * inert JSON script publishes the same pairs with their JSON types, so agents read the authored values without
+ * scraping the list.
  */
 export default function keyValue({ props, html }: ComponentProps<KeyValueProps>) {
   const fromProps = parseItems(props.items);
@@ -125,9 +183,14 @@ export default function keyValue({ props, html }: ComponentProps<KeyValueProps>)
   return h(
     "dl",
     { class: LIST_CLASS },
-    items.flatMap((item) => [
-      h("dt", { class: KEY_CLASS }, item.key),
-      h("dd", { class: valueClassOf(item.value) }, item.value),
-    ]),
+    items.flatMap((item) => {
+      const shown = displayOf(item.value);
+      return [h("dt", { class: KEY_CLASS }, item.key), h("dd", { class: valueClassOf(shown) }, shown)];
+    }),
+    h("script", {
+      type: "application/json",
+      "data-key-value-pairs": "",
+      dangerouslySetInnerHTML: { __html: pairsJson(pairsPayloadOf(items)) },
+    }),
   );
 }
