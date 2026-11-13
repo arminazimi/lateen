@@ -13,9 +13,11 @@ import table, {
 import {
   OVERFLOW_TOLERANCE,
   REGION_SELECTOR,
+  createWatcher,
   enhance,
   isOverflowing,
   regionLabel,
+  start,
   sync,
   type TableElement,
 } from "../components/table/client.ts";
@@ -217,6 +219,7 @@ function fakeRegion(scrollWidth: number, clientWidth: number, caption = "", auth
   const attributes = new Map<string, string>();
   if (authorLabel !== undefined) attributes.set("data-label", authorLabel);
   const captionNode: TableElement = { ...BLANK, textContent: caption };
+  const tableNode: TableElement = { ...BLANK };
   return {
     scrollWidth,
     clientWidth,
@@ -231,7 +234,7 @@ function fakeRegion(scrollWidth: number, clientWidth: number, caption = "", auth
     },
     querySelector: (selector) => {
       if (selector === "caption") return caption === "" ? null : captionNode;
-      if (selector === "table") return BLANK;
+      if (selector === "table") return tableNode;
       return null;
     },
   };
@@ -289,30 +292,158 @@ test("an author label names the region and beats a caption", () => {
   assert.equal(region.attributes.get("aria-label"), "Author label");
 });
 
-test("enhance watches the container and the table, and resizing updates the state in both directions", () => {
-  const region = fakeRegion(100, 100, "Deploy targets");
-  fallback(region, "Deploy targets");
-  const watched: Array<{ target: TableElement; update: () => void }> = [];
+/** A fake observer that records the targets it observes and whether it was disconnected. */
+class FakeObserver {
+  readonly callback: () => void;
+  readonly targets: TableElement[] = [];
+  disconnected = 0;
 
-  enhance({
-    regions: () => [region],
-    watch: (target, update) => {
-      watched.push({ target, update });
+  constructor(callback: () => void) {
+    this.callback = callback;
+  }
+
+  observe(target: TableElement): void {
+    this.targets.push(target);
+  }
+
+  disconnect(): void {
+    this.disconnected += 1;
+  }
+
+  fire(): void {
+    this.callback();
+  }
+}
+
+/** A fake `ResizeObserver` constructor plus every instance it created, in order. */
+function observing(): { Observer: new (callback: () => void) => FakeObserver; created: FakeObserver[] } {
+  const created: FakeObserver[] = [];
+  const Observer = class extends FakeObserver {
+    constructor(callback: () => void) {
+      super(callback);
+      created.push(this);
+    }
+  };
+  return { Observer, created };
+}
+
+/** A fake window that records the resize listeners registered on it. */
+function fakeWindow(): {
+  listeners: Set<() => void>;
+  addEventListener: (type: "resize", listener: () => void) => void;
+  removeEventListener: (type: "resize", listener: () => void) => void;
+} {
+  const listeners = new Set<() => void>();
+  return {
+    listeners,
+    addEventListener: (_type, listener) => {
+      listeners.add(listener);
     },
+    removeEventListener: (_type, listener) => {
+      listeners.delete(listener);
+    },
+  };
+}
+
+test("every table on the page shares one observer and re-syncs after a region or table resize", () => {
+  const wide = fakeRegion(640, 320, "Wide");
+  const narrow = fakeRegion(320, 320, "Narrow");
+  const { Observer, created } = observing();
+
+  const stop = enhance({ regions: () => [wide, narrow], watcher: createWatcher(Observer, fakeWindow()) });
+
+  assert.equal(created.length, 1, "the whole page uses one observer");
+  const observer = created[0]!;
+  assert.equal(observer.targets.length, 4, "both regions and both tables are observed");
+  assert.equal(wide.attributes.get("tabindex"), "0");
+  assert.equal(narrow.attributes.has("tabindex"), false, "the fitting table keeps no tab stop");
+
+  narrow.scrollWidth = 700;
+  observer.fire();
+  assert.equal(narrow.attributes.get("tabindex"), "0", "growing past the region adds the tab stop");
+  assert.equal(narrow.attributes.get("aria-label"), "Narrow");
+
+  wide.scrollWidth = 320;
+  observer.fire();
+  assert.equal(wide.attributes.has("tabindex"), false, "shrinking back removes it again");
+  assert.equal(wide.attributes.has("role"), false);
+
+  stop();
+});
+
+test("cleanup disconnects the shared observer once and keeps the current overflow state", () => {
+  const wide = fakeRegion(640, 320, "Wide");
+  const { Observer, created } = observing();
+  const stop = enhance({ regions: () => [wide], watcher: createWatcher(Observer, fakeWindow()) });
+  const observer = created[0]!;
+  assert.equal(observer.disconnected, 0);
+
+  stop();
+
+  assert.equal(observer.disconnected, 1);
+  assert.equal(wide.attributes.get("tabindex"), "0");
+  assert.equal(wide.attributes.get("role"), "region");
+  assert.equal(wide.attributes.get("aria-label"), "Wide");
+
+  observer.fire();
+  assert.equal(wide.attributes.get("tabindex"), "0", "a late callback no longer touches the page");
+  assert.equal(wide.attributes.get("aria-label"), "Wide");
+});
+
+test("the resize fallback adds one window listener for any number of tables and cleanup removes it", () => {
+  const win = fakeWindow();
+  const one = fakeRegion(640, 320, "One");
+  const two = fakeRegion(320, 320, "Two");
+
+  const stop = enhance({ regions: () => [one, two], watcher: createWatcher(undefined, win) });
+
+  assert.equal(win.listeners.size, 1, "one listener total, not one per region or table");
+
+  two.scrollWidth = 700;
+  for (const listener of win.listeners) listener();
+  assert.equal(two.attributes.get("tabindex"), "0");
+  assert.equal(two.attributes.get("aria-label"), "Two");
+
+  stop();
+  assert.equal(win.listeners.size, 0);
+});
+
+test("repeated setup through one watcher does not duplicate the observer or the listener", () => {
+  const win = fakeWindow();
+  const shared = createWatcher(undefined, win);
+  const region = fakeRegion(640, 320, "One");
+
+  const first = enhance({ regions: () => [region], watcher: shared });
+  const second = enhance({ regions: () => [region], watcher: shared });
+
+  assert.equal(win.listeners.size, 1);
+  first();
+  second();
+  assert.equal(win.listeners.size, 0);
+});
+
+test("the island starts from the document and observer globals and can be stopped", () => {
+  const region = fakeRegion(640, 320, "Deploy targets");
+  const { Observer, created } = observing();
+  const win = fakeWindow();
+
+  const stop = start({
+    document: { querySelectorAll: () => [region] },
+    ResizeObserver: Observer,
+    addEventListener: win.addEventListener,
+    removeEventListener: win.removeEventListener,
   });
-
-  assert.equal(region.attributes.has("tabindex"), false, "the initial sync removes the fallback");
-  assert.equal(watched.length, 2, "the region and the table are both observed");
-
-  region.scrollWidth = 200;
-  for (const entry of watched) entry.update();
-  assert.equal(region.attributes.get("tabindex"), "0", "growing past the region adds the tab stop");
+  assert.equal(created.length, 1);
   assert.equal(region.attributes.get("aria-label"), "Deploy targets");
 
-  region.scrollWidth = 100;
-  for (const entry of watched) entry.update();
-  assert.equal(region.attributes.has("tabindex"), false, "shrinking back removes it again");
-  assert.equal(region.attributes.has("role"), false);
+  stop();
+  assert.equal(created[0]!.disconnected, 1);
+});
+
+test("the island does nothing without a document and keeps the no-JS markup as it is", () => {
+  const stop = start({});
+  assert.equal(typeof stop, "function");
+  assert.doesNotThrow(() => stop());
 });
 
 test("style.css uses only token custom properties from names.json", () => {
