@@ -13,7 +13,7 @@ import {
   sectionOf,
   type OptionList,
   type SearchRecord,
-} from "../chrome/search/options.ts";
+} from "../chrome/search/client.ts";
 import {
   activate,
   countMessage,
