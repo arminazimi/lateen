@@ -32,6 +32,33 @@ type RenderResult =
   | { readonly ok: true; readonly svg: string }
   | { readonly ok: false; readonly error: string };
 
+/** Where a diagram's text alternative came from: the fence's `alt`, a leading `%% alt:` comment, or neither. */
+export type MermaidAltOrigin = "prop" | "comment" | "none";
+
+/**
+ * One diagram's record for automation: the normalized source, its text alternative and where it came from,
+ * the source position, and whether the SVG rendered. It is published whether the render succeeded or not,
+ * so a failed diagram exposes the same complete source instead of only a fallback class. `version` is
+ * bumped when the meaning of a field changes.
+ */
+export interface MermaidRecord {
+  /** Names the component, so a consumer knows how to read the rest. */
+  readonly component: "mermaid";
+  /** Shape version; bumped when a field changes meaning. */
+  readonly version: 1;
+  /** The normalized Mermaid source, complete even when the render failed. */
+  readonly source: string;
+  /** The text alternative and where it came from; `none` means the diagram has an empty alternative. */
+  readonly alt: {
+    readonly text: string;
+    readonly origin: MermaidAltOrigin;
+  };
+  /** The authored source position as the engine stamped it, or `null` when the block has none. */
+  readonly src: string | null;
+  /** Whether the SVG rendered; a failed diagram keeps its source and shows the localized fallback. */
+  readonly render: "rendered" | "failed";
+}
+
 /** Options that shape the generated SVG. They are part of the cache key, so changing one re-renders. */
 export type RenderOptions = {
   readonly theme: NonNullable<MermaidConfig["theme"]>;
@@ -125,6 +152,11 @@ function escapeAttr(value: string): string {
   return escapeHtml(value).replace(/"/g, "&quot;");
 }
 
+/** JSON safe inside a `<script>` element: a `<` can never close the tag early. */
+function recordJson(record: MermaidRecord): string {
+  return JSON.stringify(record).replace(/</g, "\\u003c");
+}
+
 /**
  * Adds the accessible name and role to a rendered SVG, and removes anything that would run in the
  * browser. Mermaid's own script and event hooks stay out of the page: rendering happened at build time.
@@ -202,9 +234,20 @@ export default function mermaid({ props, page }: ComponentProps<MermaidProps>) {
   const source = normalizeSource(text(props.source));
   if (source === "") return null;
 
-  const alt = text(props.alt) || altFromSource(source);
+  const authoredAlt = text(props.alt);
+  const derivedAlt = authoredAlt === "" ? altFromSource(source) : "";
+  const alt = authoredAlt === "" ? derivedAlt : authoredAlt;
+  const altOrigin: MermaidAltOrigin = authoredAlt !== "" ? "prop" : derivedAlt !== "" ? "comment" : "none";
   const src = text(props.src);
   const result = renderDiagram(source);
+  const record: MermaidRecord = {
+    component: "mermaid",
+    version: 1,
+    source,
+    alt: { text: alt, origin: altOrigin },
+    src: src === "" ? null : src,
+    render: result.ok ? "rendered" : "failed",
+  };
 
   const diagram =
     result.ok
@@ -228,6 +271,11 @@ export default function mermaid({ props, page }: ComponentProps<MermaidProps>) {
       h("summary", null, t(page.lang, "mermaid_source")),
       h("pre", null, h("code", { class: "language-mermaid" }, source)),
     ),
+    h("script", {
+      type: "application/json",
+      "data-mermaid-record": "",
+      dangerouslySetInnerHTML: { __html: recordJson(record) },
+    }),
   );
 }
 

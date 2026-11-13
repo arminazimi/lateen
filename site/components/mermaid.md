@@ -46,6 +46,28 @@ sequenceDiagram
   S-->>B: 200 OK
 ```
 
+## Structured diagram record
+
+Each diagram publishes an inert `<script type="application/json" data-mermaid-record>` beside its source disclosure. It is always written, whether the SVG rendered or not, so automation does not infer failure from CSS classes or SVG markup. Every `<` is escaped, so no source line or alt text can close the block early.
+
+```json
+{
+  "component": "mermaid",
+  "version": 1,
+  "source": "flowchart LR\n  Browser --> Server",
+  "alt": { "text": "A request goes from the browser to the server", "origin": "prop" },
+  "src": "guide/requests.md:12:1-15:3",
+  "render": "rendered"
+}
+```
+
+- `source` is the normalized Mermaid source, with LF line endings, no trailing whitespace, and no blank lines at either edge. It is complete even when `render` is `"failed"`.
+- `alt.origin` says where the text alternative came from: `"prop"` for the fence's `alt`, `"comment"` for a leading `%% alt:` comment, or `"none"` when the alternative is empty.
+- `src` is the authored source position, or `null` when the block has none.
+- `render` is `"rendered"` or `"failed"`. A renderer error is diagnostic only and is never published; the page keeps the complete source and the localized fallback.
+
+Publishing the record reuses the render the diagram already has, so it starts no additional Mermaid process and does not change the SVG.
+
 ## Notes
 
 - The diagram is rendered during the build in a short child process, so a complex diagram adds build time but no page weight.
